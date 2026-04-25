@@ -134,3 +134,26 @@ def test_real_fixture_block_types_known(md_path):
     allowed = {"h1", "h2", "h3", "h4", "p", "code", "ul", "ol", "quote", "hr", "table", "image"}
     for b in blocks:
         assert b["t"] in allowed, f"unknown block type {b['t']} in {md_path.name}"
+
+
+from app.services.markdown_pipeline import compute_derived
+
+
+def test_word_count_mixed():
+    blocks = parse_markdown("Hello world\n\n你好世界")
+    d = compute_derived(blocks)
+    assert d["word_count"] == 2 + 4   # 2 english tokens + 4 cjk chars
+
+
+def test_read_minutes():
+    text = "word " * 480  # ~480 words → 2 min @240wpm
+    blocks = parse_markdown(text.strip())
+    d = compute_derived(blocks)
+    assert d["read"] == "2 min"
+
+
+def test_summary_first_paragraph():
+    md = "## h\n\nFirst paragraph here. More text.\n\n## h2\n\nSecond."
+    blocks = parse_markdown(md)
+    d = compute_derived(blocks)
+    assert d["summary"].startswith("First paragraph here.")

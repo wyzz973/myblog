@@ -240,3 +240,39 @@ def parse_markdown(md: str) -> list[Block]:
     md = _strip_task_list_markers(md)
     ast = _md(md)
     return _walk_blocks(ast)
+
+
+import math
+import re
+
+_WORD_RE = re.compile(r"[A-Za-z0-9_]+")
+_CJK_RE = re.compile(r"[一-鿿]")
+
+
+def _plaintext(blocks: list[Block]) -> str:
+    parts: list[str] = []
+    for b in blocks:
+        if "c" in b:
+            parts.append(b["c"])
+        elif b.get("t") in ("ul", "ol"):
+            for it in b["items"]:
+                parts.append(it["c"])
+        elif b.get("t") == "table":
+            parts.extend(b["header"])
+            for row in b["rows"]:
+                parts.extend(row)
+    return " ".join(parts)
+
+
+def compute_derived(blocks: list[Block]) -> dict:
+    text = _plaintext(blocks)
+    words = len(_WORD_RE.findall(text))
+    cjk = len(_CJK_RE.findall(text))
+    word_count = words + cjk
+    read_min = max(1, math.ceil(word_count / 240))
+    first_p = next((b for b in blocks if b.get("t") == "p"), None)
+    summary = (
+        (first_p["c"][:140] + "…") if first_p and len(first_p["c"]) > 140
+        else (first_p["c"] if first_p else "")
+    )
+    return {"word_count": word_count, "read": f"{read_min} min", "summary": summary}
