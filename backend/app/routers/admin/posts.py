@@ -1,6 +1,7 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -153,3 +154,51 @@ async def render_preview(
         "body": blocks,
         "derived": derived,
     }
+
+
+@router.post("/posts/upload")
+async def upload_md(
+    files: list[UploadFile] = File(...),
+    overwrite: bool = Query(False),
+    admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> JSONResponse:
+    if len(files) > 20:
+        raise HTTPException(status_code=413, detail="max 20 files per upload")
+    results: list[dict] = []
+    ok = 0
+    for f in files:
+        if not (f.filename and (f.filename.endswith(".md") or f.filename.endswith(".markdown"))):
+            results.append({"file": f.filename, "ok": False, "status": 415, "detail": "must be .md"})
+            continue
+        raw_bytes = await f.read()
+        if len(raw_bytes) > 1_048_576:
+            results.append({"file": f.filename, "ok": False, "status": 413, "detail": "exceeds 1MB"})
+            continue
+        try:
+            text = raw_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            results.append({"file": f.filename, "ok": False, "status": 422, "detail": "encoding must be utf-8"})
+            continue
+        try:
+            fm, body_md = await parse_or_infer_frontmatter(s, raw=text, file_path=None, default_tag=None)
+            post = await upsert_post(s, fm=fm, body_md=body_md, overwrite=overwrite)
+            await write_event(s, type="post.created", actor=admin.email, target=post.id, meta={"via": "upload"})
+            await s.flush()
+            results.append({"file": f.filename, "ok": True, "post": {"id": post.id, "title": post.title}})
+            ok += 1
+        except IngestError as e:
+            code = 409 if "already exists" in str(e) else 422
+            results.append({"file": f.filename, "ok": False, "status": code, "detail": str(e)})
+
+    failed = len(results) - ok
+    if ok == len(results):
+        status_code = 201
+    elif ok > 0:
+        status_code = 207
+    else:
+        status_code = 422
+    return JSONResponse(
+        status_code=status_code,
+        content={"results": results, "summary": {"total": len(results), "ok": ok, "failed": failed}},
+    )

@@ -73,3 +73,30 @@ async def test_admin_list_includes_drafts(client, auth):
     assert r.status_code == 200
     assert any(p["id"] == "test-draft-1" for p in r.json()["items"])
     await client.delete("/api/admin/posts/test-draft-1", headers=auth)
+
+
+async def test_upload_single_md(client, auth):
+    await client.delete("/api/admin/posts/upload-test-1", headers=auth)
+    md = GOOD_MD.replace("test-post-1", "upload-test-1")
+    files = {"files": ("upload-test-1.md", md.encode("utf-8"), "text/markdown")}
+    r = await client.post("/api/admin/posts/upload", files=files, headers=auth)
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["summary"] == {"total": 1, "ok": 1, "failed": 0}
+    await client.delete("/api/admin/posts/upload-test-1", headers=auth)
+
+
+async def test_upload_partial_failure_returns_207(client, auth):
+    await client.delete("/api/admin/posts/upload-test-2", headers=auth)
+    good = GOOD_MD.replace("test-post-1", "upload-test-2")
+    bad = "no-frontmatter content"
+    files = [
+        ("files", ("a.md", good.encode("utf-8"), "text/markdown")),
+        ("files", ("b.md", bad.encode("utf-8"), "text/markdown")),
+    ]
+    r = await client.post("/api/admin/posts/upload", files=files, headers=auth)
+    assert r.status_code == 207
+    body = r.json()
+    assert body["summary"]["total"] == 2
+    assert body["summary"]["ok"] == 1
+    await client.delete("/api/admin/posts/upload-test-2", headers=auth)
