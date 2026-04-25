@@ -162,5 +162,70 @@ def seed_bootstrap() -> None:
     typer.echo("✓ tags + site_meta + projects seeded")
 
 
+# ---------------------------------------------------------------------------
+# import-md
+# ---------------------------------------------------------------------------
+
+from pathlib import Path  # noqa: E402
+
+from app.services.post_ingest import (  # noqa: E402
+    IngestError,
+    is_sensitive,
+    parse_or_infer_frontmatter,
+    upsert_post,
+)
+
+
+async def _import_md_file(
+    path: Path, default_tag: str | None, overwrite: bool, dry_run: bool
+) -> tuple[bool, str]:
+    if is_sensitive(path):
+        return False, f"⊘ skipped (sensitive name): {path.name}"
+    raw = path.read_text(encoding="utf-8")
+    async with AsyncSessionLocal() as session:
+        try:
+            fm_obj, body = await parse_or_infer_frontmatter(
+                session, raw=raw, file_path=path, default_tag=default_tag
+            )
+            if dry_run:
+                return (
+                    True,
+                    f"DRY  {path.name} → id='{fm_obj.id}' tag='{fm_obj.tag}' lang='{fm_obj.lang}'",
+                )
+            await upsert_post(session, fm=fm_obj, body_md=body, overwrite=overwrite)
+            await session.commit()
+            return True, f"✓    {path.name} → posts/{fm_obj.id}"
+        except IngestError as e:
+            return False, f"✗    {path.name} → {e}"
+
+
+async def _run_imports(
+    files: list[Path], default_tag: str | None, overwrite: bool, dry_run: bool
+) -> list[tuple[bool, str]]:
+    return [await _import_md_file(p, default_tag, overwrite, dry_run) for p in files]
+
+
+@app.command("import-md")
+def import_md(
+    path: Path = typer.Argument(..., exists=True, dir_okay=True, file_okay=True),
+    overwrite: bool = typer.Option(False, "--overwrite"),
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    default_tag: str | None = typer.Option(None, "--default-tag"),
+) -> None:
+    """Import a single .md file or a directory of .md files."""
+    files: list[Path] = sorted(path.rglob("*.md")) if path.is_dir() else [path]
+    if not files:
+        typer.echo("no .md files found")
+        raise typer.Exit(code=1)
+
+    results = asyncio.run(_run_imports(files, default_tag, overwrite, dry_run))
+    ok = sum(1 for r in results if r[0])
+    failed = len(results) - ok
+    for _, msg in results:
+        typer.echo(msg)
+    typer.echo("─" * 60)
+    typer.echo(f"total {len(results)} · ok {ok} · failed {failed}")
+
+
 if __name__ == "__main__":
     app()
