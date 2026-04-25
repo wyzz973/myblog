@@ -3,6 +3,8 @@
 The frontend renders 8 block types and 4 inline types. We use mistune's AST
 output ('renderer=None') and walk it; any unsupported AST node is a hard error.
 """
+import math
+import re
 from typing import Any
 
 import mistune
@@ -241,9 +243,6 @@ def parse_markdown(md: str) -> list[Block]:
     ast = _md(md)
     return _walk_blocks(ast)
 
-
-import math
-import re
 
 _WORD_RE = re.compile(r"[A-Za-z0-9_]+")
 _CJK_RE = re.compile(r"[一-鿿]")

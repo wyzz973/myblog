@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column

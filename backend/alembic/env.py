@@ -5,11 +5,10 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import app.models  # noqa: F401  -- ensure all models registered
 from alembic import context
-
 from app.config import get_settings
 from app.models import Base
-import app.models  # noqa: F401  -- ensure all models registered
 
 config = context.config
 if config.config_file_name is not None:

@@ -59,6 +59,8 @@ def install_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def _unhandled(req: Request, e: Exception) -> JSONResponse:
-        rid = req.headers.get("X-Request-ID", "?")
+        # Prefer the rid stashed by RequestContextMiddleware (matches the
+        # X-Request-ID response header). Fall back to inbound header, then "?".
+        rid = getattr(req.state, "request_id", None) or req.headers.get("X-Request-ID", "?")
         logger.exception("unhandled_exception", error=str(e), request_id=rid)
         return _err(status.HTTP_500_INTERNAL_SERVER_ERROR, f"internal error · {rid}")

@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, Index, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
