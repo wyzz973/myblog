@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>wangyang.dev — 汪洋 / backend · AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,wght@0,400;0,500;1,400;1,500&family=Inter:wght@400;500;600&family=Noto+Serif+SC:wght@400;500;600&family=Noto+Sans+SC:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=8" />
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="data.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <div class="ambient-grid"></div>
+  <div class="ambient-noise"></div>
+
+  <script>
+    // Tweak defaults — persisted
+    window.TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "layout": "A",
+      "theme": "dark",
+      "accent": "green"
+    }/*EDITMODE-END*/;
+  </script>
+
+  <script type="text/babel" src="pets.jsx"></script>
+  <script type="text/babel" src="home.jsx"></script>
+  <script type="text/babel" src="parts.jsx"></script>
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+    function applyAccent(name) {
+      const map = {
+        green:  { a: 'oklch(82% 0.17 152)', l: 'oklch(55% 0.15 152)' },
+        amber:  { a: 'oklch(80% 0.15 70)',  l: 'oklch(58% 0.15 60)'  },
+        violet: { a: 'oklch(72% 0.18 295)', l: 'oklch(55% 0.17 295)' },
+      };
+      const v = map[name] || map.green;
+      const root = document.documentElement;
+      root.style.setProperty('--accent', document.body.classList.contains('theme-light') ? v.l : v.a);
+      root.style.setProperty('--accent-glow', `color-mix(in oklab, ${v.a} 40%, transparent)`);
+    }
+
+    function App() {
+      const D = window.TWEAK_DEFAULTS;
+      const [layout, setLayoutRaw] = useState(() => localStorage.getItem('bl.layout') || D.layout);
+      const [theme, setThemeRaw]   = useState(() => localStorage.getItem('bl.theme')  || D.theme);
+      const [accent, setAccentRaw] = useState(() => localStorage.getItem('bl.accent') || D.accent);
+      const [activeTag, setActiveTag] = useState('all');
+      const [focusIdx, setFocusIdx] = useState(0);
+      const [reading, setReading] = useState(null);
+      const [paletteOpen, setPaletteOpen] = useState(false);
+      const [tweaksOpen, setTweaksOpen] = useState(false);
+      const [konamiOn, setKonamiOn] = useState(false);
+
+      const setLayout = (v) => { setLayoutRaw(v); localStorage.setItem('bl.layout', v); postTweak({layout:v}); };
+      const setTheme  = (v) => { const val = typeof v === 'function' ? v(theme) : v; setThemeRaw(val); localStorage.setItem('bl.theme', val); postTweak({theme:val}); };
+      const setAccent = (v) => { setAccentRaw(v); localStorage.setItem('bl.accent', v); postTweak({accent:v}); };
+
+      const postTweak = (edits) => {
+        try { window.parent.postMessage({type:'__edit_mode_set_keys', edits}, '*'); } catch(e){}
+      };
+
+      useEffect(() => {
+        document.body.classList.toggle('theme-light', theme === 'light');
+        applyAccent(accent);
+      }, [theme, accent]);
+
+      useEffect(() => {
+        applyAccent(accent);
+      }, [theme]);
+
+      // Tweaks protocol
+      useEffect(() => {
+        const h = (e) => {
+          if (!e.data || typeof e.data !== 'object') return;
+          if (e.data.type === '__activate_edit_mode') setTweaksOpen(true);
+          if (e.data.type === '__deactivate_edit_mode') setTweaksOpen(false);
+        };
+        window.addEventListener('message', h);
+        try { window.parent.postMessage({type:'__edit_mode_available'}, '*'); } catch(e){}
+        return () => window.removeEventListener('message', h);
+      }, []);
+
+      // filtered posts
+      const posts = useMemo(() =>
+        activeTag === 'all' ? window.POSTS : window.POSTS.filter(p => p.tag === activeTag)
+      , [activeTag]);
+
+      useEffect(() => { setFocusIdx(0); }, [activeTag, layout]);
+
+      const openPost = (p) => { setReading(p); window.scrollTo(0,0); };
+      const closePost = () => setReading(null);
+
+      // Keyboard shortcuts
+      useEffect(() => {
+        const konSeq = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+        let buf = [];
+        const handler = (e) => {
+          // cmd+k
+          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault(); setPaletteOpen(o => !o); return;
+          }
+          if (paletteOpen) return;
+          if (reading) {
+            if (e.key === 'Escape') { closePost(); }
+            return;
+          }
+          if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+          // slash for palette
+          if (e.key === '/') { e.preventDefault(); setPaletteOpen(true); return; }
+          if (e.key === 'j') { setFocusIdx(i => Math.min(posts.length-1, i+1)); }
+          if (e.key === 'k') { setFocusIdx(i => Math.max(0, i-1)); }
+          if (e.key === 'Enter') { if (posts[focusIdx]) openPost(posts[focusIdx]); }
+          if (e.key === 't') { setTheme(theme === 'dark' ? 'light' : 'dark'); }
+          if (e.key === '1') setLayout('A');
+          if (e.key === '2') setLayout('B');
+          if (e.key === '3') setLayout('C');
+
+          // konami
+          buf.push(e.key);
+          if (buf.length > konSeq.length) buf = buf.slice(buf.length - konSeq.length);
+          if (buf.length === konSeq.length && buf.every((k, i) => k === konSeq[i])) {
+            setKonamiOn(true);
+            setTimeout(() => setKonamiOn(false), 2400);
+            buf = [];
+          }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+      }, [paletteOpen, reading, posts, focusIdx, theme]);
+
+      const Page = reading ? (
+        <Reader post={reading} onBack={closePost} onOpenPost={openPost} />
+      ) : (
+        <>
+          {layout === 'A' && <HomeA posts={posts} activeTag={activeTag} setTag={setActiveTag} focusIdx={focusIdx} onOpenPost={openPost} />}
+          {layout === 'B' && <HomeB posts={posts} activeTag={activeTag} setTag={setActiveTag} focusIdx={focusIdx} onOpenPost={openPost} />}
+          {layout === 'C' && <HomeC posts={posts} activeTag={activeTag} setTag={setActiveTag} focusIdx={focusIdx} onOpenPost={openPost} />}
+          <div className="wrap">
+            <footer className="footer">
+              <div>© 2026 Wang Yang · hand-coded · no trackers · <span className="accent">powered by coffee</span></div>
+              <div>
+                <a href="#" onClick={(e)=>e.preventDefault()}>github</a> ·{' '}
+                <a href="#" onClick={(e)=>e.preventDefault()}>rss</a> ·{' '}
+                <a href="#" onClick={(e)=>e.preventDefault()}>email</a>
+              </div>
+            </footer>
+          </div>
+        </>
+      );
+
+      return (
+        <div className="app" data-screen-label={reading ? `Reading: ${reading.title}` : `Home · Variant ${layout}`}>
+          <TopBar
+            theme={theme}
+            setTheme={setTheme}
+            layout={layout}
+            onOpenPalette={() => setPaletteOpen(true)}
+            onNav={(v) => { if (v === 'home') closePost(); }}
+          />
+          {Page}
+          <Palette
+            open={paletteOpen}
+            onClose={() => setPaletteOpen(false)}
+            onOpenPost={openPost}
+            setTheme={setTheme}
+            setLayout={setLayout}
+          />
+          <Konami on={konamiOn} />
+          <AsciiPet />
+          <TweaksPanel
+            open={tweaksOpen}
+            layout={layout} setLayout={setLayout}
+            theme={theme} setTheme={setTheme}
+            accent={accent} setAccent={setAccent}
+          />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

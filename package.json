@@ -1,0 +1,20 @@
+{
+  "name": "myblog",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "wangyang.dev — terminal-style blog (Vite + React)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.10"
+  }
+}

@@ -1,0 +1,23 @@
+node_modules
+dist
+.DS_Store
+*.local
+.vite
+.env
+.env.*
+!.env.example
+
+# Backend (planned, will land later)
+backend/data/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.venv/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+
+# Misc
+*.log
+
+# Handoff zip is a redundant copy of myblog/; keep myblog/ as source of truth
+MyBlog-handoff.zip
