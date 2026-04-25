@@ -89,10 +89,17 @@ def test_image_block():
     assert blocks == [{"t": "image", "src": "https://x.png", "alt": "alt"}]
 
 
-def test_disallowed_task_list_rejected():
+def test_task_list_degrades_to_plain_list_item():
+    # GFM task-list checkboxes are stripped to plain bullets so legacy posts
+    # that use ``- [ ]`` as a decorative checklist still parse. -- Task 16.
     md = "- [ ] todo"
-    with pytest.raises(MarkdownError):
-        parse_markdown(md)
+    blocks = parse_markdown(md)
+    assert blocks == [
+        {
+            "t": "ul",
+            "items": [{"c": "todo", "inline": [{"kind": "text", "s": "todo"}]}],
+        }
+    ]
 
 
 def test_disallowed_strikethrough_rejected():
@@ -105,3 +112,25 @@ def test_disallowed_html_rejected():
     md = "<div>nope</div>"
     with pytest.raises(MarkdownError):
         parse_markdown(md)
+
+
+from pathlib import Path
+
+FIXTURES = Path(__file__).parent / "fixtures" / "real_md"
+
+
+@pytest.mark.parametrize("md_path", sorted(FIXTURES.glob("*.md")), ids=lambda p: p.name)
+def test_real_fixture_parses_without_error(md_path):
+    text = md_path.read_text(encoding="utf-8")
+    blocks = parse_markdown(text)
+    assert isinstance(blocks, list)
+    assert len(blocks) > 0
+
+
+@pytest.mark.parametrize("md_path", sorted(FIXTURES.glob("*.md")), ids=lambda p: p.name)
+def test_real_fixture_block_types_known(md_path):
+    text = md_path.read_text(encoding="utf-8")
+    blocks = parse_markdown(text)
+    allowed = {"h1", "h2", "h3", "h4", "p", "code", "ul", "ol", "quote", "hr", "table", "image"}
+    for b in blocks:
+        assert b["t"] in allowed, f"unknown block type {b['t']} in {md_path.name}"

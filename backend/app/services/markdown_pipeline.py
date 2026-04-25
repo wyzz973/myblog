@@ -185,6 +185,39 @@ _md = mistune.create_markdown(
 )
 
 
+_TASK_PREFIXES = ("- [ ]", "- [x]", "- [X]", "* [ ]", "* [x]", "* [X]",
+                  "+ [ ]", "+ [x]", "+ [X]")
+
+
+def _has_unrendered_task_list(md: str) -> bool:
+    # Currently we always degrade. Reserved for future strict-mode use.
+    return False
+
+
+def _strip_task_list_markers(md: str) -> str:
+    """Rewrite GFM task-list items as plain bullet items.
+
+    Converts ``- [ ] foo`` / ``- [x] foo`` to ``- foo`` so mistune's default
+    list parser treats them as regular bullets. The semantic checkbox is
+    dropped; this is a one-way degrade. Real legacy posts (Task 16 fixtures)
+    use task-list syntax as decoration only, so this is acceptable.
+    """
+    lines = md.splitlines(keepends=True)
+    out: list[str] = []
+    for line in lines:
+        stripped = line.lstrip()
+        indent = line[: len(line) - len(stripped)]
+        for prefix in _TASK_PREFIXES:
+            if stripped.startswith(prefix):
+                # `- [ ] foo` -> `- foo`
+                bullet = prefix[0]
+                rest = stripped[len(prefix):].lstrip()
+                line = f"{indent}{bullet} {rest}"
+                break
+        out.append(line)
+    return "".join(out)
+
+
 def parse_markdown(md: str) -> list[Block]:
     """Parse a Markdown body into a list of structured blocks.
 
@@ -199,11 +232,11 @@ def parse_markdown(md: str) -> list[Block]:
                 raise MarkdownError("inline/block HTML is not supported")
     if "~~" in md:
         raise MarkdownError("strikethrough is not supported")
-    if "[ ]" in md or "[x]" in md or "[X]" in md:
-        # task list
-        for line in md.splitlines():
-            stripped = line.lstrip()
-            if stripped.startswith(("- [ ]", "- [x]", "- [X]")):
-                raise MarkdownError("task lists are not supported")
+    if _has_unrendered_task_list(md):
+        raise MarkdownError("task lists are not supported")
+    # Strip GFM task-list markers so they degrade to plain list items. Real
+    # legacy posts (e.g. PageHelper troubleshooting checklists) use these and
+    # we don't want to reject them. -- Batch C, Task 16.
+    md = _strip_task_list_markers(md)
     ast = _md(md)
     return _walk_blocks(ast)
