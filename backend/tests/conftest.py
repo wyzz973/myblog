@@ -24,7 +24,17 @@ async def client() -> AsyncIterator[AsyncClient]:
 
     Phase 1 runs tests against the dev DB to keep complexity low; Phase 4
     introduces `pytest-postgresql`-driven schema isolation as the suite grows.
+
+    The shared async engine in `app.db` is module-level, but pytest-asyncio
+    spins up a fresh event loop per test. Dispose the engine after each test
+    so its asyncpg connection pool gets recreated against the current loop
+    instead of carrying state from a closed loop.
     """
+    from app import db as _db
+
     app = create_app()
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            yield c
+    finally:
+        await _db.engine.dispose()

@@ -10,3 +10,26 @@ async def test_site_payload_shape(client):
         assert key in body, f"missing key: {key}"
     assert isinstance(body["uptime"], str)
     assert body["posts"] >= 0
+
+
+async def test_contacts_returns_list(client):
+    r = await client.get("/api/contacts")
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+
+async def test_tags_includes_all(client):
+    r = await client.get("/api/tags")
+    assert r.status_code == 200
+    body = r.json()
+    assert any(t["id"] == "all" for t in body)
+    assert all(set(t.keys()) == {"id", "label", "n"} for t in body)
+
+
+async def test_projects_returns_list(client):
+    r = await client.get("/api/projects")
+    assert r.status_code == 200
+    body = r.json()
+    assert isinstance(body, list)
+    if body:
+        assert set(body[0].keys()) == {"name", "desc", "lang", "stars", "status"}

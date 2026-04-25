@@ -1,16 +1,3 @@
-import pytest
-from httpx import ASGITransport, AsyncClient
-
-from app.main import create_app
-
-
-@pytest.fixture
-async def client():
-    app = create_app()
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c
-
-
 async def test_healthz(client):
     r = await client.get("/api/healthz")
     assert r.status_code == 200
