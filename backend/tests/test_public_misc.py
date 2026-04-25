@@ -33,3 +33,13 @@ async def test_projects_returns_list(client):
     assert isinstance(body, list)
     if body:
         assert set(body[0].keys()) == {"name", "desc", "lang", "stars", "status"}
+
+
+async def test_contrib_returns_grid(client):
+    r = await client.get("/api/contrib")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["weeks"] == 52
+    assert len(body["grid"]) == 52
+    assert all(len(col) == 7 for col in body["grid"])
+    assert body["source"] in ("seed", "github")
