@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { SITE, POSTS } from '../data.js';
+import { useSite, usePosts } from '../api/hooks.js';
 
 function CodeBlock({ code }) {
   const [copied, setCopied] = useState(false);
@@ -44,12 +44,17 @@ export default function Reader({ post, onBack, onOpenPost }) {
   const [progress, setProgress] = useState(0);
   const [activeHeading, setActiveHeading] = useState(0);
   const [liked, setLiked] = useState(false);
-  const [likes, setLikes] = useState(20);
+  const [likes, setLikes] = useState(0);
+
+  const { data: site } = useSite();
+  const { data: postsResp } = usePosts({ limit: 100 });
+  const SITE = site || { name: 'Wang Yang', tagline: '' };
+  const POSTS = postsResp?.items || [];
 
   useEffect(() => {
     if (!post) return;
     const stored = parseInt(localStorage.getItem(`bl.likes.${post.id}`) || '0', 10);
-    setLikes(stored || Math.floor(Math.random() * 80 + 20));
+    setLikes(stored || 0);
     setLiked(!!localStorage.getItem(`bl.liked.${post.id}`));
   }, [post?.id]);
 

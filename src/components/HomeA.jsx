@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { SITE, PROJECTS, TAGS, CONTRIB } from '../data.js';
+import { useSite, useProjects, useContrib } from '../api/hooks.js';
 
 function HeroA() {
   const [typed, setTyped] = useState('');
@@ -174,14 +174,33 @@ function PostRowA({ p, focused, onClick }) {
   );
 }
 
-export default function HomeA({ posts, activeTag, setTag, focusIdx, onOpenPost }) {
+export default function HomeA({ posts, tags, activeTag, setTag, focusIdx, onOpenPost, loading }) {
+  const { data: site } = useSite();
+  const { data: projects } = useProjects();
+  const { data: contribResp } = useContrib(52);
+
+  const SITE = site || { commits52w: 0, email: '', github: '', name: '' };
+  const PROJECTS = projects || [];
+  const CONTRIB = contribResp?.grid || [];
+  const TAGS = tags || [];
+
+  if (loading && posts.length === 0) {
+    return (
+      <div className="hero">
+        <div className="wrap">
+          <div className="prompt">loading…</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <HeroA />
       <div className="wrap">
         <div className="section-head" id="now">
           <span className="label"><span className="n">02 /</span> contributions · 52w</span>
-          <span className="count">{SITE.commits52w.toLocaleString()} commits</span>
+          <span className="count">{(SITE.commits52w || 0).toLocaleString()} commits</span>
         </div>
         <ContribGraph grid={CONTRIB} />
 

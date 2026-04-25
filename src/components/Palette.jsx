@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { POSTS } from '../data.js';
+import { usePosts } from '../api/hooks.js';
 import { ACCENTS } from '../utils/accent.js';
 
 const ICONS = { theme: '◐', accent: '◉', post: '✦' };
@@ -8,6 +8,8 @@ export default function Palette({ open, onClose, onOpenPost, setTheme, setAccent
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const inputRef = useRef(null);
+  const { data: postsResp } = usePosts({ limit: 100 });
+  const POSTS = postsResp?.items || [];
 
   const items = useMemo(() => {
     const cmds = [
@@ -39,7 +41,7 @@ export default function Palette({ open, onClose, onOpenPost, setTheme, setAccent
     return all.filter(
       (i) => i.label.toLowerCase().includes(qq) || (i.sub || '').toLowerCase().includes(qq),
     );
-  }, [q, onOpenPost, setTheme, setAccent]);
+  }, [q, onOpenPost, setTheme, setAccent, POSTS]);
 
   useEffect(() => {
     if (open) {
