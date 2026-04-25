@@ -7,6 +7,7 @@ from app.config import get_settings
 from app.errors import install_handlers
 from app.logging_config import configure_logging
 from app.middleware import RequestContextMiddleware
+from app.routers.admin import router as admin_router
 from app.routers.public import router as public_router
 
 
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
     install_handlers(app)
 
     app.include_router(public_router)
+    app.include_router(admin_router)
     return app
 
 
