@@ -54,3 +54,11 @@ class TfaChallengeRequest(_Strict):
 
 class TfaRegenerateRequest(_Strict):
     current_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class MagicLinkRequest(_Strict):
+    email: EmailStr
+
+
+class MagicLinkToggleRequest(_Strict):
+    enabled: bool

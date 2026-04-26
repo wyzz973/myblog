@@ -175,3 +175,40 @@ async def logout(
 @router.get("/session")
 async def get_session_(admin: Account = Depends(current_admin)) -> dict:
     return {"id": admin.id, "email": admin.email, "tfa_enabled": admin.tfa_enabled}
+
+
+from app.schemas.auth import MagicLinkRequest  # noqa: E402
+from app.services import email as email_svc  # noqa: E402
+from app.services import magic_link as magic_link_svc  # noqa: E402
+
+
+@router.post("/auth/magic-link", status_code=202)
+async def magic_link_request(
+    req: MagicLinkRequest,
+    s: AsyncSession = Depends(get_session),
+) -> dict:
+    acct = (
+        await s.execute(select(Account).where(Account.email == req.email))
+    ).scalar_one_or_none()
+    # Always 202: don't leak whether email/flag is set.
+    if acct is None or not acct.magic_link_enabled:
+        return {"ok": True}
+    raw = await magic_link_svc.issue(s, account_id=acct.id)
+    settings = get_settings()
+    base = "http://localhost:51820" if settings.env == "dev" else f"https://{settings.cors_origins[0] if settings.cors_origins else 'localhost'}"
+    url = f"{base}/api/admin/auth/magic-link/verify?t={raw}"
+    await email_svc.send_magic_link(email=acct.email, url=url)
+    return {"ok": True}
+
+
+@router.get("/auth/magic-link/verify", response_model=LoginResponse)
+async def magic_link_verify(
+    t: str,
+    response: Response,
+    s: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> LoginResponse:
+    acct = await magic_link_svc.consume(s, raw=t)
+    if acct is None:
+        raise HTTPException(401, "invalid or expired magic link")
+    return await _issue_session_tokens(redis, response, acct)
