@@ -84,20 +84,20 @@ async def issue_refresh(redis: Redis, *, sub: str) -> tuple[str, str]:
 
 
 async def rotate_refresh(
-    redis: Redis, *, sub: str, presented_raw: str
+    redis: Redis, *, sub: str, jti: str, presented_raw: str
 ) -> tuple[str, str] | None:
-    """Find the jti whose hash matches presented_raw, delete it, issue a new one.
+    """Atomic: GETDEL refresh:{sub}:{jti} (returns stored hash or None);
+    if it matches sha256(presented_raw), issue and store a new refresh,
+    return (raw, new_jti). Otherwise None.
 
-    Single-author scale: O(n) scan over `refresh:{sub}:*` is fine. Returns
-    None if no match (caller should treat as 401 + clear cookie).
+    Single Redis round-trip for the lookup-and-delete (modulo TTL semantics);
+    no race window between scan and delete.
     """
     target = _hash_raw(presented_raw)
-    pattern = f"refresh:{sub}:*"
-    async for key in redis.scan_iter(match=pattern):
-        if (await redis.get(key)) == target:
-            await redis.delete(key)
-            return await issue_refresh(redis, sub=sub)
-    return None
+    stored = await redis.execute_command("GETDEL", _refresh_key(sub, jti))
+    if stored != target:
+        return None
+    return await issue_refresh(redis, sub=sub)
 
 
 async def revoke_refresh(redis: Redis, *, sub: str, jti: str) -> None:

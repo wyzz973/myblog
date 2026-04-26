@@ -188,7 +188,7 @@ async def refresh(
         raise HTTPException(401, "missing refresh cookie")
     sub, _old_jti, raw = parsed
 
-    rotated = await rotate_refresh(redis, sub=sub, presented_raw=raw)
+    rotated = await rotate_refresh(redis, sub=sub, jti=_old_jti, presented_raw=raw)
     if rotated is None:
         _clear_refresh_cookie(response)
         raise HTTPException(401, "invalid refresh token")

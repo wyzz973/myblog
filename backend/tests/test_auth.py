@@ -47,7 +47,9 @@ async def test_issue_refresh_persists_in_redis(redis):
 
 async def test_rotate_refresh_invalidates_old(redis):
     raw, jti = await issue_refresh(redis, sub="1")
-    new_raw, new_jti = await rotate_refresh(redis, sub="1", presented_raw=raw)
+    new = await rotate_refresh(redis, sub="1", jti=jti, presented_raw=raw)
+    assert new is not None
+    new_raw, new_jti = new
     assert new_raw != raw
     assert new_jti != jti
     assert not await redis.exists(f"refresh:1:{jti}")
@@ -55,7 +57,7 @@ async def test_rotate_refresh_invalidates_old(redis):
 
 
 async def test_rotate_refresh_unknown_returns_none(redis):
-    result = await rotate_refresh(redis, sub="1", presented_raw="bogus")
+    result = await rotate_refresh(redis, sub="1", jti="bogus-jti", presented_raw="bogus")
     assert result is None
 
 
