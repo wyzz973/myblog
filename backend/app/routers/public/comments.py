@@ -3,9 +3,10 @@ from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db import get_session
 from app.errors import NotFoundError
-from app.models import Post
+from app.models import Account, Post
 from app.redis import get_redis
 from app.schemas.comment import (
     CommentCreateRequest,
@@ -13,7 +14,7 @@ from app.schemas.comment import (
     PublicAdminReply,
     PublicCommentItem,
 )
-from app.services import comments, rate_limit
+from app.services import comments, email as email_svc, rate_limit
 from app.services.hashing import email_hash
 
 router = APIRouter()
@@ -60,6 +61,23 @@ async def create_comment(
         email_hash=email_hash(req.email),
         body=req.body,
     )
+
+    settings = get_settings()
+    notify_to = settings.admin_notify_email
+    if notify_to is None:
+        admin = (
+            await s.execute(select(Account).where(Account.id == 1))
+        ).scalar_one_or_none()
+        notify_to = admin.email if admin else None
+    if notify_to:
+        await email_svc.send_comment_notification(
+            to=notify_to,
+            comment_id=row.id,
+            post_id=post_id,
+            who=req.who,
+            snippet=req.body,
+        )
+
     return CommentCreateResponse(id=row.id, status=row.status)
 
 

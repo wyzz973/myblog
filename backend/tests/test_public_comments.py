@@ -168,3 +168,41 @@ async def test_get_comments_response_omits_email_hash(client, seed_post):
     for item in body:
         assert "email_hash" not in item
         assert "email" not in item
+
+
+from unittest.mock import patch
+
+
+async def test_post_comment_triggers_notification(client, seed_post, monkeypatch):
+    monkeypatch.setenv("ADMIN_NOTIFY_EMAIL", "admin@example.com")
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.test")
+    from app.config import get_settings
+    get_settings.cache_clear()
+
+    from unittest.mock import MagicMock
+    fake_smtp = MagicMock()
+    fake_ctx = MagicMock()
+    fake_ctx.__enter__.return_value = fake_smtp
+
+    with patch("smtplib.SMTP", return_value=fake_ctx):
+        r = await client.post(
+            f"/api/posts/{seed_post}/comments",
+            json={"who": "carol", "email": "carol@example.com", "body": "hi mod"},
+        )
+    assert r.status_code == 202
+    fake_smtp.send_message.assert_called_once()
+
+
+async def test_post_comment_succeeds_when_smtp_down(client, seed_post, monkeypatch):
+    """SMTP failure inside notification must NOT cause the POST to 500."""
+    monkeypatch.setenv("ADMIN_NOTIFY_EMAIL", "admin@example.com")
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.test")
+    from app.config import get_settings
+    get_settings.cache_clear()
+
+    with patch("smtplib.SMTP", side_effect=ConnectionError("nope")):
+        r = await client.post(
+            f"/api/posts/{seed_post}/comments",
+            json={"who": "dave", "email": "d@e.f", "body": "yo"},
+        )
+    assert r.status_code == 202
