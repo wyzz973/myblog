@@ -17,7 +17,7 @@ async def seed_post():
         await s.execute(delete(Post).where(Post.id == pid))
         await s.execute(insert(Post).values(
             id=pid, n="901", title="t", tag_id=tag.id, date=date(2026, 1, 1),
-            lang="en", body_md="x", body_json={"blocks": []},
+            lang="en", body_md="x", body_json=[],
             word_count=1, status="published",
             featured=False, private=False, comments_enabled=True,
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
@@ -83,3 +83,11 @@ async def test_like_rate_limit(client, seed_post, redis):
     r = await client.post(f"/api/posts/{seed_post}/like")
     assert r.status_code == 429
     assert "Retry-After" in r.headers
+
+
+async def test_post_detail_shows_actual_likes_count(client, seed_post):
+    """After 1 like, GET /posts/{id} must show likes=1, not the hardcoded 0."""
+    await client.post(f"/api/posts/{seed_post}/like")
+    r = await client.get(f"/api/posts/{seed_post}")
+    assert r.status_code == 200
+    assert r.json()["likes"] == 1

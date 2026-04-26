@@ -67,7 +67,9 @@ async def get_post(post_id: str, s: AsyncSession = Depends(get_session)) -> Post
     return PostDetail(
         id=post.id, n=post.n, title=post.title, subtitle=post.subtitle, tag=post.tag.slug,
         date=post.date, read=post.read, lang=post.lang, summary=post.summary,
-        tldr=post.tldr, body=post.body_json, likes=0, word_count=post.word_count,
+        tldr=post.tldr, body=post.body_json,
+        likes=await likes.get_count(s, post_id=post.id),
+        word_count=post.word_count,
     )
 
 

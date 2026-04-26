@@ -9,6 +9,7 @@ from app.db import get_session
 from app.deps import current_admin, require_scope
 from app.models import Account, Post, Tag
 from app.schemas.post import PostDetail, PostList, PostSummary
+from app.services import likes
 from app.services.event_log import write_event
 from app.services.post_ingest import IngestError, parse_or_infer_frontmatter, upsert_post
 
@@ -88,7 +89,13 @@ async def get_post(
     post = (await s.execute(select(Post).join(Tag).where(Post.id == post_id))).scalar_one_or_none()
     if post is None:
         raise HTTPException(status_code=404, detail="not found")
-    return _detail(post)
+    return PostDetail(
+        id=post.id, n=post.n, title=post.title, subtitle=post.subtitle, tag=post.tag.slug,
+        date=post.date, read=post.read, lang=post.lang, summary=post.summary,
+        tldr=post.tldr, body=post.body_json,
+        likes=await likes.get_count(s, post_id=post.id),
+        word_count=post.word_count,
+    )
 
 
 @router.patch("/posts/{post_id}", response_model=PostDetail, dependencies=[Depends(require_scope("write"))])
