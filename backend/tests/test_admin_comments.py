@@ -101,3 +101,110 @@ async def test_admin_delete_unknown_404(client, admin_token):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert r.status_code == 404
+
+
+async def test_admin_patch_status_approve(client, admin_token, seed_post):
+    await _seed_comments(seed_post)
+    listing = await client.get(
+        f"/api/admin/comments?post_id={seed_post}&status=pending",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    cid = listing.json()[0]["id"]
+    r = await client.patch(
+        f"/api/admin/comments/{cid}",
+        json={"status": "approved"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "approved"
+    assert body.get("reply_id") is None
+
+
+async def test_admin_patch_set_flag(client, admin_token, seed_post):
+    await _seed_comments(seed_post)
+    listing = await client.get(
+        f"/api/admin/comments?post_id={seed_post}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    cid = listing.json()[0]["id"]
+    r = await client.patch(
+        f"/api/admin/comments/{cid}",
+        json={"flag": True},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    assert r.json()["flag"] is True
+
+
+async def test_admin_patch_reply_creates_child(client, admin_token, seed_post):
+    await _seed_comments(seed_post)
+    listing = await client.get(
+        f"/api/admin/comments?post_id={seed_post}&status=approved",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    parent_id = listing.json()[0]["id"]
+    r = await client.patch(
+        f"/api/admin/comments/{parent_id}",
+        json={"reply_body": "Thanks for the comment!"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["reply_id"] is not None
+
+    async with AsyncSessionLocal() as s:
+        child = (
+            await s.execute(select(Comment).where(Comment.id == body["reply_id"]))
+        ).scalar_one()
+        assert child.parent_id == parent_id
+        assert child.actor == "admin"
+        assert child.status == "approved"
+        assert child.body == "Thanks for the comment!"
+
+
+async def test_admin_patch_combined_status_and_reply(client, admin_token, seed_post):
+    await _seed_comments(seed_post)
+    listing = await client.get(
+        f"/api/admin/comments?post_id={seed_post}&status=pending",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    cid = listing.json()[0]["id"]
+    r = await client.patch(
+        f"/api/admin/comments/{cid}",
+        json={"status": "approved", "reply_body": "Approved + replied"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    body = r.json()
+    assert body["status"] == "approved"
+    assert body["reply_id"] is not None
+
+
+async def test_admin_patch_unknown_404(client, admin_token):
+    r = await client.patch(
+        "/api/admin/comments/99999999",
+        json={"status": "approved"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 404
+
+
+async def test_admin_patch_read_token_denied_403(client, admin_token, seed_post):
+    create = await client.post(
+        "/api/admin/api-tokens",
+        json={"name": "r-comments", "scope": "read"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    raw = create.json()["token"]
+    await _seed_comments(seed_post)
+    listing = await client.get(
+        f"/api/admin/comments?post_id={seed_post}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    cid = listing.json()[0]["id"]
+    r = await client.patch(
+        f"/api/admin/comments/{cid}",
+        json={"status": "approved"},
+        headers={"Authorization": f"Bearer {raw}"},
+    )
+    assert r.status_code == 403
