@@ -7,6 +7,7 @@ from app.config import get_settings
 from app.errors import install_handlers
 from app.logging_config import configure_logging
 from app.middleware import RequestContextMiddleware
+from app.redis import close_redis
 from app.routers.admin import router as admin_router
 from app.routers.public import router as public_router
 
@@ -15,6 +16,7 @@ from app.routers.public import router as public_router
 async def lifespan(_: FastAPI):
     configure_logging()
     yield
+    await close_redis()
 
 
 def create_app() -> FastAPI:

@@ -1,27 +1,26 @@
+"""Async redis client + FastAPI dependency."""
 from __future__ import annotations
 
-import redis.asyncio as redis
+from collections.abc import AsyncIterator
+
+from redis.asyncio import Redis, from_url
 
 from app.config import get_settings
 
-_settings = get_settings()
-_pool: redis.ConnectionPool | None = None
+_client: Redis | None = None
 
 
-def _get_pool() -> redis.ConnectionPool:
-    global _pool
-    if _pool is None:
-        _pool = redis.ConnectionPool.from_url(_settings.redis_url, decode_responses=True)
-    return _pool
+async def get_redis() -> AsyncIterator[Redis]:
+    """FastAPI dependency yielding a process-wide Redis connection."""
+    global _client
+    if _client is None:
+        _client = from_url(get_settings().redis_url, decode_responses=True)
+    yield _client
 
 
-def get_redis() -> redis.Redis:
-    return redis.Redis(connection_pool=_get_pool())
-
-
-async def ping() -> bool:
-    client = get_redis()
-    try:
-        return await client.ping()
-    finally:
-        await client.aclose()
+async def close_redis() -> None:
+    """Called from app shutdown lifespan."""
+    global _client
+    if _client is not None:
+        await _client.aclose()
+        _client = None

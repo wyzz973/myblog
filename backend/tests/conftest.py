@@ -1,11 +1,7 @@
-"""Shared pytest fixtures for the backend test suite.
-
-Task 21 in the plan introduces a httpx ASGI client fixture; this file is
-created early so logging is configured for every test session (otherwise
-`app.main:lifespan` is never driven under `httpx.ASGITransport`).
-"""
+"""Shared pytest fixtures for the backend test suite."""
 from collections.abc import AsyncIterator
 
+import fakeredis.aioredis
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -19,20 +15,27 @@ def _configure_logging() -> None:
 
 
 @pytest.fixture
-async def client() -> AsyncIterator[AsyncClient]:
-    """httpx.AsyncClient bound to a fresh ASGI app instance per test.
+async def redis():
+    """In-memory fakeredis client. Test-isolated: cleared at fixture teardown."""
+    client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    try:
+        yield client
+    finally:
+        await client.aclose()
 
-    Phase 1 runs tests against the dev DB to keep complexity low; Phase 4
-    introduces `pytest-postgresql`-driven schema isolation as the suite grows.
 
-    The shared async engine in `app.db` is module-level, but pytest-asyncio
-    spins up a fresh event loop per test. Dispose the engine after each test
-    so its asyncpg connection pool gets recreated against the current loop
-    instead of carrying state from a closed loop.
-    """
+@pytest.fixture
+async def client(redis) -> AsyncIterator[AsyncClient]:
+    """httpx.AsyncClient with the app's get_redis dependency overridden to fakeredis."""
     from app import db as _db
+    from app.redis import get_redis
 
     app = create_app()
+
+    async def _fake_get_redis():
+        yield redis
+
+    app.dependency_overrides[get_redis] = _fake_get_redis
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             yield c
