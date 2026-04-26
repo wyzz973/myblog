@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.routers.public.comments import router as comments_router
 from app.routers.public.contacts import router as contacts_router
 from app.routers.public.contrib import router as contrib_router
 from app.routers.public.health import router as health_router
@@ -16,3 +17,4 @@ router.include_router(tags_router, tags=["public"])
 router.include_router(projects_router, tags=["public"])
 router.include_router(posts_router, tags=["public"])
 router.include_router(contrib_router, tags=["public"])
+router.include_router(comments_router, tags=["public·comments"])

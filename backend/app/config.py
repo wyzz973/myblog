@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     public_api_base_url: str = "http://localhost:51820"
 
+    # IPs we trust to forward original client IP via X-Forwarded-For.
+    # In dev: empty list (use request.client.host directly).
+    trusted_proxies: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
     # storage
     database_url: str
     redis_url: str
@@ -36,10 +40,19 @@ class Settings(BaseSettings):
     login_lockout_window_sec: int = 900     # 15 minutes
     secrets_key: SecretStr = Field(min_length=32)
 
+    # SMTP (optional; if smtp_host is None we fall back to log-only)
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from: str = "noreply@wangyang.dev"
+    smtp_starttls: bool = True
+    admin_notify_email: str | None = None
+
     # salts
     like_salt: str = Field(min_length=16)
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "trusted_proxies", mode="before")
     @classmethod
     def _split_csv(cls, v):
         if isinstance(v, str):

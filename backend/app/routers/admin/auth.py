@@ -26,6 +26,7 @@ from app.services.auth import (
     rotate_refresh,
     verify_password,
 )
+from app.services.client_ip import client_ip_from, client_ip_key_part
 from app.services.event_log import write_event
 
 router = APIRouter()
@@ -77,16 +78,17 @@ async def login(
     redis: Redis = Depends(get_redis),
 ):
     settings = get_settings()
-    ip = request.client.host if request.client else "unknown"
+    raw_ip = client_ip_from(request)
+    ip_key = client_ip_key_part(request)
 
     # Lockout check first.
-    if await rate_limit.lockout_active(redis, f"login:{ip}"):
-        retry = await rate_limit.lockout_retry_after(redis, f"login:{ip}")
+    if await rate_limit.lockout_active(redis, f"login:{ip_key}"):
+        retry = await rate_limit.lockout_retry_after(redis, f"login:{ip_key}")
         from app.errors import RateLimited
         raise RateLimited(retry_after=retry, detail="too many failures, locked out")
 
     # Per-minute throttle.
-    await rate_limit.hit(redis, f"rl:login:{ip}", limit=5, window_sec=60)
+    await rate_limit.hit(redis, f"rl:login:{ip_key}", limit=5, window_sec=60)
 
     acct = (
         await s.execute(select(Account).where(Account.email == req.email))
@@ -94,7 +96,7 @@ async def login(
     if acct is None or not verify_password(acct.password_hash, req.password):
         await rate_limit.mark_failure(
             redis,
-            f"login:{ip}",
+            f"login:{ip_key}",
             threshold=settings.login_lockout_threshold,
             lock_window_sec=settings.login_lockout_window_sec,
         )
@@ -102,13 +104,13 @@ async def login(
             s,
             type="auth.login.fail",
             actor=req.email,
-            meta={"ip": ip, "reason": "password" if acct else "unknown_email"},
+            meta={"ip": raw_ip, "reason": "password" if acct else "unknown_email"},
         )
         await s.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
 
     # Successful password — reset failure counter.
-    await rate_limit.reset_failures(redis, f"login:{ip}")
+    await rate_limit.reset_failures(redis, f"login:{ip_key}")
 
     if acct.tfa_enabled:
         challenge = secrets.token_urlsafe(16)
@@ -120,7 +122,7 @@ async def login(
         return LoginChallengeResponse(challenge=challenge)
 
     result = await _issue_session_tokens(redis, response, acct)
-    await write_event(s, type="auth.login.success", actor=acct.email, meta={"ip": ip})
+    await write_event(s, type="auth.login.success", actor=acct.email, meta={"ip": raw_ip})
     await s.commit()
     return result
 
