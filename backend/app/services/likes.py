@@ -14,9 +14,9 @@ from app.services.hashing import ip_hash
 async def record_like(
     s: AsyncSession, *, post_id: str, ip: str
 ) -> tuple[int, bool]:
-    """INSERT ... ON CONFLICT DO NOTHING.
+    """INSERT ... ON CONFLICT DO NOTHING. Caller is responsible for commit.
 
-    Returns (current total likes for the post, was_new).
+    Returns (current_total_likes_after_flush, was_new).
     """
     today = datetime.now(UTC).date()
     stmt = (
@@ -33,7 +33,7 @@ async def record_like(
     res = await s.execute(stmt)
     inserted_id = res.scalar_one_or_none()
     was_new = inserted_id is not None
-    await s.commit()
+    await s.flush()
     total = await get_count(s, post_id=post_id)
     return total, was_new
 

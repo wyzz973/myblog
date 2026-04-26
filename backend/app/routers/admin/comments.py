@@ -102,10 +102,7 @@ async def delete_comment(
     ok = await comments.delete_one(s, comment_id=comment_id)
     if not ok:
         raise HTTPException(404, "comment not found")
-    # delete_one already commits the row delete; write the event AFTER
-    await write_event(
-        s, type="comment.deleted", actor=_admin.email,
-        meta={"comment_id": comment_id},
-    )
+    await write_event(s, type="comment.deleted", actor=_admin.email,
+                       meta={"comment_id": comment_id})
     await s.commit()
     return Response(status_code=204)

@@ -74,7 +74,9 @@ async def test_record_like_concurrent_same_ip(seed_post):
     """100 concurrent record_like calls with same (post, ip, day) → exactly 1 row."""
     async def one():
         async with AsyncSessionLocal() as s:
-            return await record_like(s, post_id=seed_post, ip="1.2.3.4")
+            result = await record_like(s, post_id=seed_post, ip="1.2.3.4")
+            await s.commit()
+            return result
 
     results = await asyncio.gather(*[one() for _ in range(100)], return_exceptions=False)
     new_count = sum(1 for _, was_new in results if was_new)

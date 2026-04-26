@@ -71,7 +71,6 @@ async def create_comment(
         target=str(row.id),
         meta={"post_id": post_id, "who": req.who, "length": len(req.body)},
     )
-    await s.commit()
 
     settings = get_settings()
     notify_to = settings.admin_notify_email
@@ -89,6 +88,7 @@ async def create_comment(
             snippet=req.body,
         )
 
+    await s.commit()
     return CommentCreateResponse(id=row.id, status=row.status)
 
 

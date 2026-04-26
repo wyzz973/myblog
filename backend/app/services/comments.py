@@ -31,7 +31,7 @@ async def create_pending(
         created_at=datetime.now(UTC),
     )
     s.add(row)
-    await s.commit()
+    await s.flush()
     await s.refresh(row)
     return row
 
@@ -128,7 +128,7 @@ async def patch(
             created_at=datetime.now(UTC),
         )
         s.add(child)
-    await s.commit()
+    await s.flush()
     if child is not None:
         await s.refresh(child)
     await s.refresh(parent)
@@ -137,5 +137,5 @@ async def patch(
 
 async def delete_one(s: AsyncSession, *, comment_id: int) -> bool:
     res = await s.execute(delete(Comment).where(Comment.id == comment_id))
-    await s.commit()
+    await s.flush()
     return res.rowcount > 0
