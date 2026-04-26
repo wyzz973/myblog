@@ -115,3 +115,42 @@ async def recompute_post_word_counts(ctx: dict) -> dict:
             n += 1
         await s.commit()
         return {"updated": n}
+
+
+from app.models import ContribDay  # noqa: E402
+from app.services import github as github_svc  # noqa: E402
+from app.services import integrations as integrations_svc  # noqa: E402
+from sqlalchemy.dialects.postgresql import insert as pg_insert  # noqa: E402
+
+
+async def sync_github_contrib(ctx: dict) -> dict:
+    """Pull latest 52-week contribution calendar; upsert contrib_days."""
+    async with AsyncSessionLocal() as s:
+        row = await integrations_svc.get(s, name="github")
+        if row is None or row.username is None:
+            return {"count": 0, "skipped": "no integration configured"}
+        token = await integrations_svc.get_secret(s, name="github")
+        if token is None:
+            return {"count": 0, "skipped": "no token"}
+
+    try:
+        days = await github_svc.fetch_contributions(token, row.username)
+    except Exception as e:  # noqa: BLE001
+        async with AsyncSessionLocal() as s:
+            await integrations_svc.set_status(s, name="github", status="failed", error=str(e)[:512])
+            await s.commit()
+        raise
+
+    async with AsyncSessionLocal() as s:
+        for d in days:
+            stmt = pg_insert(ContribDay).values(
+                day=d["day"], count=d["count"], level=d["level"],
+            ).on_conflict_do_update(
+                index_elements=[ContribDay.day],
+                set_={"count": d["count"], "level": d["level"]},
+            )
+            await s.execute(stmt)
+        await integrations_svc.set_status(s, name="github", status="ok", error=None)
+        await s.commit()
+
+    return {"count": len(days), "days_with_activity": sum(1 for d in days if d["count"] > 0)}

@@ -8,6 +8,16 @@ import pytest
 from app.services.github import fetch_contributions, ping
 
 
+@pytest.fixture(autouse=True)
+async def _reset_pool():
+    """Dispose the engine pool before each test so asyncpg connections are
+    not carried across test-local event loops."""
+    from app import db as _db
+    await _db.engine.dispose()
+    yield
+    await _db.engine.dispose()
+
+
 CONTRIBUTIONS_FAKE = {
     "data": {
         "user": {
@@ -69,3 +79,68 @@ async def test_fetch_contributions_empty_user():
     with patch("httpx.AsyncClient.post", new=_mock_post(payload, status=200)):
         days = await fetch_contributions("ghp_token", "ghost")
         assert days == []
+
+
+async def test_sync_github_contrib_upserts_contrib_days(monkeypatch):
+    from datetime import UTC, datetime as dt
+    from sqlalchemy import delete, select
+    from app.db import AsyncSessionLocal
+    from app.models import ContribDay, Integration
+    from app.services import integrations
+    from app.workers.tasks import sync_github_contrib
+
+    monkeypatch.setenv("LIKE_SALT", "x" * 32)
+    from app.config import get_settings
+    get_settings.cache_clear()
+
+    async with AsyncSessionLocal() as s:
+        await s.execute(delete(ContribDay))
+        await s.execute(delete(Integration).where(Integration.name == "github"))
+        await integrations.upsert(s, name="github", username="myuser", secret="ghp_token")
+        await s.commit()
+
+    from unittest.mock import patch
+    with patch("app.services.github.fetch_contributions") as fetch:
+        fetch.return_value = [
+            {"day": dt(2026, 1, 1).date(), "count": 5, "level": 2},
+            {"day": dt(2026, 1, 2).date(), "count": 0, "level": 0},
+        ]
+        result = await sync_github_contrib({})
+
+    assert result["count"] == 2
+
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(select(ContribDay))).scalars().all()
+        assert len(rows) == 2
+        row = (await s.execute(select(Integration).where(Integration.name == "github"))).scalar_one()
+        assert row.last_status == "ok"
+
+        # cleanup
+        await s.execute(delete(ContribDay))
+        await s.execute(delete(Integration).where(Integration.name == "github"))
+        await s.commit()
+
+
+async def test_sync_github_contrib_marks_failure(monkeypatch):
+    from sqlalchemy import delete, select
+    from app.db import AsyncSessionLocal
+    from app.models import Integration
+    from app.services import integrations
+    from app.workers.tasks import sync_github_contrib
+
+    async with AsyncSessionLocal() as s:
+        await s.execute(delete(Integration).where(Integration.name == "github"))
+        await integrations.upsert(s, name="github", username="myuser", secret="ghp_bad")
+        await s.commit()
+
+    from unittest.mock import patch
+    with patch("app.services.github.fetch_contributions", side_effect=ConnectionError("network")):
+        with pytest.raises(ConnectionError):
+            await sync_github_contrib({})
+
+    async with AsyncSessionLocal() as s:
+        row = (await s.execute(select(Integration).where(Integration.name == "github"))).scalar_one()
+        assert row.last_status == "failed"
+        assert row.last_error and "network" in row.last_error
+        await s.execute(delete(Integration).where(Integration.name == "github"))
+        await s.commit()
