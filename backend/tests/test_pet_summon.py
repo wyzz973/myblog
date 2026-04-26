@@ -1,8 +1,27 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from sqlalchemy import update
 
+from app.db import engine
+from app.models import SiteMeta
 from app.services import pet_llm
+
+
+@pytest.fixture(autouse=True)
+async def reset_pet_config(request):
+    """Reset pet_config to defaults before each test that hits the HTTP endpoints."""
+    if "client" not in request.fixturenames:
+        yield
+        return
+    from app.schemas.pet import PetConfig
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    defaults = PetConfig().model_dump()
+    async with AsyncSession(engine) as s:
+        await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(pet_config=defaults))
+        await s.commit()
+    yield
 
 
 async def test_ping_with_valid_key():
@@ -45,3 +64,30 @@ async def test_summon_returns_fallback_on_error():
         )
         assert quip == "only fb"
         assert source == "fallback"
+
+
+async def test_public_pet_config_returns_safe_subset(client):
+    r = await client.get("/api/pet/config")
+    assert r.status_code == 200
+    body = r.json()
+    assert "species" in body
+    assert "model" not in body
+    assert "system_prompt" not in body
+    assert "fallback_lines" not in body
+
+
+async def test_public_pet_summon_returns_quip(client):
+    """With no anthropic integration, summon returns a fallback line."""
+    r = await client.post("/api/pet/summon")
+    assert r.status_code == 200
+    body = r.json()
+    assert "quip" in body
+    assert body["source"] in ("llm", "fallback")
+
+
+async def test_public_pet_summon_rate_limit(client, redis):
+    for _ in range(6):
+        r = await client.post("/api/pet/summon")
+        assert r.status_code == 200
+    r = await client.post("/api/pet/summon")
+    assert r.status_code == 429
