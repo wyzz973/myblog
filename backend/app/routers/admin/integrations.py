@@ -63,6 +63,15 @@ async def put_github(
     )
 
 
+@router.post("/integrations/github/sync", dependencies=[Depends(require_scope("write"))])
+async def sync_github(
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> dict:
+    from app.workers.tasks import sync_github_contrib
+    return await sync_github_contrib({})
+
+
 @router.get("/integrations/anthropic", response_model=AnthropicIntegrationGet)
 async def get_anthropic(
     _admin: Account = Depends(current_admin),

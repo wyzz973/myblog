@@ -95,3 +95,19 @@ async def test_get_never_returns_secret(client, admin_token, cleanup_integration
     )
     text = r.text
     assert "leaky-secret-xyz" not in text
+
+
+async def test_github_manual_sync_endpoint(client, admin_token, cleanup_integrations):
+    from app.services import integrations as svc
+    async with AsyncSessionLocal() as s:
+        await svc.upsert(s, name="github", username="alice", secret="ghp_token")
+        await s.commit()
+
+    with patch("app.services.github.fetch_contributions", new=AsyncMock(return_value=[])):
+        r = await client.post(
+            "/api/admin/integrations/github/sync",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert "count" in body
