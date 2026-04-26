@@ -23,6 +23,14 @@ def monkeypatch_session():
     mp.undo()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _register_arq_tasks() -> None:
+    """Register all ARQ tasks in the inline-mode registry for tests."""
+    from app.workers import queue as q
+    from app.workers import tasks as t
+    q.register("send_email_task", t.send_email_task)
+
+
 @pytest.fixture
 async def redis():
     """In-memory fakeredis client. Test-isolated: cleared at fixture teardown."""

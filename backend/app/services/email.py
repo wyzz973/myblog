@@ -1,19 +1,13 @@
 """Email transport.
 
-Two modes selected at call time via settings.smtp_host:
+P5: send_email enqueues an ARQ task; the task body invokes _send_sync
+in a thread. Dev fallback (smtp_host=None) still logs metadata only.
 
-  - smtp_host = None  → dev fallback: structlog.info() the event and
-    return. Used when the operator hasn't wired SMTP yet.
-  - smtp_host = "..." → run smtplib.SMTP(host, port) in asyncio.to_thread,
-    optional STARTTLS + login, send_message.
-
-Failures inside SMTP mode are caught and logged at WARNING. The caller's
-business path (comment submission, magic-link issuance) MUST NOT fail
-because email transport failed.
+Inline test mode (settings.arq_inline=True) runs the task synchronously
+in the same process so HTTP integration tests don't need a worker.
 """
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import smtplib
 from email.message import EmailMessage
@@ -43,22 +37,18 @@ def _send_sync(*, to: str, subject: str, body: str) -> None:
 async def send_email(*, to: str, subject: str, body: str) -> None:
     settings = get_settings()
     if settings.smtp_host is None:
-        # Dev fallback: log only metadata, never the body. Magic-link URLs
-        # and comment text are sensitive; if smtp_host is unset by mistake
-        # in prod, body content would leak through stdout/structlog.
         log.info(
             "email.dev_log",
-            to=to,
-            subject=subject,
+            to=to, subject=subject,
             body_sha256=hashlib.sha256(body.encode()).hexdigest()[:12],
             body_len=len(body),
         )
         return
+    from app.workers.queue import enqueue
     try:
-        await asyncio.to_thread(_send_sync, to=to, subject=subject, body=body)
-        log.info("email.sent", to=to, subject=subject)
+        await enqueue("send_email_task", to=to, subject=subject, body=body)
     except Exception as e:  # noqa: BLE001
-        log.warning("email.send_failed", to=to, subject=subject, error=str(e))
+        log.warning("email.enqueue_failed", to=to, subject=subject, error=str(e))
 
 
 async def send_magic_link(*, email: str, url: str) -> None:
