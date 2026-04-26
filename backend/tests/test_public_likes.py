@@ -1,6 +1,7 @@
+from datetime import UTC, date, datetime
+
 import pytest
 from sqlalchemy import delete, insert
-from datetime import UTC, date, datetime
 
 from app.db import AsyncSessionLocal
 from app.models import LikeEvent, Post, Tag

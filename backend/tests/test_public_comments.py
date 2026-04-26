@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import delete, insert, select
@@ -168,9 +169,6 @@ async def test_get_comments_response_omits_email_hash(client, seed_post):
     for item in body:
         assert "email_hash" not in item
         assert "email" not in item
-
-
-from unittest.mock import patch
 
 
 async def test_post_comment_triggers_notification(client, seed_post, monkeypatch):

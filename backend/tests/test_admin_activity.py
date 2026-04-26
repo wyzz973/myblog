@@ -81,7 +81,9 @@ async def test_post_liked_writes_event(client, admin_token):
     """POST /posts/{id}/like must produce a post.liked event."""
     pid = "p4-evt-like"
     from datetime import UTC, date, datetime
-    from sqlalchemy import select, insert
+
+    from sqlalchemy import insert, select
+
     from app.models import LikeEvent, Post, Tag
 
     async with AsyncSessionLocal() as s:
@@ -113,7 +115,9 @@ async def test_post_liked_writes_event(client, admin_token):
 async def test_comment_created_writes_event(client, admin_token):
     pid = "p4-evt-cmt"
     from datetime import UTC, date, datetime
-    from sqlalchemy import select, insert
+
+    from sqlalchemy import insert, select
+
     from app.models import Comment, Post, Tag
 
     async with AsyncSessionLocal() as s:

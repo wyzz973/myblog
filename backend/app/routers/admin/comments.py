@@ -7,7 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.deps import current_admin, require_scope
 from app.models import Account, SiteMeta
-from app.schemas.comment import AdminCommentItem, AdminCommentPatchRequest, AdminCommentPatchResponse
+from app.schemas.comment import (
+    AdminCommentItem,
+    AdminCommentPatchRequest,
+    AdminCommentPatchResponse,
+)
 from app.services import comments
 from app.services.event_log import write_event
 

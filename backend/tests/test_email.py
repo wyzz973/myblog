@@ -2,8 +2,6 @@
 import logging
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from app.services.email import send_comment_notification, send_email, send_magic_link
 
 

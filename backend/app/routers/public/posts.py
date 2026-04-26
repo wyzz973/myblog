@@ -1,9 +1,9 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from redis.asyncio import Redis
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from datetime import UTC, datetime
 
 from app.db import get_session
 from app.errors import NotFoundError

@@ -14,7 +14,8 @@ from app.schemas.comment import (
     PublicAdminReply,
     PublicCommentItem,
 )
-from app.services import comments, email as email_svc, rate_limit
+from app.services import comments, rate_limit
+from app.services import email as email_svc
 from app.services.event_log import write_event
 from app.services.hashing import email_hash
 
