@@ -15,6 +15,7 @@ from app.schemas.comment import (
     PublicCommentItem,
 )
 from app.services import comments, email as email_svc, rate_limit
+from app.services.event_log import write_event
 from app.services.hashing import email_hash
 
 router = APIRouter()
@@ -61,6 +62,14 @@ async def create_comment(
         email_hash=email_hash(req.email),
         body=req.body,
     )
+
+    await write_event(
+        s, type="comment.created",
+        actor=email_hash(req.email)[:12],
+        target=str(row.id),
+        meta={"post_id": post_id, "who": req.who, "length": len(req.body)},
+    )
+    await s.commit()
 
     settings = get_settings()
     notify_to = settings.admin_notify_email

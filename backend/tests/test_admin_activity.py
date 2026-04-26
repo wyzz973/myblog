@@ -75,3 +75,71 @@ async def test_dashboard_activity_default_limit(client, admin_token, seed_events
 async def test_activity_requires_admin(client):
     r = await client.get("/api/admin/activity")
     assert r.status_code == 401
+
+
+async def test_post_liked_writes_event(client, admin_token):
+    """POST /posts/{id}/like must produce a post.liked event."""
+    pid = "p4-evt-like"
+    from datetime import UTC, date, datetime
+    from sqlalchemy import select, insert
+    from app.models import LikeEvent, Post, Tag
+
+    async with AsyncSessionLocal() as s:
+        tag = (await s.execute(select(Tag).limit(1))).scalar_one()
+        await s.execute(delete(Post).where(Post.id == pid))
+        await s.execute(insert(Post).values(
+            id=pid, n="906", title="t", tag_id=tag.id, date=date(2026, 1, 1),
+            lang="en", body_md="x", body_json={"blocks": []},
+            word_count=1, status="published",
+            featured=False, private=False, comments_enabled=True,
+            created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+        ))
+        await s.commit()
+    try:
+        await client.post(f"/api/posts/{pid}/like")
+        r = await client.get(
+            "/api/admin/activity?type=post.liked&limit=20",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        items = r.json()
+        assert any(i["target"] == pid for i in items)
+    finally:
+        async with AsyncSessionLocal() as s:
+            await s.execute(delete(LikeEvent).where(LikeEvent.post_id == pid))
+            await s.execute(delete(Post).where(Post.id == pid))
+            await s.commit()
+
+
+async def test_comment_created_writes_event(client, admin_token):
+    pid = "p4-evt-cmt"
+    from datetime import UTC, date, datetime
+    from sqlalchemy import select, insert
+    from app.models import Comment, Post, Tag
+
+    async with AsyncSessionLocal() as s:
+        tag = (await s.execute(select(Tag).limit(1))).scalar_one()
+        await s.execute(delete(Post).where(Post.id == pid))
+        await s.execute(insert(Post).values(
+            id=pid, n="907", title="t", tag_id=tag.id, date=date(2026, 1, 1),
+            lang="en", body_md="x", body_json={"blocks": []},
+            word_count=1, status="published",
+            featured=False, private=False, comments_enabled=True,
+            created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+        ))
+        await s.commit()
+    try:
+        await client.post(
+            f"/api/posts/{pid}/comments",
+            json={"who": "evt", "email": "e@v.t", "body": "hello"},
+        )
+        r = await client.get(
+            "/api/admin/activity?type=comment.created&limit=20",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        items = r.json()
+        assert any(str(i.get("meta", {}).get("post_id")) == pid for i in items)
+    finally:
+        async with AsyncSessionLocal() as s:
+            await s.execute(delete(Comment).where(Comment.post_id == pid))
+            await s.execute(delete(Post).where(Post.id == pid))
+            await s.commit()

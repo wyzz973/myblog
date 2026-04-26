@@ -3,6 +3,8 @@ from redis.asyncio import Redis
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from datetime import UTC, datetime
+
 from app.db import get_session
 from app.errors import NotFoundError
 from app.models import Post, Tag
@@ -10,6 +12,8 @@ from app.redis import get_redis
 from app.schemas.like import LikeResponse
 from app.schemas.post import PostDetail, PostList, PostSummary
 from app.services import likes, rate_limit
+from app.services.event_log import write_event
+from app.services.hashing import ip_hash
 
 router = APIRouter()
 
@@ -90,4 +94,13 @@ async def like_post(
         raise NotFoundError("post not found")
 
     total, was_new = await likes.record_like(s, post_id=post_id, ip=ip)
+    if was_new:
+        await write_event(
+            s,
+            type="post.liked",
+            actor=ip_hash(ip)[:12],
+            target=post_id,
+            meta={"day": datetime.now(UTC).date().isoformat()},
+        )
+        await s.commit()
     return LikeResponse(likes=total, was_new=was_new)

@@ -9,6 +9,7 @@ from app.deps import current_admin, require_scope
 from app.models import Account, SiteMeta
 from app.schemas.comment import AdminCommentItem, AdminCommentPatchRequest, AdminCommentPatchResponse
 from app.services import comments
+from app.services.event_log import write_event
 
 router = APIRouter()
 
@@ -61,6 +62,25 @@ async def patch_comment(
     )
     if parent is None:
         raise HTTPException(404, "comment not found")
+    if req.status is not None:
+        await write_event(
+            s, type="comment.moderated", actor=_admin.email,
+            target=str(parent.id),
+            meta={"to_status": req.status},
+        )
+    if req.flag is not None:
+        await write_event(
+            s, type="comment.flagged", actor=_admin.email,
+            target=str(parent.id),
+            meta={"flag": req.flag},
+        )
+    if child is not None:
+        await write_event(
+            s, type="comment.replied", actor=_admin.email,
+            target=str(parent.id),
+            meta={"child_id": child.id, "post_id": parent.post_id},
+        )
+    await s.commit()
     return AdminCommentPatchResponse(
         id=parent.id,
         status=parent.status,
@@ -78,4 +98,10 @@ async def delete_comment(
     ok = await comments.delete_one(s, comment_id=comment_id)
     if not ok:
         raise HTTPException(404, "comment not found")
+    # delete_one already commits the row delete; write the event AFTER
+    await write_event(
+        s, type="comment.deleted", actor=_admin.email,
+        meta={"comment_id": comment_id},
+    )
+    await s.commit()
     return Response(status_code=204)
