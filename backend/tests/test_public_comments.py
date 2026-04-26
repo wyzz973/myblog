@@ -109,3 +109,62 @@ async def test_post_comment_invalid_body(client, seed_post):
         json={"who": "", "email": "x@y.z", "body": "hi"},
     )
     assert r.status_code == 422
+
+
+async def test_get_comments_only_approved(client, seed_post):
+    """Pending comments must not appear in GET response."""
+    async with AsyncSessionLocal() as s:
+        s.add_all([
+            Comment(post_id=seed_post, who="approved", email_hash="h" * 64,
+                    body="visible", status="approved", actor="public", flag=False,
+                    created_at=datetime.now(UTC)),
+            Comment(post_id=seed_post, who="pending", email_hash="h" * 64,
+                    body="hidden", status="pending", actor="public", flag=False,
+                    created_at=datetime.now(UTC)),
+            Comment(post_id=seed_post, who="spam", email_hash="h" * 64,
+                    body="spammy", status="spam", actor="public", flag=False,
+                    created_at=datetime.now(UTC)),
+        ])
+        await s.commit()
+
+    r = await client.get(f"/api/posts/{seed_post}/comments")
+    assert r.status_code == 200
+    body = r.json()
+    bodies = [c["body"] for c in body]
+    assert "visible" in bodies
+    assert "hidden" not in bodies
+    assert "spammy" not in bodies
+
+
+async def test_get_comments_includes_admin_reply_nested(client, seed_post):
+    async with AsyncSessionLocal() as s:
+        parent = Comment(post_id=seed_post, who="alice", email_hash="h" * 64,
+                         body="What about X?", status="approved", actor="public", flag=False,
+                         created_at=datetime.now(UTC))
+        s.add(parent)
+        await s.commit()
+        await s.refresh(parent)
+        s.add(Comment(post_id=seed_post, parent_id=parent.id, who="Wang Yang",
+                      email_hash=None, body="X is the answer.", status="approved",
+                      actor="admin", flag=False, created_at=datetime.now(UTC)))
+        await s.commit()
+
+    r = await client.get(f"/api/posts/{seed_post}/comments")
+    items = r.json()
+    parent_item = next(c for c in items if c["body"] == "What about X?")
+    assert parent_item["admin_reply"] is not None
+    assert parent_item["admin_reply"]["body"] == "X is the answer."
+    assert parent_item["admin_reply"]["who"] == "Wang Yang"
+
+
+async def test_get_comments_response_omits_email_hash(client, seed_post):
+    async with AsyncSessionLocal() as s:
+        s.add(Comment(post_id=seed_post, who="alice", email_hash="abcd1234" * 8,
+                      body="hi", status="approved", actor="public", flag=False,
+                      created_at=datetime.now(UTC)))
+        await s.commit()
+    r = await client.get(f"/api/posts/{seed_post}/comments")
+    body = r.json()
+    for item in body:
+        assert "email_hash" not in item
+        assert "email" not in item

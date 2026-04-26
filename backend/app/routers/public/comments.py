@@ -7,7 +7,12 @@ from app.db import get_session
 from app.errors import NotFoundError
 from app.models import Post
 from app.redis import get_redis
-from app.schemas.comment import CommentCreateRequest, CommentCreateResponse
+from app.schemas.comment import (
+    CommentCreateRequest,
+    CommentCreateResponse,
+    PublicAdminReply,
+    PublicCommentItem,
+)
 from app.services import comments, rate_limit
 from app.services.hashing import email_hash
 
@@ -56,3 +61,23 @@ async def create_comment(
         body=req.body,
     )
     return CommentCreateResponse(id=row.id, status=row.status)
+
+
+@router.get("/posts/{post_id}/comments", response_model=list[PublicCommentItem])
+async def list_comments(
+    post_id: str,
+    s: AsyncSession = Depends(get_session),
+) -> list[PublicCommentItem]:
+    await _resolve_post(s, post_id)
+    pairs = await comments.list_for_post(s, post_id=post_id)
+    return [
+        PublicCommentItem(
+            id=top.id, who=top.who, body=top.body, created_at=top.created_at,
+            admin_reply=(
+                PublicAdminReply(
+                    id=reply.id, who=reply.who, body=reply.body, created_at=reply.created_at
+                ) if reply else None
+            ),
+        )
+        for top, reply in pairs
+    ]
