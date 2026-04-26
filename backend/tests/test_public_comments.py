@@ -204,3 +204,37 @@ async def test_post_comment_succeeds_when_smtp_down(client, seed_post, monkeypat
             json={"who": "dave", "email": "d@e.f", "body": "yo"},
         )
     assert r.status_code == 202
+
+
+async def test_get_comments_returns_latest_admin_reply(client, seed_post):
+    """If admin replies twice, the public GET returns the LATEST one."""
+    from datetime import timedelta
+    async with AsyncSessionLocal() as s:
+        parent = Comment(
+            post_id=seed_post, who="alice", email_hash="h" * 64,
+            body="question?", status="approved", actor="public", flag=False,
+            created_at=datetime.now(UTC),
+        )
+        s.add(parent)
+        await s.commit()
+        await s.refresh(parent)
+
+        first = Comment(
+            post_id=seed_post, parent_id=parent.id, who="Wang Yang",
+            email_hash=None, body="first reply", status="approved",
+            actor="admin", flag=False,
+            created_at=datetime.now(UTC) - timedelta(seconds=10),
+        )
+        second = Comment(
+            post_id=seed_post, parent_id=parent.id, who="Wang Yang",
+            email_hash=None, body="corrected reply", status="approved",
+            actor="admin", flag=False,
+            created_at=datetime.now(UTC),
+        )
+        s.add_all([first, second])
+        await s.commit()
+
+    r = await client.get(f"/api/posts/{seed_post}/comments")
+    items = r.json()
+    parent_item = next(c for c in items if c["body"] == "question?")
+    assert parent_item["admin_reply"]["body"] == "corrected reply"

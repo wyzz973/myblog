@@ -60,14 +60,19 @@ async def list_for_post(s: AsyncSession, *, post_id: str) -> list[tuple[Comment,
     parent_ids = [t.id for t in tops]
     replies = (
         await s.execute(
-            select(Comment).where(
+            select(Comment)
+            .where(
                 Comment.parent_id.in_(parent_ids),
                 Comment.actor == "admin",
                 Comment.status == "approved",
             )
+            .order_by(Comment.created_at.desc())
         )
     ).scalars().all()
-    by_parent: dict[int, Comment] = {r.parent_id: r for r in replies if r.parent_id}
+    by_parent: dict[int, Comment] = {}
+    for r in replies:
+        if r.parent_id is not None and r.parent_id not in by_parent:
+            by_parent[r.parent_id] = r
     return [(t, by_parent.get(t.id)) for t in tops]
 
 
