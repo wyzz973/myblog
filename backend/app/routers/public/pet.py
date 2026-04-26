@@ -11,7 +11,9 @@ from app.redis import get_redis
 from app.schemas.pet import PetConfig, PublicPetConfig
 from app.services import integrations as integrations_svc
 from app.services import pet_llm, rate_limit
-from app.services.client_ip import client_ip_key_part
+from app.services.client_ip import client_ip_from, client_ip_key_part
+from app.services.event_log import write_event
+from app.services.hashing import ip_hash
 
 router = APIRouter()
 
@@ -45,11 +47,19 @@ async def public_pet_summon(
 
     api_key = await integrations_svc.get_secret(s, name="anthropic")
     if api_key is None or not cfg.enabled:
-        return {"quip": random.choice(cfg.fallback_lines), "source": "fallback"}
-    quip, source = await pet_llm.summon(
-        api_key=api_key,
-        system_prompt=cfg.system_prompt,
-        model=cfg.model,
-        fallback_lines=cfg.fallback_lines,
+        source = "fallback"
+        quip = random.choice(cfg.fallback_lines)
+    else:
+        quip, source = await pet_llm.summon(
+            api_key=api_key,
+            system_prompt=cfg.system_prompt,
+            model=cfg.model,
+            fallback_lines=cfg.fallback_lines,
+        )
+    await write_event(
+        s, type="pet.summoned",
+        actor=ip_hash(client_ip_from(request))[:12],
+        meta={"source": source},
     )
+    await s.commit()
     return {"quip": quip, "source": source}

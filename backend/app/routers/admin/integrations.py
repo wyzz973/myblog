@@ -13,6 +13,7 @@ from app.schemas.integration import (
 from app.services import github as github_svc
 from app.services import integrations as svc
 from app.services import pet_llm as pet_svc
+from app.services.event_log import write_event
 
 router = APIRouter()
 
@@ -55,6 +56,11 @@ async def put_github(
     except Exception:  # noqa: BLE001
         pass
     row = await svc.get(s, name="github")
+    await write_event(
+        s, type="integration.github.synced", actor=_admin.email,
+        meta={"username": req.username, "status": row.last_status},
+    )
+    await s.commit()
     return GithubIntegrationGet(
         username=row.username,
         last_synced_at=row.last_synced_at,
@@ -69,7 +75,13 @@ async def sync_github(
     s: AsyncSession = Depends(get_session),
 ) -> dict:
     from app.workers.tasks import sync_github_contrib
-    return await sync_github_contrib({})
+    result = await sync_github_contrib({})
+    await write_event(
+        s, type="integration.github.synced", actor=_admin.email,
+        meta={"manual": True},
+    )
+    await s.commit()
+    return result
 
 
 @router.get("/integrations/anthropic", response_model=AnthropicIntegrationGet)
@@ -103,6 +115,7 @@ async def put_anthropic(
     extras = {"model": req.model} if req.model else {}
     await svc.upsert(s, name="anthropic", username=None, secret=req.api_key, extra=extras)
     await svc.set_status(s, name="anthropic", status="ok", error=None)
+    await write_event(s, type="integration.anthropic.tested", actor=_admin.email, meta={"ok": True})
     await s.commit()
     row = await svc.get(s, name="anthropic")
     return AnthropicIntegrationGet(

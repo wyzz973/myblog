@@ -6,6 +6,7 @@ from app.deps import current_admin, require_scope
 from app.models import Account
 from app.schemas.now import NowCreateRequest, NowEntryItem, NowPatchRequest
 from app.services import now as now_svc
+from app.services.event_log import write_event
 
 router = APIRouter()
 
@@ -35,6 +36,10 @@ async def create_now(
         s, body_md=req.body_md, listening=req.listening,
         reading=req.reading, is_current=req.is_current,
     )
+    await write_event(
+        s, type="now.created", actor=_admin.email,
+        target=str(row.id), meta={"is_current": row.is_current},
+    )
     await s.commit()
     return _to_item(row)
 
@@ -54,6 +59,11 @@ async def patch_now(
     )
     if row is None:
         raise HTTPException(404, "now entry not found")
+    fields = [k for k, v in req.model_dump(exclude_none=True).items() if v is not None]
+    await write_event(
+        s, type="now.updated", actor=_admin.email,
+        target=str(entry_id), meta={"fields_changed": fields},
+    )
     await s.commit()
     return _to_item(row)
 
@@ -68,5 +78,6 @@ async def delete_now(
     ok = await now_svc.delete_one(s, entry_id=entry_id)
     if not ok:
         raise HTTPException(404, "now entry not found")
+    await write_event(s, type="now.deleted", actor=_admin.email, target=str(entry_id))
     await s.commit()
     return Response(status_code=204)
