@@ -237,27 +237,27 @@ from app.services import magic_link as magic_link_svc  # noqa: E402
 @router.post("/auth/magic-link", status_code=202)
 async def magic_link_request(
     req: MagicLinkRequest,
+    request: Request,
     s: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ) -> dict:
-    await rate_limit.hit(
-        redis, f"rl:mlink:{req.email.lower()}", limit=3, window_sec=3600
-    )
+    await rate_limit.hit(redis, f"rl:mlink:{req.email.lower()}", limit=3, window_sec=3600)
     acct = (
         await s.execute(select(Account).where(Account.email == req.email))
     ).scalar_one_or_none()
-    # Always 202: don't leak whether email/flag is set.
     if acct is None or not acct.magic_link_enabled:
+        # Equalise timing: do dummy crypto + sleep close to issue+commit cost.
+        import asyncio as _a
+        hashlib.sha256(req.email.encode()).hexdigest()
+        await _a.sleep(0.005)
         return {"ok": True}
     raw = await magic_link_svc.issue(s, account_id=acct.id)
     settings = get_settings()
-    base = "http://localhost:51820" if settings.env == "dev" else f"https://{settings.cors_origins[0] if settings.cors_origins else 'localhost'}"
+    base = settings.public_api_base_url
     url = f"{base}/api/admin/auth/magic-link/verify?t={raw}"
     await email_svc.send_magic_link(email=acct.email, url=url)
     await write_event(
-        s,
-        type="auth.magic_link.requested",
-        actor=req.email,
+        s, type="auth.magic_link.requested", actor=req.email,
         meta={"email_hashed": hashlib.sha256(req.email.lower().encode()).hexdigest()[:12]},
     )
     await s.commit()
