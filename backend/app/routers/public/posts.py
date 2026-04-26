@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from redis.asyncio import Redis
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
+from app.errors import NotFoundError
 from app.models import Post, Tag
+from app.redis import get_redis
+from app.schemas.like import LikeResponse
 from app.schemas.post import PostDetail, PostList, PostSummary
+from app.services import likes, rate_limit
 
 router = APIRouter()
 
@@ -59,3 +64,30 @@ async def get_post(post_id: str, s: AsyncSession = Depends(get_session)) -> Post
         date=post.date, read=post.read, lang=post.lang, summary=post.summary,
         tldr=post.tldr, body=post.body_json, likes=0, word_count=post.word_count,
     )
+
+
+@router.post("/posts/{post_id}/like", response_model=LikeResponse)
+async def like_post(
+    post_id: str,
+    request: Request,
+    s: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> LikeResponse:
+    ip = request.client.host if request.client else "unknown"
+    await rate_limit.hit(redis, f"rl:like:{ip}:{post_id}", limit=10, window_sec=60)
+
+    # Resolve published+public post
+    post = (
+        await s.execute(
+            select(Post).where(
+                Post.id == post_id,
+                Post.status == "published",
+                Post.private.is_(False),
+            )
+        )
+    ).scalar_one_or_none()
+    if post is None:
+        raise NotFoundError("post not found")
+
+    total, was_new = await likes.record_like(s, post_id=post_id, ip=ip)
+    return LikeResponse(likes=total, was_new=was_new)
