@@ -14,6 +14,7 @@ because email transport failed.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import smtplib
 from email.message import EmailMessage
 
@@ -42,7 +43,16 @@ def _send_sync(*, to: str, subject: str, body: str) -> None:
 async def send_email(*, to: str, subject: str, body: str) -> None:
     settings = get_settings()
     if settings.smtp_host is None:
-        log.info("email.dev_log", to=to, subject=subject, body_preview=body[:120])
+        # Dev fallback: log only metadata, never the body. Magic-link URLs
+        # and comment text are sensitive; if smtp_host is unset by mistake
+        # in prod, body content would leak through stdout/structlog.
+        log.info(
+            "email.dev_log",
+            to=to,
+            subject=subject,
+            body_sha256=hashlib.sha256(body.encode()).hexdigest()[:12],
+            body_len=len(body),
+        )
         return
     try:
         await asyncio.to_thread(_send_sync, to=to, subject=subject, body=body)
