@@ -92,6 +92,39 @@ async def test_verify_second_use_rejected(client, magic_link_on):
     assert r2.status_code == 401
 
 
+async def test_verify_expired_magic_link_rejected(client):
+    """Expired magic links must be rejected even on first use."""
+    from datetime import UTC, datetime, timedelta
+    from sqlalchemy import update
+    from app.db import AsyncSessionLocal
+    from app.models import Account, MagicLink
+    from app.services.magic_link import _hash
+
+    # Enable magic-link, then issue a link, then mark expired in the past.
+    async with AsyncSessionLocal() as s:
+        await s.execute(update(Account).where(Account.id == 1).values(magic_link_enabled=True))
+        await s.commit()
+
+    from app.services import magic_link
+    raw = await magic_link.issue_for_test(s_factory=AsyncSessionLocal, account_id=1)
+
+    async with AsyncSessionLocal() as s:
+        await s.execute(
+            update(MagicLink)
+            .where(MagicLink.token_hash == _hash(raw))
+            .values(expires_at=datetime.now(UTC) - timedelta(minutes=1))
+        )
+        await s.commit()
+
+    r = await client.get(f"/api/admin/auth/magic-link/verify?t={raw}")
+    assert r.status_code == 401
+
+    # cleanup
+    async with AsyncSessionLocal() as s:
+        await s.execute(update(Account).where(Account.id == 1).values(magic_link_enabled=False))
+        await s.commit()
+
+
 async def test_toggle_magic_link(client, admin_token):
     r1 = await client.patch(
         "/api/admin/account/magic-link",

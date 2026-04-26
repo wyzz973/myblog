@@ -49,22 +49,20 @@ async def issue_for_test(
 
 
 async def consume(s: AsyncSession, *, raw: str) -> Account | None:
-    """Mark link consumed and return the associated Account, or None on miss/expired/used."""
-    row = (
-        await s.execute(select(MagicLink).where(MagicLink.token_hash == _hash(raw)))
-    ).scalar_one_or_none()
+    """Atomically mark consumed and return Account. Single UPDATE with predicates
+    so concurrent calls can never both succeed (DB-level single-use guarantee)."""
+    res = await s.execute(
+        update(MagicLink)
+        .where(MagicLink.token_hash == _hash(raw))
+        .where(MagicLink.consumed_at.is_(None))
+        .where(MagicLink.expires_at > datetime.now(UTC))
+        .values(consumed_at=datetime.now(UTC))
+        .returning(MagicLink.account_id)
+    )
+    row = res.first()
     if row is None:
         return None
-    if row.consumed_at is not None:
-        return None
-    if row.expires_at < datetime.now(UTC):
-        return None
-    await s.execute(
-        update(MagicLink)
-        .where(MagicLink.token_hash == row.token_hash)
-        .values(consumed_at=datetime.now(UTC))
-    )
-    acct = (
-        await s.execute(select(Account).where(Account.id == row.account_id))
+    account_id = row[0]
+    return (
+        await s.execute(select(Account).where(Account.id == account_id))
     ).scalar_one_or_none()
-    return acct
