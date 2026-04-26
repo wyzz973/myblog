@@ -62,3 +62,22 @@ async def publish_scheduled_posts(ctx: dict) -> dict:
             )
         await s.commit()
         return {"count": len(rows)}
+
+
+from app.models import MagicLink as _MagicLink  # noqa: E402
+
+
+async def cleanup_expired_magic_links(ctx: dict) -> dict:
+    """Delete magic_links rows that are expired or already consumed."""
+    from sqlalchemy import or_, delete as sa_delete
+    async with AsyncSessionLocal() as s:
+        res = await s.execute(
+            sa_delete(_MagicLink).where(
+                or_(
+                    _MagicLink.expires_at < _dt.now(UTC),
+                    _MagicLink.consumed_at.is_not(None),
+                )
+            )
+        )
+        await s.commit()
+        return {"count": res.rowcount}

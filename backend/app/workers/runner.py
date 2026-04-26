@@ -12,12 +12,14 @@ from app.workers import tasks as t
 # Register every task so enqueue() inline-mode can find them by name
 q.register("send_email_task", t.send_email_task)
 q.register("publish_scheduled_posts", t.publish_scheduled_posts)
+q.register("cleanup_expired_magic_links", t.cleanup_expired_magic_links)
 
 
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)
-    functions = [t.send_email_task, t.publish_scheduled_posts]
+    functions = [t.send_email_task, t.publish_scheduled_posts, t.cleanup_expired_magic_links]
     cron_jobs: list = [
         cron(t.publish_scheduled_posts, minute=set(range(0, 60))),  # every minute
+        cron(t.cleanup_expired_magic_links, minute={10, 40}),
     ]
     max_jobs = 4
