@@ -12,6 +12,7 @@ from app.redis import get_redis
 from app.schemas.like import LikeResponse
 from app.schemas.post import PostDetail, PostList, PostSummary
 from app.services import likes, rate_limit
+from app.services.client_ip import client_ip_from, client_ip_key_part
 from app.services.event_log import write_event
 from app.services.hashing import ip_hash
 
@@ -77,8 +78,9 @@ async def like_post(
     s: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ) -> LikeResponse:
-    ip = request.client.host if request.client else "unknown"
-    await rate_limit.hit(redis, f"rl:like:{ip}:{post_id}", limit=10, window_sec=60)
+    ip_key = client_ip_key_part(request)
+    await rate_limit.hit(redis, f"rl:like:{ip_key}:{post_id}", limit=10, window_sec=60)
+    raw_ip = client_ip_from(request)
 
     # Resolve published+public post
     post = (
@@ -93,14 +95,14 @@ async def like_post(
     if post is None:
         raise NotFoundError("post not found")
 
-    total, was_new = await likes.record_like(s, post_id=post_id, ip=ip)
+    total, was_new = await likes.record_like(s, post_id=post_id, ip=raw_ip)
     if was_new:
         await write_event(
             s,
             type="post.liked",
-            actor=ip_hash(ip)[:12],
+            actor=ip_hash(raw_ip)[:12],
             target=post_id,
             meta={"day": datetime.now(UTC).date().isoformat()},
         )
-        await s.commit()
+    await s.commit()
     return LikeResponse(likes=total, was_new=was_new)

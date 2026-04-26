@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     public_api_base_url: str = "http://localhost:51820"
 
+    # IPs we trust to forward original client IP via X-Forwarded-For.
+    # In dev: empty list (use request.client.host directly).
+    trusted_proxies: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
     # storage
     database_url: str
     redis_url: str
@@ -48,7 +52,7 @@ class Settings(BaseSettings):
     # salts
     like_salt: str = Field(min_length=16)
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "trusted_proxies", mode="before")
     @classmethod
     def _split_csv(cls, v):
         if isinstance(v, str):

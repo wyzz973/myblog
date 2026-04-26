@@ -16,6 +16,7 @@ from app.schemas.comment import (
 )
 from app.services import comments, rate_limit
 from app.services import email as email_svc
+from app.services.client_ip import client_ip_key_part
 from app.services.event_log import write_event
 from app.services.hashing import email_hash
 
@@ -49,8 +50,8 @@ async def create_comment(
     s: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ) -> CommentCreateResponse:
-    ip = request.client.host if request.client else "unknown"
-    await rate_limit.hit(redis, f"rl:comment:{ip}", limit=3, window_sec=60)
+    ip_key = client_ip_key_part(request)
+    await rate_limit.hit(redis, f"rl:comment:{ip_key}", limit=3, window_sec=60)
 
     post = await _resolve_post(s, post_id)
     if not post.comments_enabled:

@@ -44,12 +44,15 @@ async def test_login_rate_limit(client, redis):
     assert "Retry-After" in r.headers
 
 
-async def test_login_lockout(client, redis):
+async def test_login_lockout(client, redis, monkeypatch):
     # The 5/min throttle would 429 us on call #6 before the 10-fail counter
     # ever ticks to threshold. To assert the *lockout* path specifically,
     # plant the lockout key directly (this is the same key set by
     # mark_failure() once it reaches threshold).
-    await redis.set("rl:lock:login:127.0.0.1", "1", ex=900)
+    from app.services.hashing import ip_hash
+    # The ASGI client peer is 127.0.0.1
+    ip_key = ip_hash("127.0.0.1")[:16]
+    await redis.set(f"rl:lock:login:{ip_key}", "1", ex=900)
     r = await client.post("/api/admin/auth/login", json={"email": EMAIL, "password": PASS})
     assert r.status_code == 429
     assert "Retry-After" in r.headers
