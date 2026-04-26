@@ -6,7 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.deps import current_admin
+from app.deps import current_admin, require_scope
 from app.models import Account, Post, Tag
 from app.schemas.post import PostDetail, PostList, PostSummary
 from app.services.event_log import write_event
@@ -57,7 +57,7 @@ async def list_posts(
     return PostList(items=[_summary(p) for p in rows], total=int(total), limit=limit, offset=offset)
 
 
-@router.post("/posts", response_model=PostDetail, status_code=201)
+@router.post("/posts", response_model=PostDetail, status_code=201, dependencies=[Depends(require_scope("write"))])
 async def create_post(
     body: Annotated[dict, Body(..., example={"markdown": "---\nid: ...\n---\nbody"})],
     overwrite: bool = Query(False),
@@ -91,7 +91,7 @@ async def get_post(
     return _detail(post)
 
 
-@router.patch("/posts/{post_id}", response_model=PostDetail)
+@router.patch("/posts/{post_id}", response_model=PostDetail, dependencies=[Depends(require_scope("write"))])
 async def patch_post(
     post_id: str,
     body: dict = Body(...),
@@ -117,7 +117,7 @@ async def patch_post(
     return _detail(post)
 
 
-@router.delete("/posts/{post_id}", status_code=204)
+@router.delete("/posts/{post_id}", status_code=204, dependencies=[Depends(require_scope("write"))])
 async def delete_post(
     post_id: str,
     admin: Account = Depends(current_admin),
@@ -130,7 +130,7 @@ async def delete_post(
     await write_event(s, type="post.deleted", actor=admin.email, target=post_id)
 
 
-@router.post("/posts/render-preview")
+@router.post("/posts/render-preview", dependencies=[Depends(require_scope("write"))])
 async def render_preview(
     body: dict = Body(...),
     _: Account = Depends(current_admin),
@@ -156,7 +156,7 @@ async def render_preview(
     }
 
 
-@router.post("/posts/upload")
+@router.post("/posts/upload", dependencies=[Depends(require_scope("write"))])
 async def upload_md(
     files: list[UploadFile] = File(...),
     overwrite: bool = Query(False),

@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.deps import current_admin
+from app.deps import current_admin, require_scope
 from app.models import Account, Project
 from app.services.event_log import write_event
 
@@ -36,7 +36,7 @@ async def list_(
     return [ProjectOut.model_validate(r) for r in rows]
 
 
-@router.post("/projects", response_model=ProjectOut, status_code=201)
+@router.post("/projects", response_model=ProjectOut, status_code=201, dependencies=[Depends(require_scope("write"))])
 async def create(
     payload: ProjectIn,
     admin: Account = Depends(current_admin),
@@ -55,7 +55,7 @@ async def create(
     return ProjectOut.model_validate(p)
 
 
-@router.put("/projects/order", status_code=204)
+@router.put("/projects/order", status_code=204, dependencies=[Depends(require_scope("write"))])
 async def reorder(
     payload: dict = Body(...),
     admin: Account = Depends(current_admin),
@@ -76,7 +76,7 @@ async def reorder(
     await write_event(s, type="project.reordered", actor=admin.email)
 
 
-@router.patch("/projects/{name}", response_model=ProjectOut)
+@router.patch("/projects/{name}", response_model=ProjectOut, dependencies=[Depends(require_scope("write"))])
 async def patch(
     name: str,
     payload: dict = Body(...),
@@ -95,7 +95,7 @@ async def patch(
     return ProjectOut.model_validate(p)
 
 
-@router.delete("/projects/{name}", status_code=204)
+@router.delete("/projects/{name}", status_code=204, dependencies=[Depends(require_scope("write"))])
 async def delete(
     name: str,
     admin: Account = Depends(current_admin),

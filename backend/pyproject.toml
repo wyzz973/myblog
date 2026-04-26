@@ -16,6 +16,9 @@ dependencies = [
     "mistune>=3",
     "python-frontmatter>=1.1",
     "argon2-cffi>=23",
+    "pyotp>=2.9",
+    "segno>=1.6",
+    "cryptography>=44",
     "pyjwt>=2.10",
     "typer>=0.15",
     "structlog>=24",
@@ -55,4 +58,6 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC"]
-ignore = ["E501"]
+# E501 line too long: covered by formatter.
+# B008 function-call-in-default-arg: required by FastAPI Depends() / typer Argument().
+ignore = ["E501", "B008"]

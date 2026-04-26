@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.deps import current_admin
+from app.deps import current_admin, require_scope
 from app.models import Account, SiteMeta
 from app.services.event_log import write_event
 
@@ -63,7 +63,7 @@ async def get_profile(
     return {k: getattr(sm, k) for k in ProfileIn.model_fields}
 
 
-@router.put("/profile")
+@router.put("/profile", dependencies=[Depends(require_scope("write"))])
 async def put_profile(
     payload: ProfileIn,
     admin: Account = Depends(current_admin),
@@ -84,7 +84,7 @@ async def get_site(
     return {k: getattr(sm, k) for k in SiteIn.model_fields}
 
 
-@router.put("/site")
+@router.put("/site", dependencies=[Depends(require_scope("write"))])
 async def put_site(
     payload: SiteIn,
     admin: Account = Depends(current_admin),
@@ -118,7 +118,7 @@ async def get_theme(
     return {k: getattr(sm, k) for k in ThemeIn.model_fields}
 
 
-@router.put("/theme")
+@router.put("/theme", dependencies=[Depends(require_scope("write"))])
 async def put_theme(
     payload: ThemeIn,
     admin: Account = Depends(current_admin),

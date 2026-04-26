@@ -1,0 +1,264 @@
+import pyotp
+
+from app.services.totp import generate_secret, otpauth_uri, qr_svg, verify
+
+
+def test_generate_secret_format():
+    secret = generate_secret()
+    assert len(secret) == 32
+    # base32 alphabet: A-Z 2-7
+    assert all(c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567" for c in secret)
+
+
+def test_otpauth_uri_includes_email_and_issuer():
+    uri = otpauth_uri(secret="ABC234", email="hi@wangyang.dev")
+    assert uri.startswith("otpauth://totp/")
+    assert "hi%40wangyang.dev" in uri or "hi@wangyang.dev" in uri
+    assert "secret=ABC234" in uri
+    assert "issuer=" in uri
+
+
+def test_qr_svg_returns_svg_string():
+    svg = qr_svg("otpauth://totp/test?secret=ABC&issuer=test")
+    assert svg.startswith("<?xml") or svg.startswith("<svg")
+    assert "</svg>" in svg
+
+
+def test_verify_accepts_current_code():
+    secret = generate_secret()
+    code = pyotp.TOTP(secret).now()
+    assert verify(secret, code) is True
+
+
+def test_verify_rejects_wrong_code():
+    secret = generate_secret()
+    assert verify(secret, "000000") is False
+
+
+import pytest
+
+EMAIL = "hi@wangyang.dev"
+PASS = "changeme"
+
+
+@pytest.fixture
+async def admin_token(client):
+    r = await client.post("/api/admin/auth/login", json={"email": EMAIL, "password": PASS})
+    assert r.status_code == 200
+    return r.json()["access"]
+
+
+@pytest.fixture
+async def reset_2fa(client, admin_token):
+    """Cleanup: disable 2fa after each test that touched it."""
+    yield
+    from sqlalchemy import update
+
+    from app.db import AsyncSessionLocal
+    from app.models import Account
+    async with AsyncSessionLocal() as s:
+        await s.execute(
+            update(Account).where(Account.id == 1).values(
+                tfa_enabled=False, tfa_secret_encrypted=None
+            )
+        )
+        await s.commit()
+
+
+async def test_setup_returns_secret_and_qr(client, admin_token, reset_2fa):
+    r = await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["secret"]) == 32
+    assert body["otpauth_uri"].startswith("otpauth://totp/")
+    assert "<svg" in body["qr_svg"] or body["qr_svg"].startswith("<?xml")
+
+
+async def test_enable_with_correct_code_flips_flag(client, admin_token, reset_2fa):
+    import pyotp
+    r1 = await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    secret = r1.json()["secret"]
+    code = pyotp.TOTP(secret).now()
+    r2 = await client.post(
+        "/api/admin/account/2fa/enable",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r2.status_code == 200, r2.text
+    # session endpoint should now report tfa_enabled
+    r3 = await client.get(
+        "/api/admin/session", headers={"Authorization": f"Bearer {admin_token}"}
+    )
+    assert r3.json()["tfa_enabled"] is True
+
+
+async def test_enable_with_wrong_code_400(client, admin_token, reset_2fa):
+    await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    r = await client.post(
+        "/api/admin/account/2fa/enable",
+        json={"code": "000000"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 400
+
+
+async def test_disable_with_correct_code(client, admin_token, reset_2fa):
+    import pyotp
+    setup = await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    secret = setup.json()["secret"]
+    code = pyotp.TOTP(secret).now()
+    await client.post(
+        "/api/admin/account/2fa/enable",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    code2 = pyotp.TOTP(secret).now()
+    r = await client.request(
+        "DELETE",
+        "/api/admin/account/2fa",
+        json={"current_code": code2},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 204
+
+
+async def test_login_with_2fa_returns_challenge(client, admin_token, reset_2fa):
+    import pyotp
+    setup = await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    secret = setup.json()["secret"]
+    code = pyotp.TOTP(secret).now()
+    await client.post(
+        "/api/admin/account/2fa/enable",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    r = await client.post("/api/admin/auth/login", json={"email": EMAIL, "password": PASS})
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("tfa_required") is True
+    assert "challenge" in body
+    # no access token, no refresh cookie at this stage
+    assert "access" not in body
+    assert "myblog_refresh" not in r.cookies
+
+
+async def test_2fa_challenge_with_correct_totp_returns_access(client, admin_token, reset_2fa):
+    import pyotp
+    setup = await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    secret = setup.json()["secret"]
+    code = pyotp.TOTP(secret).now()
+    await client.post(
+        "/api/admin/account/2fa/enable",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    r1 = await client.post("/api/admin/auth/login", json={"email": EMAIL, "password": PASS})
+    challenge = r1.json()["challenge"]
+    code2 = pyotp.TOTP(secret).now()
+    r2 = await client.post(
+        "/api/admin/auth/2fa", json={"challenge": challenge, "code": code2}
+    )
+    assert r2.status_code == 200, r2.text
+    assert "access" in r2.json()
+    assert r2.cookies.get("myblog_refresh")
+
+
+async def test_2fa_challenge_with_wrong_code_401(client, admin_token, reset_2fa):
+    import pyotp
+    setup = await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    secret = setup.json()["secret"]
+    code = pyotp.TOTP(secret).now()
+    await client.post(
+        "/api/admin/account/2fa/enable",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    r1 = await client.post("/api/admin/auth/login", json={"email": EMAIL, "password": PASS})
+    challenge = r1.json()["challenge"]
+    r2 = await client.post(
+        "/api/admin/auth/2fa", json={"challenge": challenge, "code": "000000"}
+    )
+    assert r2.status_code == 401
+
+
+async def test_2fa_unknown_challenge_401(client):
+    r = await client.post(
+        "/api/admin/auth/2fa", json={"challenge": "nope-nope", "code": "123456"}
+    )
+    assert r.status_code == 401
+
+
+async def test_login_success_writes_event(client):
+    from sqlalchemy import select
+
+    from app.db import AsyncSessionLocal
+    from app.models import EventLog
+    await client.post("/api/admin/auth/login", json={"email": EMAIL, "password": PASS})
+    async with AsyncSessionLocal() as s:
+        rows = (
+            await s.execute(
+                select(EventLog).where(EventLog.type == "auth.login.success").order_by(EventLog.id.desc())
+            )
+        ).scalars().all()
+        assert len(rows) >= 1
+
+
+async def test_login_fail_writes_event(client):
+    from sqlalchemy import select
+
+    from app.db import AsyncSessionLocal
+    from app.models import EventLog
+    await client.post("/api/admin/auth/login", json={"email": EMAIL, "password": "wrong"})
+    async with AsyncSessionLocal() as s:
+        rows = (
+            await s.execute(
+                select(EventLog).where(EventLog.type == "auth.login.fail").order_by(EventLog.id.desc())
+            )
+        ).scalars().all()
+        assert len(rows) >= 1
+
+
+async def test_2fa_challenge_expires(client, redis, admin_token, reset_2fa):
+    """A challenge that has expired in Redis must 401 even with the right code."""
+    import pyotp
+    setup = await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    secret = setup.json()["secret"]
+    code = pyotp.TOTP(secret).now()
+    await client.post(
+        "/api/admin/account/2fa/enable",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    # Plant an already-expired challenge
+    await redis.set("2fa:expired-challenge", "1", ex=1)
+    import asyncio
+    await asyncio.sleep(1.2)
+    code2 = pyotp.TOTP(secret).now()
+    r = await client.post(
+        "/api/admin/auth/2fa", json={"challenge": "expired-challenge", "code": code2}
+    )
+    assert r.status_code == 401
