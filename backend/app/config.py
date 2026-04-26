@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     login_lockout_window_sec: int = 900     # 15 minutes
     secrets_key: SecretStr = Field(min_length=32)
 
+    # SMTP (optional; if smtp_host is None we fall back to log-only)
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from: str = "noreply@wangyang.dev"
+    smtp_starttls: bool = True
+    admin_notify_email: str | None = None
+
     # salts
     like_salt: str = Field(min_length=16)
 
