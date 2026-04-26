@@ -64,6 +64,8 @@ async def publish_scheduled_posts(ctx: dict) -> dict:
         return {"count": len(rows)}
 
 
+from datetime import timedelta  # noqa: E402
+
 from app.models import MagicLink as _MagicLink  # noqa: E402
 
 
@@ -81,3 +83,16 @@ async def cleanup_expired_magic_links(ctx: dict) -> dict:
         )
         await s.commit()
         return {"count": res.rowcount}
+
+
+from app.models import EventLog as _EventLog  # noqa: E402
+
+
+async def prune_event_log(ctx: dict) -> dict:
+    """Hard-delete event_log rows older than 90 days. Archive table is P7 work."""
+    from sqlalchemy import delete as sa_delete
+    cutoff = _dt.now(UTC) - timedelta(days=90)
+    async with AsyncSessionLocal() as s:
+        res = await s.execute(sa_delete(_EventLog).where(_EventLog.created_at < cutoff))
+        await s.commit()
+        return {"deleted": res.rowcount}
