@@ -1,6 +1,6 @@
 import secrets
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,7 @@ from app.schemas.auth import (
     RefreshResponse,
     TfaChallengeRequest,
 )
-from app.services import recovery_codes, secret_box, totp
+from app.services import rate_limit, recovery_codes, secret_box, totp
 from app.services.auth import (
     create_access_token,
     issue_refresh,
@@ -69,16 +69,37 @@ async def _issue_session_tokens(redis: Redis, response: Response, acct: Account)
 @router.post("/auth/login")
 async def login(
     req: LoginRequest,
+    request: Request,
     response: Response,
     s: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ):
     settings = get_settings()
+    ip = request.client.host if request.client else "unknown"
+
+    # Lockout check first.
+    if await rate_limit.lockout_active(redis, f"login:{ip}"):
+        retry = await rate_limit.lockout_retry_after(redis, f"login:{ip}")
+        from app.errors import RateLimited
+        raise RateLimited(retry_after=retry, detail="too many failures, locked out")
+
+    # Per-minute throttle.
+    await rate_limit.hit(redis, f"rl:login:{ip}", limit=5, window_sec=60)
+
     acct = (
         await s.execute(select(Account).where(Account.email == req.email))
     ).scalar_one_or_none()
     if acct is None or not verify_password(acct.password_hash, req.password):
+        await rate_limit.mark_failure(
+            redis,
+            f"login:{ip}",
+            threshold=settings.login_lockout_threshold,
+            lock_window_sec=settings.login_lockout_window_sec,
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
+
+    # Successful password — reset failure counter.
+    await rate_limit.reset_failures(redis, f"login:{ip}")
 
     if acct.tfa_enabled:
         challenge = secrets.token_urlsafe(16)
@@ -99,6 +120,10 @@ async def auth_2fa(
     s: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ) -> LoginResponse:
+    await rate_limit.hit(
+        redis, f"rl:2fa:{req.challenge}", limit=5, window_sec=300
+    )
+
     sub = await redis.get(f"{CHALLENGE_PREFIX}{req.challenge}")
     if sub is None:
         raise HTTPException(401, "invalid or expired challenge")
@@ -186,7 +211,11 @@ from app.services import magic_link as magic_link_svc  # noqa: E402
 async def magic_link_request(
     req: MagicLinkRequest,
     s: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
 ) -> dict:
+    await rate_limit.hit(
+        redis, f"rl:mlink:{req.email.lower()}", limit=3, window_sec=3600
+    )
     acct = (
         await s.execute(select(Account).where(Account.email == req.email))
     ).scalar_one_or_none()
