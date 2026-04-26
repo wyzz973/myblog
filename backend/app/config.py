@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     # NoDecode disables pydantic-settings' default JSON-decode of list-typed env
     # vars, so the _split_csv validator below sees the raw "a,b,c" string.
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    public_api_base_url: str = "http://localhost:51820"
 
     # storage
     database_url: str
