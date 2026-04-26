@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { SITE, POSTS } from './data.js';
+import { useState, useEffect, useCallback } from 'react';
+import { useSite, usePosts, useTags } from './api/hooks.js';
 import { applyAccent } from './utils/accent.js';
 import TopBar from './components/TopBar.jsx';
 import HomeA from './components/HomeA.jsx';
@@ -40,10 +40,13 @@ export default function App() {
     applyAccent(accent);
   }, [theme, accent]);
 
-  const posts = useMemo(
-    () => (activeTag === 'all' ? POSTS : POSTS.filter((p) => p.tag === activeTag)),
-    [activeTag],
-  );
+  const { data: siteData } = useSite();
+  const { data: postsResp, loading: postsLoading } = usePosts({
+    tag: activeTag === 'all' ? undefined : activeTag,
+    limit: 100,
+  });
+  const { data: tagsData } = useTags();
+  const posts = postsResp?.items || [];
 
   useEffect(() => { setFocusIdx(0); }, [activeTag]);
 
@@ -95,15 +98,17 @@ export default function App() {
     <>
       <HomeA
         posts={posts}
+        tags={tagsData || []}
         activeTag={activeTag}
         setTag={setActiveTag}
         focusIdx={focusIdx}
         onOpenPost={openPost}
+        loading={postsLoading}
       />
       <div className="wrap">
         <footer className="footer">
           <div>
-            © 2026 {SITE.nameEn} · hand-coded · no trackers ·{' '}
+            © 2026 {siteData?.name_en || 'Wang Yang'} · hand-coded · no trackers ·{' '}
             <span className="accent">powered by coffee</span>
           </div>
           <div>
