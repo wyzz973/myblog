@@ -26,6 +26,10 @@ async def admin_token(client):
 
 @pytest.fixture
 async def cleanup_now():
+    """Clean BEFORE and AFTER so tests are isolated from leftover state."""
+    async with AsyncSessionLocal() as s:
+        await s.execute(delete(NowEntry))
+        await s.commit()
     yield
     async with AsyncSessionLocal() as s:
         await s.execute(delete(NowEntry))
