@@ -98,6 +98,7 @@ async def test_recovery_codes_concurrent_use(client, admin_token, reset_2fa):
     """Two concurrent /auth/2fa calls with the SAME recovery code must
     have at most one succeed (DB-level single-use guarantee)."""
     import asyncio
+
     import pyotp
 
     # Set up 2FA and grab the codes

@@ -95,7 +95,9 @@ async def test_verify_second_use_rejected(client, magic_link_on):
 async def test_verify_expired_magic_link_rejected(client):
     """Expired magic links must be rejected even on first use."""
     from datetime import UTC, datetime, timedelta
+
     from sqlalchemy import update
+
     from app.db import AsyncSessionLocal
     from app.models import Account, MagicLink
     from app.services.magic_link import _hash

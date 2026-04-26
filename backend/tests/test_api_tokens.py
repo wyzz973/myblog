@@ -163,6 +163,7 @@ async def test_session_only_endpoint_rejects_token(client, admin_token, cleanup_
 
     # Bug fix verification: rejected calls must not tick last_used_at
     from sqlalchemy import select
+
     from app.db import AsyncSessionLocal
     from app.models import ApiToken
     async with AsyncSessionLocal() as s:
