@@ -7,9 +7,11 @@ from app.models import Account
 from app.schemas.auth import (
     TfaDisableRequest,
     TfaEnableRequest,
+    TfaRecoveryCodesResponse,
+    TfaRegenerateRequest,
     TfaSetupResponse,
 )
-from app.services import secret_box, totp
+from app.services import recovery_codes, secret_box, totp
 
 router = APIRouter()
 
@@ -27,21 +29,21 @@ async def tfa_setup(
     return TfaSetupResponse(secret=secret, otpauth_uri=uri, qr_svg=totp.qr_svg(uri))
 
 
-@router.post("/account/2fa/enable")
+@router.post("/account/2fa/enable", response_model=TfaRecoveryCodesResponse)
 async def tfa_enable(
     req: TfaEnableRequest,
     admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
-) -> dict:
+) -> TfaRecoveryCodesResponse:
     if not admin.tfa_secret_encrypted:
         raise HTTPException(400, "no setup in progress")
     secret = secret_box.decrypt(admin.tfa_secret_encrypted)
     if not totp.verify(secret, req.code):
         raise HTTPException(400, "invalid code")
     admin.tfa_enabled = True
+    raw = await recovery_codes.replace_for_account(s, account_id=admin.id)
     await s.commit()
-    # recovery codes are issued in Task 12 (placeholder for now)
-    return {"tfa_enabled": True}
+    return TfaRecoveryCodesResponse(recovery_codes=raw)
 
 
 @router.delete("/account/2fa", status_code=204)
@@ -57,5 +59,27 @@ async def tfa_disable(
         raise HTTPException(400, "invalid code")
     admin.tfa_enabled = False
     admin.tfa_secret_encrypted = None
+    from sqlalchemy import delete as _del
+    from app.models import TfaRecoveryCode
+    await s.execute(_del(TfaRecoveryCode).where(TfaRecoveryCode.account_id == admin.id))
     await s.commit()
     return Response(status_code=204)
+
+
+@router.post(
+    "/account/2fa/recovery-codes/regenerate",
+    response_model=TfaRecoveryCodesResponse,
+)
+async def tfa_regenerate_recovery_codes(
+    req: TfaRegenerateRequest,
+    admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> TfaRecoveryCodesResponse:
+    if not admin.tfa_enabled or not admin.tfa_secret_encrypted:
+        raise HTTPException(400, "2fa not enabled")
+    secret = secret_box.decrypt(admin.tfa_secret_encrypted)
+    if not totp.verify(secret, req.current_code):
+        raise HTTPException(400, "invalid code")
+    raw = await recovery_codes.replace_for_account(s, account_id=admin.id)
+    await s.commit()
+    return TfaRecoveryCodesResponse(recovery_codes=raw)

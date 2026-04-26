@@ -17,7 +17,7 @@ from app.schemas.auth import (
     RefreshResponse,
     TfaChallengeRequest,
 )
-from app.services import secret_box, totp
+from app.services import recovery_codes, secret_box, totp
 from app.services.auth import (
     create_access_token,
     issue_refresh,
@@ -109,9 +109,19 @@ async def auth_2fa(
     if acct is None or not acct.tfa_secret_encrypted:
         raise HTTPException(401, "account not configured")
 
-    secret = secret_box.decrypt(acct.tfa_secret_encrypted)
-    if not totp.verify(secret, req.code):
-        # Recovery-code path is added in Task 12.
+    accepted = False
+    code = req.code.strip()
+    if len(code) == 6 and code.isdigit():
+        secret = secret_box.decrypt(acct.tfa_secret_encrypted)
+        accepted = totp.verify(secret, code)
+    elif len(code) == 9 and code[4] == "-":
+        accepted = await recovery_codes.verify_and_consume(
+            s, account_id=acct.id, presented=code
+        )
+        if accepted:
+            await s.commit()
+
+    if not accepted:
         raise HTTPException(401, "invalid code")
 
     await redis.delete(f"{CHALLENGE_PREFIX}{req.challenge}")

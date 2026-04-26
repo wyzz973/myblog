@@ -50,3 +50,7 @@ class TfaRecoveryCodesResponse(_Strict):
 class TfaChallengeRequest(_Strict):
     challenge: str = Field(min_length=8, max_length=64)
     code: str = Field(min_length=6, max_length=9)
+
+
+class TfaRegenerateRequest(_Strict):
+    current_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
