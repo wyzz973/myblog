@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     # auth
     jwt_secret: str = Field(min_length=32)
     access_token_ttl: int = 900
+    refresh_token_ttl: int = 2_592_000      # 30 days
+    magic_link_ttl: int = 900               # 15 minutes
+    tfa_challenge_ttl: int = 300            # 5 minutes
+    login_lockout_threshold: int = 10
+    login_lockout_window_sec: int = 900     # 15 minutes
+    secrets_key: SecretStr = Field(min_length=32)
 
     # salts
     like_salt: str = Field(min_length=16)
