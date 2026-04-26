@@ -8,6 +8,14 @@ from app.models import EventLog
 from app.workers.tasks import prune_event_log
 
 
+@pytest.fixture(autouse=True)
+async def _reset_pool():
+    """Dispose asyncpg pool between tests to avoid Future-attached-to-different-loop."""
+    from app import db as _db
+    yield
+    await _db.engine.dispose()
+
+
 @pytest.fixture
 async def seeded_events():
     async with AsyncSessionLocal() as s:

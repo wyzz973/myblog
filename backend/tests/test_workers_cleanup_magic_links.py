@@ -8,6 +8,13 @@ from app.models import MagicLink
 from app.workers.tasks import cleanup_expired_magic_links
 
 
+@pytest.fixture(autouse=True)
+async def _reset_pool():
+    from app import db as _db
+    yield
+    await _db.engine.dispose()
+
+
 @pytest.fixture
 async def seeded_links():
     async with AsyncSessionLocal() as s:
