@@ -11,6 +11,7 @@ from app.routers.admin.posts import router as posts_router
 from app.routers.admin.projects import router as projects_router
 from app.routers.admin.site import router as site_router
 from app.routers.admin.pet import router as pet_admin_router
+from app.routers.admin.now import router as now_admin_router
 from app.routers.admin.tags import router as tags_router
 
 router = APIRouter(prefix="/api/admin")
@@ -26,3 +27,4 @@ router.include_router(comments_router, tags=["admin·comments"])
 router.include_router(activity_router, tags=["admin·activity"])
 router.include_router(integrations_router, tags=["admin·integrations"])
 router.include_router(pet_admin_router, tags=["admin·pet"])
+router.include_router(now_admin_router, tags=["admin·now"])
