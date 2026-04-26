@@ -5,6 +5,7 @@ from app.db import get_session
 from app.deps import current_admin
 from app.models import Account
 from app.schemas.auth import (
+    MagicLinkToggleRequest,
     TfaDisableRequest,
     TfaEnableRequest,
     TfaRecoveryCodesResponse,
@@ -64,6 +65,17 @@ async def tfa_disable(
     await s.execute(_del(TfaRecoveryCode).where(TfaRecoveryCode.account_id == admin.id))
     await s.commit()
     return Response(status_code=204)
+
+
+@router.patch("/account/magic-link")
+async def toggle_magic_link(
+    req: MagicLinkToggleRequest,
+    admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> dict:
+    admin.magic_link_enabled = req.enabled
+    await s.commit()
+    return {"magic_link_enabled": admin.magic_link_enabled}
 
 
 @router.post(

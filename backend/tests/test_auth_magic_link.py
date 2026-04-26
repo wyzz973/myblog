@@ -90,3 +90,20 @@ async def test_verify_second_use_rejected(client, magic_link_on):
     assert r1.status_code == 200
     r2 = await client.get(f"/api/admin/auth/magic-link/verify?t={raw}")
     assert r2.status_code == 401
+
+
+async def test_toggle_magic_link(client, admin_token):
+    r1 = await client.patch(
+        "/api/admin/account/magic-link",
+        json={"enabled": True},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r1.status_code == 200
+    assert r1.json()["magic_link_enabled"] is True
+
+    r2 = await client.patch(
+        "/api/admin/account/magic-link",
+        json={"enabled": False},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r2.json()["magic_link_enabled"] is False
