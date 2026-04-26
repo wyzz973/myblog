@@ -154,8 +154,17 @@ async def test_session_only_endpoint_rejects_token(client, admin_token, cleanup_
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     raw = create.json()["token"]
+    tid = create.json()["id"]
     # /account/2fa/setup is session-only
     r = await client.post(
         "/api/admin/account/2fa/setup", headers={"Authorization": f"Bearer {raw}"}
     )
     assert r.status_code == 401
+
+    # Bug fix verification: rejected calls must not tick last_used_at
+    from sqlalchemy import select
+    from app.db import AsyncSessionLocal
+    from app.models import ApiToken
+    async with AsyncSessionLocal() as s:
+        row = (await s.execute(select(ApiToken).where(ApiToken.id == tid))).scalar_one()
+        assert row.last_used_at is None

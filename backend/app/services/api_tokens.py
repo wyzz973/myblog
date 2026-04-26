@@ -46,10 +46,11 @@ async def create(
     return row, raw
 
 
-async def verify_and_touch(s: AsyncSession, raw: str) -> ApiToken | None:
+async def verify(s: AsyncSession, raw: str) -> ApiToken | None:
+    """Verify the bearer token without writing last_used_at."""
     if not raw.startswith(PREFIX):
         return None
-    row = (
+    return (
         await s.execute(
             select(ApiToken).where(
                 ApiToken.token_hash == hash_raw(raw),
@@ -57,13 +58,13 @@ async def verify_and_touch(s: AsyncSession, raw: str) -> ApiToken | None:
             )
         )
     ).scalar_one_or_none()
-    if row is None:
-        return None
+
+
+async def touch_last_used(s: AsyncSession, *, token_id: int) -> None:
     await s.execute(
-        update(ApiToken).where(ApiToken.id == row.id).values(last_used_at=datetime.now(UTC))
+        update(ApiToken).where(ApiToken.id == token_id).values(last_used_at=datetime.now(UTC))
     )
     await s.commit()
-    return row
 
 
 async def revoke(s: AsyncSession, *, token_id: int) -> bool:

@@ -39,10 +39,11 @@ async def current_admin(
     """
     raw = _bearer(authorization)
     if raw.startswith("tk_"):
-        row = await api_tokens_svc.verify_and_touch(s, raw)
+        row = await api_tokens_svc.verify(s, raw)
         if row is None:
             raise AuthError("invalid api token")
         request.state.api_token_scope = row.scope
+        request.state.api_token_id = row.id   # for touch downstream
         # Reuse the singleton admin row for downstream endpoints that
         # display "actor".
         acct = (
@@ -66,11 +67,19 @@ async def current_session_admin(
 
 
 def require_scope(scope: Literal["read", "write"]):
-    async def _dep(request: Request, _: Account = Depends(current_admin)) -> None:
+    async def _dep(
+        request: Request,
+        _admin: Account = Depends(current_admin),
+        s: AsyncSession = Depends(get_session),
+    ) -> None:
         token_scope = getattr(request.state, "api_token_scope", None)
         if token_scope is None:
             return  # session JWT — full access
         if scope == "write" and token_scope != "write":
             raise HTTPException(status_code=403, detail="api token has read scope only")
+        # write → touch happens here, after authorisation succeeds
+        token_id = getattr(request.state, "api_token_id", None)
+        if token_id is not None:
+            await api_tokens_svc.touch_last_used(s, token_id=token_id)
 
     return _dep
