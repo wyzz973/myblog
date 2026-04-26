@@ -1,6 +1,5 @@
 import pytest
 from fastapi import Request
-from starlette.datastructures import Headers
 
 from app.services.client_ip import client_ip_from, client_ip_key_part
 

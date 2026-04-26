@@ -19,7 +19,6 @@ from app.schemas.auth import (
     TfaChallengeRequest,
 )
 from app.services import rate_limit, recovery_codes, secret_box, totp
-from app.services.client_ip import client_ip_from, client_ip_key_part
 from app.services.auth import (
     create_access_token,
     issue_refresh,
@@ -27,6 +26,7 @@ from app.services.auth import (
     rotate_refresh,
     verify_password,
 )
+from app.services.client_ip import client_ip_from, client_ip_key_part
 from app.services.event_log import write_event
 
 router = APIRouter()
