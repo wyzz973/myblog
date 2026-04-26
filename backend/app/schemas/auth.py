@@ -27,3 +27,21 @@ class RefreshResponse(_Strict):
     access: str
     token_type: str = "bearer"
     expires_in: int
+
+
+class TfaSetupResponse(_Strict):
+    secret: str
+    otpauth_uri: str
+    qr_svg: str
+
+
+class TfaEnableRequest(_Strict):
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class TfaDisableRequest(_Strict):
+    current_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class TfaRecoveryCodesResponse(_Strict):
+    recovery_codes: list[str]

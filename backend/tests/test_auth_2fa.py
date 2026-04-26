@@ -33,3 +33,101 @@ def test_verify_accepts_current_code():
 def test_verify_rejects_wrong_code():
     secret = generate_secret()
     assert verify(secret, "000000") is False
+
+
+import pytest
+
+EMAIL = "hi@wangyang.dev"
+PASS = "changeme"
+
+
+@pytest.fixture
+async def admin_token(client):
+    r = await client.post("/api/admin/auth/login", json={"email": EMAIL, "password": PASS})
+    assert r.status_code == 200
+    return r.json()["access"]
+
+
+@pytest.fixture
+async def reset_2fa(client, admin_token):
+    """Cleanup: disable 2fa after each test that touched it."""
+    yield
+    from sqlalchemy import update
+    from app.db import AsyncSessionLocal
+    from app.models import Account
+    async with AsyncSessionLocal() as s:
+        await s.execute(
+            update(Account).where(Account.id == 1).values(
+                tfa_enabled=False, tfa_secret_encrypted=None
+            )
+        )
+        await s.commit()
+
+
+async def test_setup_returns_secret_and_qr(client, admin_token, reset_2fa):
+    r = await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["secret"]) == 32
+    assert body["otpauth_uri"].startswith("otpauth://totp/")
+    assert "<svg" in body["qr_svg"] or body["qr_svg"].startswith("<?xml")
+
+
+async def test_enable_with_correct_code_flips_flag(client, admin_token, reset_2fa):
+    import pyotp
+    r1 = await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    secret = r1.json()["secret"]
+    code = pyotp.TOTP(secret).now()
+    r2 = await client.post(
+        "/api/admin/account/2fa/enable",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r2.status_code == 200, r2.text
+    # session endpoint should now report tfa_enabled
+    r3 = await client.get(
+        "/api/admin/session", headers={"Authorization": f"Bearer {admin_token}"}
+    )
+    assert r3.json()["tfa_enabled"] is True
+
+
+async def test_enable_with_wrong_code_400(client, admin_token, reset_2fa):
+    await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    r = await client.post(
+        "/api/admin/account/2fa/enable",
+        json={"code": "000000"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 400
+
+
+async def test_disable_with_correct_code(client, admin_token, reset_2fa):
+    import pyotp
+    setup = await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    secret = setup.json()["secret"]
+    code = pyotp.TOTP(secret).now()
+    await client.post(
+        "/api/admin/account/2fa/enable",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    code2 = pyotp.TOTP(secret).now()
+    r = await client.request(
+        "DELETE",
+        "/api/admin/account/2fa",
+        json={"current_code": code2},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 204
