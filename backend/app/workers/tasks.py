@@ -28,3 +28,37 @@ async def send_email_task(ctx: dict, *, to: str, subject: str, body: str) -> dic
 
 # job-level retry config (ARQ reads these from the function)
 send_email_task.max_tries = 3
+
+
+from datetime import UTC, datetime as _dt  # noqa: E402
+
+from sqlalchemy import select, update  # noqa: E402
+
+from app.db import AsyncSessionLocal  # noqa: E402
+from app.models import Post  # noqa: E402
+from app.services.event_log import write_event  # noqa: E402
+
+
+async def publish_scheduled_posts(ctx: dict) -> dict:
+    """Flip status='scheduled' AND scheduled_at <= now() to 'published'."""
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(
+            select(Post.id).where(
+                Post.status == "scheduled",
+                Post.scheduled_at <= _dt.now(UTC),
+            )
+        )).scalars().all()
+        if not rows:
+            return {"count": 0}
+        await s.execute(
+            update(Post)
+            .where(Post.id.in_(rows))
+            .values(status="published")
+        )
+        for pid in rows:
+            await write_event(
+                s, type="post.published", actor="worker",
+                target=pid, meta={"from": "scheduled"},
+            )
+        await s.commit()
+        return {"count": len(rows)}
