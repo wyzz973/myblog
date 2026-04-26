@@ -53,7 +53,7 @@ backend/
 backend/
 ├── pyproject.toml                            (add pyotp, segno, cryptography)
 ├── app/
-│   ├── config.py                             (5 new settings)
+│   ├── config.py                             (6 new settings)
 │   ├── deps.py                               (current_admin union, current_session_admin, require_scope)
 │   ├── services/auth.py                      (refresh tokens + jti)
 │   ├── schemas/auth.py                       (many new models)
