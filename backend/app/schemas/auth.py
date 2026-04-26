@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -62,3 +63,24 @@ class MagicLinkRequest(_Strict):
 
 class MagicLinkToggleRequest(_Strict):
     enabled: bool
+
+
+class ApiTokenCreateRequest(_Strict):
+    name: str = Field(min_length=1, max_length=64)
+    scope: Literal["read", "write"]
+
+
+class ApiTokenCreateResponse(_Strict):
+    id: int
+    name: str
+    scope: str
+    token: str  # raw, shown ONCE
+
+
+class ApiTokenListItem(_Strict):
+    id: int
+    name: str
+    scope: str
+    last_used_at: datetime | None = None
+    revoked_at: datetime | None = None
+    created_at: datetime
