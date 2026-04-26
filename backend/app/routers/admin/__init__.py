@@ -6,6 +6,7 @@ from app.routers.admin.api_tokens import router as api_tokens_router
 from app.routers.admin.auth import router as auth_router
 from app.routers.admin.comments import router as comments_router
 from app.routers.admin.contacts import router as contacts_router
+from app.routers.admin.integrations import router as integrations_router
 from app.routers.admin.posts import router as posts_router
 from app.routers.admin.projects import router as projects_router
 from app.routers.admin.site import router as site_router
@@ -22,3 +23,4 @@ router.include_router(account_router, tags=["admin·account"])
 router.include_router(api_tokens_router, tags=["admin·api-tokens"])
 router.include_router(comments_router, tags=["admin·comments"])
 router.include_router(activity_router, tags=["admin·activity"])
+router.include_router(integrations_router, tags=["admin·integrations"])
