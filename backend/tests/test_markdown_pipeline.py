@@ -1,6 +1,6 @@
 import pytest
 
-from app.services.markdown_pipeline import parse_markdown, MarkdownError
+from app.services.markdown_pipeline import MarkdownError, parse_markdown
 
 
 def test_heading_paragraph():

@@ -1,5 +1,4 @@
 import logging
-import re
 
 import pytest
 from sqlalchemy import update
@@ -36,9 +35,10 @@ async def test_request_returns_202_and_logs(client, magic_link_on, caplog):
     log_has_magic = "magic-link" in text or any("magic-link" in str(r.message) for r in caplog.records)
     if not log_has_magic:
         # Verify via DB that a magic link row was inserted
+        from sqlalchemy import select
+
         from app.db import AsyncSessionLocal
         from app.models import MagicLink
-        from sqlalchemy import select
         async with AsyncSessionLocal() as s:
             row = (
                 await s.execute(
@@ -55,10 +55,10 @@ async def test_request_disabled_returns_202_silently(client):
 
 async def test_verify_consumes_link(client, magic_link_on, caplog):
     """Round-trip via direct DB read (test won't see the URL otherwise)."""
-    from datetime import UTC, datetime
+    from sqlalchemy import select
+
     from app.db import AsyncSessionLocal
     from app.models import MagicLink
-    from sqlalchemy import select
 
     r = await client.post("/api/admin/auth/magic-link", json={"email": EMAIL})
     assert r.status_code == 202

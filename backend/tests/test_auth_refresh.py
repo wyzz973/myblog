@@ -1,4 +1,3 @@
-import pytest
 
 EMAIL = "hi@wangyang.dev"
 PASS = "changeme"

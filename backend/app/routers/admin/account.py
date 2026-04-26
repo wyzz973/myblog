@@ -63,6 +63,7 @@ async def tfa_disable(
     admin.tfa_enabled = False
     admin.tfa_secret_encrypted = None
     from sqlalchemy import delete as _del
+
     from app.models import TfaRecoveryCode
     await s.execute(_del(TfaRecoveryCode).where(TfaRecoveryCode.account_id == admin.id))
     await write_event(s, type="account.2fa.disabled", actor=admin.email)

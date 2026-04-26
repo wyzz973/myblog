@@ -17,9 +17,12 @@ from app.models import TfaRecoveryCode
 ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford-base32 (no ILOU)
 
 
+def _pick_quartet() -> str:
+    return "".join(secrets.choice(ALPHABET) for _ in range(4))
+
+
 def _generate_one() -> str:
-    pick = lambda: "".join(secrets.choice(ALPHABET) for _ in range(4))
-    return f"{pick()}-{pick()}"
+    return f"{_pick_quartet()}-{_pick_quartet()}"
 
 
 def generate_set() -> list[str]:

@@ -32,7 +32,8 @@ async def admin_token(client):
 @pytest.fixture
 async def reset_2fa(client):
     yield
-    from sqlalchemy import update, delete
+    from sqlalchemy import delete, update
+
     from app.db import AsyncSessionLocal
     from app.models import Account, TfaRecoveryCode
     async with AsyncSessionLocal() as s:

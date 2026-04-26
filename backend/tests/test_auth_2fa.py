@@ -53,6 +53,7 @@ async def reset_2fa(client, admin_token):
     """Cleanup: disable 2fa after each test that touched it."""
     yield
     from sqlalchemy import update
+
     from app.db import AsyncSessionLocal
     from app.models import Account
     async with AsyncSessionLocal() as s:
@@ -210,6 +211,7 @@ async def test_2fa_unknown_challenge_401(client):
 
 async def test_login_success_writes_event(client):
     from sqlalchemy import select
+
     from app.db import AsyncSessionLocal
     from app.models import EventLog
     await client.post("/api/admin/auth/login", json={"email": EMAIL, "password": PASS})
@@ -224,6 +226,7 @@ async def test_login_success_writes_event(client):
 
 async def test_login_fail_writes_event(client):
     from sqlalchemy import select
+
     from app.db import AsyncSessionLocal
     from app.models import EventLog
     await client.post("/api/admin/auth/login", json={"email": EMAIL, "password": "wrong"})

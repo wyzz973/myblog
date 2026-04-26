@@ -14,6 +14,7 @@ async def admin_token(client):
 async def cleanup_tokens():
     yield
     from sqlalchemy import delete
+
     from app.db import AsyncSessionLocal
     from app.models import ApiToken
     async with AsyncSessionLocal() as s:
@@ -121,6 +122,7 @@ async def test_write_token_can_post(client, admin_token, cleanup_tokens):
     assert r.status_code in (200, 201)
     # cleanup
     from sqlalchemy import delete
+
     from app.db import AsyncSessionLocal
     from app.models import Tag
     async with AsyncSessionLocal() as s:
