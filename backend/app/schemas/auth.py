@@ -45,3 +45,8 @@ class TfaDisableRequest(_Strict):
 
 class TfaRecoveryCodesResponse(_Strict):
     recovery_codes: list[str]
+
+
+class TfaChallengeRequest(_Strict):
+    challenge: str = Field(min_length=8, max_length=64)
+    code: str = Field(min_length=6, max_length=9)
