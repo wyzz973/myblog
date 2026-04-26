@@ -65,3 +65,15 @@ async def test_revoke_refresh(redis):
     raw, jti = await issue_refresh(redis, sub="1")
     await revoke_refresh(redis, sub="1", jti=jti)
     assert not await redis.exists(f"refresh:1:{jti}")
+
+
+async def test_revoke_all_refresh(redis):
+    """revoke_all_refresh wipes every refresh:* slot for an account."""
+    from app.services.auth import revoke_all_refresh
+    _, jti1 = await issue_refresh(redis, sub="1")
+    _, jti2 = await issue_refresh(redis, sub="1")
+    assert await redis.exists(f"refresh:1:{jti1}")
+    assert await redis.exists(f"refresh:1:{jti2}")
+    await revoke_all_refresh(redis, sub="1")
+    assert not await redis.exists(f"refresh:1:{jti1}")
+    assert not await redis.exists(f"refresh:1:{jti2}")

@@ -23,3 +23,10 @@ def test_distinct_ciphertexts_for_same_plaintext():
     b = encrypt("same")
     assert a != b                        # nonce randomised
     assert decrypt(a) == decrypt(b) == "same"
+
+
+def test_encrypted_blob_fits_in_db_column():
+    """A 32-char base32 TOTP secret encrypts to a blob ≤ 256 chars (the column width)."""
+    secret = "A" * 32
+    blob = encrypt(secret)
+    assert len(blob) <= 256

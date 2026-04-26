@@ -237,3 +237,28 @@ async def test_login_fail_writes_event(client):
             )
         ).scalars().all()
         assert len(rows) >= 1
+
+
+async def test_2fa_challenge_expires(client, redis, admin_token, reset_2fa):
+    """A challenge that has expired in Redis must 401 even with the right code."""
+    import pyotp
+    setup = await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    secret = setup.json()["secret"]
+    code = pyotp.TOTP(secret).now()
+    await client.post(
+        "/api/admin/account/2fa/enable",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    # Plant an already-expired challenge
+    await redis.set("2fa:expired-challenge", "1", ex=1)
+    import asyncio
+    await asyncio.sleep(1.2)
+    code2 = pyotp.TOTP(secret).now()
+    r = await client.post(
+        "/api/admin/auth/2fa", json={"challenge": "expired-challenge", "code": code2}
+    )
+    assert r.status_code == 401

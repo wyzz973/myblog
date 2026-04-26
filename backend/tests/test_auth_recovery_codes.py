@@ -94,6 +94,45 @@ async def test_recovery_code_single_use(client, admin_token, reset_2fa):
     assert r3.status_code == 401
 
 
+async def test_recovery_codes_concurrent_use(client, admin_token, reset_2fa):
+    """Two concurrent /auth/2fa calls with the SAME recovery code must
+    have at most one succeed (DB-level single-use guarantee)."""
+    import asyncio
+    import pyotp
+
+    # Set up 2FA and grab the codes
+    r1 = await client.post(
+        "/api/admin/account/2fa/setup",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    secret = r1.json()["secret"]
+    code = pyotp.TOTP(secret).now()
+    enable = await client.post(
+        "/api/admin/account/2fa/enable",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    rc = enable.json()["recovery_codes"][0]
+
+    # Issue two challenges
+    chal1 = (await client.post(
+        "/api/admin/auth/login", json={"email": EMAIL, "password": PASS}
+    )).json()["challenge"]
+    chal2 = (await client.post(
+        "/api/admin/auth/login", json={"email": EMAIL, "password": PASS}
+    )).json()["challenge"]
+
+    # Fire both /auth/2fa calls concurrently with the same recovery code
+    results = await asyncio.gather(
+        client.post("/api/admin/auth/2fa", json={"challenge": chal1, "code": rc}),
+        client.post("/api/admin/auth/2fa", json={"challenge": chal2, "code": rc}),
+        return_exceptions=False,
+    )
+    statuses = sorted([r.status_code for r in results])
+    # Exactly one 200, the other 401
+    assert statuses == [200, 401], f"Expected [200, 401], got {statuses}"
+
+
 async def test_regenerate_replaces_all_codes(client, admin_token, reset_2fa):
     import pyotp
     secret, old_codes = await _enable_2fa(client, admin_token)
