@@ -189,6 +189,40 @@ async def test_admin_patch_unknown_404(client, admin_token):
     assert r.status_code == 404
 
 
+async def test_admin_delete_parent_cascades_to_replies(client, admin_token, seed_post):
+    """Deleting a parent comment must cascade to its admin replies."""
+    from sqlalchemy import select as _select
+    async with AsyncSessionLocal() as s:
+        parent = Comment(
+            post_id=seed_post, who="alice", email_hash="h" * 64,
+            body="parent", status="approved", actor="public", flag=False,
+            created_at=datetime.now(UTC),
+        )
+        s.add(parent)
+        await s.commit()
+        await s.refresh(parent)
+        child = Comment(
+            post_id=seed_post, parent_id=parent.id, who="Wang",
+            email_hash=None, body="reply", status="approved", actor="admin",
+            flag=False, created_at=datetime.now(UTC),
+        )
+        s.add(child)
+        await s.commit()
+        await s.refresh(child)
+        child_id = child.id
+        parent_id = parent.id
+
+    r = await client.delete(
+        f"/api/admin/comments/{parent_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 204
+
+    async with AsyncSessionLocal() as s:
+        c = (await s.execute(_select(Comment).where(Comment.id == child_id))).scalar_one_or_none()
+        assert c is None, "child reply must be removed by FK CASCADE"
+
+
 async def test_admin_patch_read_token_denied_403(client, admin_token, seed_post):
     create = await client.post(
         "/api/admin/api-tokens",
