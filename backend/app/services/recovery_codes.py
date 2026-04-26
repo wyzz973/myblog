@@ -9,7 +9,7 @@ import hashlib
 import secrets
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import TfaRecoveryCode
@@ -58,22 +58,13 @@ async def replace_for_account(s: AsyncSession, *, account_id: int) -> list[str]:
 async def verify_and_consume(
     s: AsyncSession, *, account_id: int, presented: str
 ) -> bool:
-    """Mark a recovery code as used. Returns True on first-and-only success."""
+    """Atomically mark a recovery code used. Returns True on first success."""
     target = hash_code(presented)
-    row = (
-        await s.execute(
-            select(TfaRecoveryCode).where(
-                TfaRecoveryCode.code_hash == target,
-                TfaRecoveryCode.account_id == account_id,
-                TfaRecoveryCode.used_at.is_(None),
-            )
-        )
-    ).scalar_one_or_none()
-    if row is None:
-        return False
-    await s.execute(
+    res = await s.execute(
         update(TfaRecoveryCode)
         .where(TfaRecoveryCode.code_hash == target)
+        .where(TfaRecoveryCode.account_id == account_id)
+        .where(TfaRecoveryCode.used_at.is_(None))
         .values(used_at=datetime.now(UTC))
     )
-    return True
+    return res.rowcount > 0
