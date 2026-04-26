@@ -206,3 +206,31 @@ async def test_2fa_unknown_challenge_401(client):
         "/api/admin/auth/2fa", json={"challenge": "nope-nope", "code": "123456"}
     )
     assert r.status_code == 401
+
+
+async def test_login_success_writes_event(client):
+    from sqlalchemy import select
+    from app.db import AsyncSessionLocal
+    from app.models import EventLog
+    await client.post("/api/admin/auth/login", json={"email": EMAIL, "password": PASS})
+    async with AsyncSessionLocal() as s:
+        rows = (
+            await s.execute(
+                select(EventLog).where(EventLog.type == "auth.login.success").order_by(EventLog.id.desc())
+            )
+        ).scalars().all()
+        assert len(rows) >= 1
+
+
+async def test_login_fail_writes_event(client):
+    from sqlalchemy import select
+    from app.db import AsyncSessionLocal
+    from app.models import EventLog
+    await client.post("/api/admin/auth/login", json={"email": EMAIL, "password": "wrong"})
+    async with AsyncSessionLocal() as s:
+        rows = (
+            await s.execute(
+                select(EventLog).where(EventLog.type == "auth.login.fail").order_by(EventLog.id.desc())
+            )
+        ).scalars().all()
+        assert len(rows) >= 1

@@ -13,6 +13,7 @@ from app.schemas.auth import (
     TfaSetupResponse,
 )
 from app.services import recovery_codes, secret_box, totp
+from app.services.event_log import write_event
 
 router = APIRouter()
 
@@ -43,6 +44,7 @@ async def tfa_enable(
         raise HTTPException(400, "invalid code")
     admin.tfa_enabled = True
     raw = await recovery_codes.replace_for_account(s, account_id=admin.id)
+    await write_event(s, type="account.2fa.enabled", actor=admin.email)
     await s.commit()
     return TfaRecoveryCodesResponse(recovery_codes=raw)
 
@@ -63,6 +65,7 @@ async def tfa_disable(
     from sqlalchemy import delete as _del
     from app.models import TfaRecoveryCode
     await s.execute(_del(TfaRecoveryCode).where(TfaRecoveryCode.account_id == admin.id))
+    await write_event(s, type="account.2fa.disabled", actor=admin.email)
     await s.commit()
     return Response(status_code=204)
 
@@ -93,5 +96,6 @@ async def tfa_regenerate_recovery_codes(
     if not totp.verify(secret, req.current_code):
         raise HTTPException(400, "invalid code")
     raw = await recovery_codes.replace_for_account(s, account_id=admin.id)
+    await write_event(s, type="account.recovery_codes.regenerated", actor=admin.email)
     await s.commit()
     return TfaRecoveryCodesResponse(recovery_codes=raw)

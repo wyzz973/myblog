@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
@@ -25,6 +26,7 @@ from app.services.auth import (
     rotate_refresh,
     verify_password,
 )
+from app.services.event_log import write_event
 
 router = APIRouter()
 
@@ -96,6 +98,13 @@ async def login(
             threshold=settings.login_lockout_threshold,
             lock_window_sec=settings.login_lockout_window_sec,
         )
+        await write_event(
+            s,
+            type="auth.login.fail",
+            actor=req.email,
+            meta={"ip": ip, "reason": "password" if acct else "unknown_email"},
+        )
+        await s.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid credentials")
 
     # Successful password — reset failure counter.
@@ -110,7 +119,10 @@ async def login(
         )
         return LoginChallengeResponse(challenge=challenge)
 
-    return await _issue_session_tokens(redis, response, acct)
+    result = await _issue_session_tokens(redis, response, acct)
+    await write_event(s, type="auth.login.success", actor=acct.email, meta={"ip": ip})
+    await s.commit()
+    return result
 
 
 @router.post("/auth/2fa", response_model=LoginResponse)
@@ -147,10 +159,20 @@ async def auth_2fa(
             await s.commit()
 
     if not accepted:
+        await write_event(s, type="auth.2fa.fail", actor=str(sub), meta={"challenge": req.challenge})
+        await s.commit()
         raise HTTPException(401, "invalid code")
 
     await redis.delete(f"{CHALLENGE_PREFIX}{req.challenge}")
-    return await _issue_session_tokens(redis, response, acct)
+    result = await _issue_session_tokens(redis, response, acct)
+    await write_event(
+        s,
+        type="auth.2fa.success",
+        actor=acct.email,
+        meta={"method": "totp" if (len(code) == 6) else "recovery"},
+    )
+    await s.commit()
+    return result
 
 
 @router.post("/auth/refresh", response_model=RefreshResponse)
@@ -180,6 +202,8 @@ async def refresh(
     settings = get_settings()
     access = create_access_token(sub=sub, email=acct.email)
     _set_refresh_cookie(response, new_raw, sub, new_jti)
+    await write_event(s, type="auth.refresh", actor=str(sub), meta={"jti_old": _old_jti, "jti_new": new_jti})
+    await s.commit()
     return RefreshResponse(access=access, expires_in=settings.access_token_ttl)
 
 
@@ -188,11 +212,14 @@ async def logout(
     response: Response,
     redis: Redis = Depends(get_redis),
     raw_cookie: str | None = Cookie(default=None, alias=COOKIE_NAME),
+    s: AsyncSession = Depends(get_session),
 ) -> Response:
     parsed = _parse_refresh_cookie(raw_cookie)
     if parsed is not None:
         sub, jti, _ = parsed
         await revoke_refresh(redis, sub=sub, jti=jti)
+        await write_event(s, type="auth.logout", actor=sub, meta={"jti": jti})
+        await s.commit()
     _clear_refresh_cookie(response)
     return Response(status_code=204)
 
@@ -227,6 +254,13 @@ async def magic_link_request(
     base = "http://localhost:51820" if settings.env == "dev" else f"https://{settings.cors_origins[0] if settings.cors_origins else 'localhost'}"
     url = f"{base}/api/admin/auth/magic-link/verify?t={raw}"
     await email_svc.send_magic_link(email=acct.email, url=url)
+    await write_event(
+        s,
+        type="auth.magic_link.requested",
+        actor=req.email,
+        meta={"email_hashed": hashlib.sha256(req.email.lower().encode()).hexdigest()[:12]},
+    )
+    await s.commit()
     return {"ok": True}
 
 
@@ -240,4 +274,7 @@ async def magic_link_verify(
     acct = await magic_link_svc.consume(s, raw=t)
     if acct is None:
         raise HTTPException(401, "invalid or expired magic link")
-    return await _issue_session_tokens(redis, response, acct)
+    result = await _issue_session_tokens(redis, response, acct)
+    await write_event(s, type="auth.magic_link.consumed", actor=acct.email)
+    await s.commit()
+    return result

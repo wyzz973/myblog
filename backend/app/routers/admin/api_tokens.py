@@ -11,6 +11,7 @@ from app.schemas.auth import (
     ApiTokenListItem,
 )
 from app.services import api_tokens as api_tokens_svc
+from app.services.event_log import write_event
 
 router = APIRouter()
 
@@ -41,6 +42,13 @@ async def create_token(
     s: AsyncSession = Depends(get_session),
 ) -> ApiTokenCreateResponse:
     row, raw = await api_tokens_svc.create(s, name=req.name, scope=req.scope)
+    await write_event(
+        s,
+        type="api_token.created",
+        actor=_admin.email,
+        meta={"token_id": row.id, "name": row.name, "scope": row.scope},
+    )
+    await s.commit()
     return ApiTokenCreateResponse(id=row.id, name=row.name, scope=row.scope, token=raw)
 
 
@@ -53,4 +61,6 @@ async def delete_token(
     ok = await api_tokens_svc.revoke(s, token_id=token_id)
     if not ok:
         raise HTTPException(404, "token not found or already revoked")
+    await write_event(s, type="api_token.revoked", actor=_admin.email, meta={"token_id": token_id})
+    await s.commit()
     return Response(status_code=204)
