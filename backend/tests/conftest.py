@@ -10,8 +10,17 @@ from app.main import create_app
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _configure_logging() -> None:
+def _configure_logging(monkeypatch_session) -> None:
     configure_logging()
+
+
+@pytest.fixture(scope="session")
+def monkeypatch_session():
+    from _pytest.monkeypatch import MonkeyPatch
+    mp = MonkeyPatch()
+    mp.setenv("ARQ_INLINE", "true")
+    yield mp
+    mp.undo()
 
 
 @pytest.fixture

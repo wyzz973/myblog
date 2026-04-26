@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True
     admin_notify_email: str | None = None
 
+    # ARQ
+    arq_inline: bool = False    # tests set True; production stays False
+
     # salts
     like_salt: str = Field(min_length=16)
 

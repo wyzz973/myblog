@@ -56,3 +56,28 @@ def test_secrets_key_min_length_enforced(monkeypatch):
     from app.config import Settings
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_arq_inline_default_false(monkeypatch):
+    """ARQ_INLINE defaults to False in production; tests override via env."""
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x/y")
+    monkeypatch.setenv("REDIS_URL", "redis://x")
+    monkeypatch.setenv("JWT_SECRET", "x" * 32)
+    monkeypatch.setenv("LIKE_SALT", "y" * 16)
+    monkeypatch.setenv("SECRETS_KEY", "z" * 40)
+    monkeypatch.delenv("ARQ_INLINE", raising=False)
+    from app.config import Settings
+    s = Settings(_env_file=None)
+    assert s.arq_inline is False
+
+
+def test_arq_inline_env_override(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://x/y")
+    monkeypatch.setenv("REDIS_URL", "redis://x")
+    monkeypatch.setenv("JWT_SECRET", "x" * 32)
+    monkeypatch.setenv("LIKE_SALT", "y" * 16)
+    monkeypatch.setenv("SECRETS_KEY", "z" * 40)
+    monkeypatch.setenv("ARQ_INLINE", "true")
+    from app.config import Settings
+    s = Settings(_env_file=None)
+    assert s.arq_inline is True
