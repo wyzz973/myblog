@@ -96,3 +96,22 @@ async def prune_event_log(ctx: dict) -> dict:
         res = await s.execute(sa_delete(_EventLog).where(_EventLog.created_at < cutoff))
         await s.commit()
         return {"deleted": res.rowcount}
+
+
+from app.services.markdown_pipeline import compute_derived, parse_markdown  # noqa: E402
+
+
+async def recompute_post_word_counts(ctx: dict) -> dict:
+    """Recompute word_count for every post from body_md."""
+    async with AsyncSessionLocal() as s:
+        posts = (await s.execute(select(Post.id, Post.body_md))).all()
+        n = 0
+        for pid, body_md in posts:
+            blocks = parse_markdown(body_md)
+            derived = compute_derived(blocks)
+            await s.execute(
+                update(Post).where(Post.id == pid).values(word_count=derived["word_count"])
+            )
+            n += 1
+        await s.commit()
+        return {"updated": n}

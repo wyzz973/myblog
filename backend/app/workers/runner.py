@@ -14,11 +14,12 @@ q.register("send_email_task", t.send_email_task)
 q.register("publish_scheduled_posts", t.publish_scheduled_posts)
 q.register("cleanup_expired_magic_links", t.cleanup_expired_magic_links)
 q.register("prune_event_log", t.prune_event_log)
+q.register("recompute_post_word_counts", t.recompute_post_word_counts)
 
 
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)
-    functions = [t.send_email_task, t.publish_scheduled_posts, t.cleanup_expired_magic_links, t.prune_event_log]
+    functions = [t.send_email_task, t.publish_scheduled_posts, t.cleanup_expired_magic_links, t.prune_event_log, t.recompute_post_word_counts]
     cron_jobs: list = [
         cron(t.publish_scheduled_posts, minute=set(range(0, 60))),  # every minute
         cron(t.cleanup_expired_magic_links, minute={10, 40}),

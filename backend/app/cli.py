@@ -226,6 +226,17 @@ def import_md(
     typer.echo("─" * 60)
     typer.echo(f"total {len(results)} · ok {ok} · failed {failed}")
 
+    # Recompute word counts asynchronously to keep the import path fast
+    try:
+        asyncio.run(_enqueue_recompute())
+    except Exception as e:  # noqa: BLE001
+        typer.echo(f"  · recompute enqueue failed (non-fatal): {e}")
+
+
+async def _enqueue_recompute() -> None:
+    from app.workers.queue import enqueue
+    await enqueue("recompute_post_word_counts")
+
 
 if __name__ == "__main__":
     app()
