@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.deps import current_admin
+from app.deps import current_session_admin
 from app.models import Account
 from app.schemas.auth import (
     MagicLinkToggleRequest,
@@ -19,7 +19,7 @@ router = APIRouter()
 
 @router.post("/account/2fa/setup", response_model=TfaSetupResponse)
 async def tfa_setup(
-    admin: Account = Depends(current_admin),
+    admin: Account = Depends(current_session_admin),
     s: AsyncSession = Depends(get_session),
 ) -> TfaSetupResponse:
     secret = totp.generate_secret()
@@ -33,7 +33,7 @@ async def tfa_setup(
 @router.post("/account/2fa/enable", response_model=TfaRecoveryCodesResponse)
 async def tfa_enable(
     req: TfaEnableRequest,
-    admin: Account = Depends(current_admin),
+    admin: Account = Depends(current_session_admin),
     s: AsyncSession = Depends(get_session),
 ) -> TfaRecoveryCodesResponse:
     if not admin.tfa_secret_encrypted:
@@ -50,7 +50,7 @@ async def tfa_enable(
 @router.delete("/account/2fa", status_code=204)
 async def tfa_disable(
     req: TfaDisableRequest,
-    admin: Account = Depends(current_admin),
+    admin: Account = Depends(current_session_admin),
     s: AsyncSession = Depends(get_session),
 ) -> Response:
     if not admin.tfa_enabled or not admin.tfa_secret_encrypted:
@@ -70,7 +70,7 @@ async def tfa_disable(
 @router.patch("/account/magic-link")
 async def toggle_magic_link(
     req: MagicLinkToggleRequest,
-    admin: Account = Depends(current_admin),
+    admin: Account = Depends(current_session_admin),
     s: AsyncSession = Depends(get_session),
 ) -> dict:
     admin.magic_link_enabled = req.enabled
@@ -84,7 +84,7 @@ async def toggle_magic_link(
 )
 async def tfa_regenerate_recovery_codes(
     req: TfaRegenerateRequest,
-    admin: Account = Depends(current_admin),
+    admin: Account = Depends(current_session_admin),
     s: AsyncSession = Depends(get_session),
 ) -> TfaRecoveryCodesResponse:
     if not admin.tfa_enabled or not admin.tfa_secret_encrypted:

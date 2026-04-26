@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.deps import current_admin
+from app.deps import current_admin, require_scope
 from app.models import Account, Contact
 from app.services.event_log import write_event
 
@@ -35,7 +35,7 @@ async def list_(
     return [ContactOut.model_validate(r) for r in rows]
 
 
-@router.post("/contacts", response_model=ContactOut, status_code=201)
+@router.post("/contacts", response_model=ContactOut, status_code=201, dependencies=[Depends(require_scope("write"))])
 async def create(
     payload: ContactIn,
     admin: Account = Depends(current_admin),
@@ -50,7 +50,7 @@ async def create(
     return ContactOut.model_validate(c)
 
 
-@router.put("/contacts/order", status_code=204)
+@router.put("/contacts/order", status_code=204, dependencies=[Depends(require_scope("write"))])
 async def reorder(
     payload: dict = Body(...),
     admin: Account = Depends(current_admin),
@@ -71,7 +71,7 @@ async def reorder(
     await write_event(s, type="contact.reordered", actor=admin.email)
 
 
-@router.patch("/contacts/{cid}", response_model=ContactOut)
+@router.patch("/contacts/{cid}", response_model=ContactOut, dependencies=[Depends(require_scope("write"))])
 async def patch(
     cid: int,
     payload: dict = Body(...),
@@ -92,7 +92,7 @@ async def patch(
     return ContactOut.model_validate(c)
 
 
-@router.delete("/contacts/{cid}", status_code=204)
+@router.delete("/contacts/{cid}", status_code=204, dependencies=[Depends(require_scope("write"))])
 async def delete(
     cid: int,
     admin: Account = Depends(current_admin),

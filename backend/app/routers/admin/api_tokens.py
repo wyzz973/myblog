@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.deps import current_admin
+from app.deps import current_admin, require_scope
 from app.models import Account, ApiToken
 from app.schemas.auth import (
     ApiTokenCreateRequest,
@@ -34,7 +34,7 @@ async def list_tokens(
     ]
 
 
-@router.post("/api-tokens", response_model=ApiTokenCreateResponse)
+@router.post("/api-tokens", response_model=ApiTokenCreateResponse, dependencies=[Depends(require_scope("write"))])
 async def create_token(
     req: ApiTokenCreateRequest,
     _admin: Account = Depends(current_admin),
@@ -44,7 +44,7 @@ async def create_token(
     return ApiTokenCreateResponse(id=row.id, name=row.name, scope=row.scope, token=raw)
 
 
-@router.delete("/api-tokens/{token_id}", status_code=204)
+@router.delete("/api-tokens/{token_id}", status_code=204, dependencies=[Depends(require_scope("write"))])
 async def delete_token(
     token_id: int,
     _admin: Account = Depends(current_admin),

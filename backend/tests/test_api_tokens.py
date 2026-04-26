@@ -78,3 +78,82 @@ async def test_invalid_scope_rejected(client, admin_token, cleanup_tokens):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert r.status_code == 422
+
+
+async def test_read_token_can_get_admin_posts(client, admin_token, cleanup_tokens):
+    create = await client.post(
+        "/api/admin/api-tokens",
+        json={"name": "r", "scope": "read"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    raw = create.json()["token"]
+    r = await client.get("/api/admin/posts", headers={"Authorization": f"Bearer {raw}"})
+    assert r.status_code == 200
+
+
+async def test_read_token_cannot_post_admin(client, admin_token, cleanup_tokens):
+    create = await client.post(
+        "/api/admin/api-tokens",
+        json={"name": "r", "scope": "read"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    raw = create.json()["token"]
+    r = await client.post(
+        "/api/admin/tags",
+        json={"slug": "should-fail", "name": "x", "color": "#fff"},
+        headers={"Authorization": f"Bearer {raw}"},
+    )
+    assert r.status_code == 403
+
+
+async def test_write_token_can_post(client, admin_token, cleanup_tokens):
+    create = await client.post(
+        "/api/admin/api-tokens",
+        json={"name": "w", "scope": "write"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    raw = create.json()["token"]
+    r = await client.post(
+        "/api/admin/tags",
+        json={"slug": "wtoken-tag", "name": "w-tag", "color": "#aaa"},
+        headers={"Authorization": f"Bearer {raw}"},
+    )
+    assert r.status_code in (200, 201)
+    # cleanup
+    from sqlalchemy import delete
+    from app.db import AsyncSessionLocal
+    from app.models import Tag
+    async with AsyncSessionLocal() as s:
+        await s.execute(delete(Tag).where(Tag.slug == "wtoken-tag"))
+        await s.commit()
+
+
+async def test_revoked_token_rejected(client, admin_token, cleanup_tokens):
+    create = await client.post(
+        "/api/admin/api-tokens",
+        json={"name": "rev", "scope": "read"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    raw = create.json()["token"]
+    tid = create.json()["id"]
+    await client.delete(
+        f"/api/admin/api-tokens/{tid}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    r = await client.get("/api/admin/posts", headers={"Authorization": f"Bearer {raw}"})
+    assert r.status_code == 401
+
+
+async def test_session_only_endpoint_rejects_token(client, admin_token, cleanup_tokens):
+    """API tokens must NOT be allowed to manage their own scope tier."""
+    create = await client.post(
+        "/api/admin/api-tokens",
+        json={"name": "self", "scope": "write"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    raw = create.json()["token"]
+    # /account/2fa/setup is session-only
+    r = await client.post(
+        "/api/admin/account/2fa/setup", headers={"Authorization": f"Bearer {raw}"}
+    )
+    assert r.status_code == 401

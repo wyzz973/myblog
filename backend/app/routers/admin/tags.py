@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.deps import current_admin
+from app.deps import current_admin, require_scope
 from app.models import Account, Tag
 from app.services.event_log import write_event
 
@@ -37,7 +37,7 @@ async def list_(
     return [TagOut.model_validate(r) for r in rows]
 
 
-@router.post("/tags", response_model=TagOut, status_code=201)
+@router.post("/tags", response_model=TagOut, status_code=201, dependencies=[Depends(require_scope("write"))])
 async def create(
     payload: TagIn,
     admin: Account = Depends(current_admin),
@@ -54,7 +54,7 @@ async def create(
     return TagOut.model_validate(tag)
 
 
-@router.put("/tags/order", status_code=204)
+@router.put("/tags/order", status_code=204, dependencies=[Depends(require_scope("write"))])
 async def reorder(
     payload: dict = Body(...),
     admin: Account = Depends(current_admin),
@@ -73,7 +73,7 @@ async def reorder(
     await write_event(s, type="tag.reordered", actor=admin.email)
 
 
-@router.patch("/tags/{tag_id}", response_model=TagOut)
+@router.patch("/tags/{tag_id}", response_model=TagOut, dependencies=[Depends(require_scope("write"))])
 async def patch(
     tag_id: int,
     payload: dict = Body(...),
@@ -92,7 +92,7 @@ async def patch(
     return TagOut.model_validate(tag)
 
 
-@router.delete("/tags/{tag_id}", status_code=204)
+@router.delete("/tags/{tag_id}", status_code=204, dependencies=[Depends(require_scope("write"))])
 async def delete(
     tag_id: int,
     admin: Account = Depends(current_admin),
