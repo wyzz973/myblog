@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.errors import install_handlers
@@ -36,6 +37,11 @@ def create_app() -> FastAPI:
 
     app.include_router(public_router)
     app.include_router(admin_router)
+
+    media_dir = settings.data_dir / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/media", StaticFiles(directory=str(media_dir), check_dir=False), name="media")
+
     return app
 
 
