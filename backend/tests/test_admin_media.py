@@ -141,3 +141,63 @@ async def test_media_delete_clears_avatar_id_via_fk(client, admin_token, cleanup
         # Cleanup so the next test sees a clean fixture.
         await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(avatar_id=None))
         await s.commit()
+
+
+from io import BytesIO
+from PIL import Image
+
+
+def _png_bytes(w=4, h=3) -> bytes:
+    buf = BytesIO()
+    Image.new("RGB", (w, h), color=(0, 200, 0)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+async def test_media_post_single_png(client, admin_token, cleanup_media, tmp_path, monkeypatch):
+    from app.services import media_storage
+    monkeypatch.setattr(media_storage, "MEDIA_DIR", tmp_path)
+
+    files = {"files": ("cat.png", _png_bytes(20, 30), "image/png")}
+    r = await client.post(
+        "/api/admin/media",
+        files=files,
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["ok"]) == 1
+    assert body["failed"] == []
+    item = body["ok"][0]
+    assert item["mime_type"] == "image/png"
+    assert item["width"] == 20
+    assert item["height"] == 30
+
+
+async def test_media_post_partial_failure(client, admin_token, cleanup_media, tmp_path, monkeypatch):
+    """Two valid PNGs + one oversize. ok=2, failed=1, no abort."""
+    from app.services import media_storage
+    monkeypatch.setattr(media_storage, "MEDIA_DIR", tmp_path)
+
+    big = b"\x89PNG\r\n\x1a\n" + b"x" * (media_storage.MAX_BYTES + 10)
+    files = [
+        ("files", ("a.png", _png_bytes(), "image/png")),
+        ("files", ("huge.png", big, "image/png")),
+        ("files", ("b.png", _png_bytes(), "image/png")),
+    ]
+    r = await client.post(
+        "/api/admin/media",
+        files=files,
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["ok"]) == 2
+    assert len(body["failed"]) == 1
+    assert body["failed"][0]["filename"] == "huge.png"
+    assert "too large" in body["failed"][0]["error"]
+
+
+async def test_media_post_unauthenticated_401(client, cleanup_media):
+    files = {"files": ("x.png", b"abc", "image/png")}
+    r = await client.post("/api/admin/media", files=files)
+    assert r.status_code == 401

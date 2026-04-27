@@ -1,13 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_session
+from app.db import AsyncSessionLocal, get_session
 from app.deps import current_admin, require_scope
 from app.models import Account, Media
-from app.schemas.media import MediaItem, MediaPatch
+from app.schemas.media import (
+    MediaItem,
+    MediaPatch,
+    MediaUploadFailure,
+    MediaUploadResponse,
+)
 from app.services import media as media_svc
 from app.services.event_log import write_event
-from app.services.media_storage import url_for
+from app.services.media_storage import MediaError, url_for
 
 router = APIRouter()
 
@@ -101,3 +106,87 @@ async def delete_media(
         await fs_delete(storage_path)
 
     return Response(status_code=204)
+
+
+@router.post(
+    "/media",
+    response_model=MediaUploadResponse,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def upload_media(
+    files: list[UploadFile],
+    _admin: Account = Depends(current_admin),
+) -> MediaUploadResponse:
+    from app.services import media_storage
+
+    ok: list[MediaItem] = []
+    failed: list[MediaUploadFailure] = []
+
+    for f in files:
+        original = f.filename or "unnamed"
+        declared = f.content_type or "application/octet-stream"
+        content = await f.read()
+
+        try:
+            save_result = await media_storage.save(
+                content, declared_mime=declared, original_name=original
+            )
+        except MediaError as e:
+            failed.append(MediaUploadFailure(filename=original, error=str(e)))
+            continue
+        except Exception as e:  # noqa: BLE001
+            failed.append(
+                MediaUploadFailure(filename=original, error=f"internal: {e}")
+            )
+            continue
+
+        # Per-file transaction: insert + event_log + commit. If commit fails,
+        # roll back the disk write so we don't leak orphans.
+        try:
+            async with AsyncSessionLocal() as s2:
+                row = await media_svc.create(
+                    s2, save_result=save_result, original_filename=original
+                )
+                await write_event(
+                    s2, type="media.uploaded", actor=_admin.email,
+                    target=str(row.id),
+                    meta={
+                        "filename": original,
+                        "size": save_result.size,
+                        "mime": save_result.mime_type,
+                        "width": save_result.width,
+                        "height": save_result.height,
+                    },
+                )
+                await s2.commit()
+                row_id = row.id
+                row_filename = row.filename
+                row_mime = row.mime_type
+                row_size = row.size
+                row_w = row.width
+                row_h = row.height
+                row_alt = row.alt
+                row_created = row.created_at
+                row_storage = row.storage_path
+        except Exception as e:  # noqa: BLE001
+            await media_storage.delete(save_result.storage_path)
+            failed.append(
+                MediaUploadFailure(filename=original, error=f"db error: {e}")
+            )
+            continue
+
+        ok.append(
+            MediaItem(
+                id=row_id,
+                filename=row_filename,
+                url=url_for(row_storage),
+                mime_type=row_mime,
+                size=row_size,
+                width=row_w,
+                height=row_h,
+                alt=row_alt,
+                created_at=row_created,
+            )
+        )
+
+    return MediaUploadResponse(ok=ok, failed=failed)
