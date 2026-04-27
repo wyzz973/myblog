@@ -77,3 +77,37 @@ async def test_save_rejects_decode_failure(tmp_path, monkeypatch):
             declared_mime="image/png",
             original_name="garbage.png",
         )
+
+
+SVG_OK = b'<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><circle cx="5" cy="5" r="4"/></svg>'
+SVG_SCRIPT = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+SVG_ONLOAD = b'<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><rect/></svg>'
+
+
+async def test_save_accepts_clean_svg(tmp_path, monkeypatch):
+    from app.services import media_storage
+    monkeypatch.setattr(media_storage, "MEDIA_DIR", tmp_path)
+    res = await media_storage.save(
+        SVG_OK, declared_mime="image/svg+xml", original_name="icon.svg"
+    )
+    assert res.mime_type == "image/svg+xml"
+    assert res.width is None
+    assert res.height is None
+
+
+async def test_save_rejects_svg_with_script(tmp_path, monkeypatch):
+    from app.services import media_storage
+    monkeypatch.setattr(media_storage, "MEDIA_DIR", tmp_path)
+    with pytest.raises(MediaError, match="svg with script"):
+        await media_storage.save(
+            SVG_SCRIPT, declared_mime="image/svg+xml", original_name="bad.svg"
+        )
+
+
+async def test_save_rejects_svg_with_onload(tmp_path, monkeypatch):
+    from app.services import media_storage
+    monkeypatch.setattr(media_storage, "MEDIA_DIR", tmp_path)
+    with pytest.raises(MediaError, match="svg with script"):
+        await media_storage.save(
+            SVG_ONLOAD, declared_mime="image/svg+xml", original_name="bad.svg"
+        )

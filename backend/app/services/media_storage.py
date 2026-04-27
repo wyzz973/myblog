@@ -56,8 +56,20 @@ async def save(
         raise MediaError(f"unsupported mime: {declared_mime}")
 
     if declared_mime == "image/svg+xml":
-        # SVG path is implemented in Task 7.
-        raise NotImplementedError("svg path implemented in next task")
+        _validate_svg(content)
+        storage_path = _build_storage_path(original_name, "image/svg+xml")
+        full = MEDIA_DIR / storage_path
+        full.parent.mkdir(parents=True, exist_ok=True)
+        tmp = full.with_suffix(full.suffix + ".tmp")
+        tmp.write_bytes(content)
+        tmp.rename(full)
+        return SaveResult(
+            storage_path=storage_path,
+            mime_type="image/svg+xml",
+            size=len(content),
+            width=None,
+            height=None,
+        )
 
     try:
         img = Image.open(BytesIO(content))
@@ -93,3 +105,20 @@ def _build_storage_path(original_name: str, mime_type: str) -> str:
     new_uuid = uuid.uuid4().hex
     bucket = new_uuid[:2]
     return f"{bucket}/{new_uuid}-{safe_name}"
+
+
+def _validate_svg(content: bytes) -> None:
+    """Reject SVGs containing <script> elements or `on*` event-handler attributes."""
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError as e:
+        raise MediaError(f"invalid svg xml: {e}") from e
+    for el in root.iter():
+        # local tag name strips XML namespace, e.g. "{ns}script" → "script".
+        local = el.tag.rsplit("}", 1)[-1].lower()
+        if local == "script":
+            raise MediaError("svg with script content not allowed")
+        for attr in el.attrib:
+            local_attr = attr.rsplit("}", 1)[-1].lower()
+            if local_attr.startswith("on"):
+                raise MediaError("svg with script content not allowed")
