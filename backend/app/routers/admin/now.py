@@ -59,7 +59,7 @@ async def patch_now(
     )
     if row is None:
         raise HTTPException(404, "now entry not found")
-    fields = [k for k, v in req.model_dump(exclude_none=True).items() if v is not None]
+    fields = list(req.model_dump(exclude_none=True).keys())
     await write_event(
         s, type="now.updated", actor=_admin.email,
         target=str(entry_id), meta={"fields_changed": fields},

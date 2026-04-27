@@ -39,8 +39,6 @@ async def upsert(
         existing.updated_at = now
         row = existing
     await s.flush()
-    await s.commit()
-    await s.refresh(row)
     return row
 
 
@@ -75,4 +73,3 @@ async def set_status(
         )
     )
     await s.flush()
-    await s.commit()

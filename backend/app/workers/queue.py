@@ -6,7 +6,6 @@ from typing import Any
 from arq.connections import ArqRedis, RedisSettings, create_pool
 
 from app.config import get_settings
-from app.workers import tasks as task_mod
 
 _pool: ArqRedis | None = None
 _TASK_REGISTRY: dict[str, Any] = {}

@@ -104,3 +104,23 @@ async def test_now_delete(client, admin_token, cleanup_now):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert r.status_code == 204
+
+
+async def test_partial_unique_index_blocks_two_current_rows(cleanup_now):
+    """Bypass the service and INSERT two rows with is_current=true directly.
+
+    The partial unique index `WHERE is_current = TRUE` is the DB-level guard
+    behind the single-current invariant. A future refactor that drops the
+    in-tx flip in now_svc.create would still fail this test.
+    """
+    from datetime import UTC, datetime
+
+    from sqlalchemy.exc import IntegrityError
+
+    async with AsyncSessionLocal() as s:
+        s.add(NowEntry(body_md="first", is_current=True, created_at=datetime.now(UTC)))
+        await s.flush()
+        s.add(NowEntry(body_md="second", is_current=True, created_at=datetime.now(UTC)))
+        with pytest.raises(IntegrityError):
+            await s.flush()
+        await s.rollback()

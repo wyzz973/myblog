@@ -7,6 +7,7 @@ Revises: 0003_interactions
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -22,7 +23,12 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=16), nullable=False),
         sa.Column("username", sa.String(length=64), nullable=True),
         sa.Column("secret_encrypted", sa.Text(), nullable=False),
-        sa.Column("extra_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'::json")),
+        sa.Column(
+            "extra_json",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'{}'::jsonb"),
+        ),
         sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_status", sa.String(length=16), nullable=True),
         sa.Column("last_error", sa.Text(), nullable=True),

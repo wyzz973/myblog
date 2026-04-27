@@ -111,3 +111,70 @@ async def test_github_manual_sync_endpoint(client, admin_token, cleanup_integrat
     assert r.status_code == 200
     body = r.json()
     assert "count" in body
+    # spec §5.1: response includes last_synced_at
+    assert "last_synced_at" in body
+    assert body["last_synced_at"] is not None
+
+
+async def test_anthropic_get_never_returns_api_key(client, admin_token, cleanup_integrations):
+    """Symmetric to test_get_never_returns_secret but for anthropic."""
+    from app.services import integrations as svc
+    async with AsyncSessionLocal() as s:
+        await svc.upsert(
+            s, name="anthropic", username=None, secret="sk-ant-leaky-xyz",
+            extra={"model": "claude-haiku-4-5-20251001"},
+        )
+        await s.commit()
+    r = await client.get(
+        "/api/admin/integrations/anthropic",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    assert "sk-ant-leaky-xyz" not in r.text
+    body = r.json()
+    assert body["model"] == "claude-haiku-4-5-20251001"
+
+
+async def test_admin_integrations_unauthenticated_returns_401(client, cleanup_integrations):
+    """No bearer token → 401 on every admin integrations route."""
+    for method, url in [
+        ("GET", "/api/admin/integrations/github"),
+        ("GET", "/api/admin/integrations/anthropic"),
+        ("PUT", "/api/admin/integrations/github"),
+        ("PUT", "/api/admin/integrations/anthropic"),
+        ("POST", "/api/admin/integrations/github/sync"),
+    ]:
+        r = await client.request(method, url, json={})
+        assert r.status_code == 401, f"{method} {url} → {r.status_code}"
+
+
+async def test_github_failed_emits_failed_event(client, admin_token, cleanup_integrations):
+    """Manual sync failure must emit integration.github.failed (spec §9 acceptance)."""
+    from sqlalchemy import select
+
+    from app.models import EventLog
+    from app.services import integrations as svc
+
+    async with AsyncSessionLocal() as s:
+        await svc.upsert(s, name="github", username="alice", secret="ghp_token")
+        await s.execute(delete(EventLog).where(EventLog.type.like("integration.github.%")))
+        await s.commit()
+
+    with patch(
+        "app.services.github.fetch_contributions",
+        new=AsyncMock(side_effect=RuntimeError("network down")),
+    ):
+        r = await client.post(
+            "/api/admin/integrations/github/sync",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+    assert r.status_code == 502
+
+    async with AsyncSessionLocal() as s:
+        events = (await s.execute(
+            select(EventLog).where(EventLog.type.like("integration.github.%"))
+            .order_by(EventLog.id)
+        )).scalars().all()
+        # Worker emits one failed event before raising; router catches and emits another.
+        types = [e.type for e in events]
+        assert "integration.github.failed" in types

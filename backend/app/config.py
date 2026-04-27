@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -61,6 +61,14 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [x.strip() for x in v.split(",") if x.strip()]
         return v
+
+    @model_validator(mode="after")
+    def _no_inline_in_prod(self) -> "Settings":
+        # Inline mode runs ARQ tasks in the request thread (synchronous email,
+        # synchronous word-count batch, etc.). Safe in tests/dev; never in prod.
+        if self.env == "prod" and self.arq_inline:
+            raise ValueError("ARQ_INLINE=true is not allowed when ENV=prod")
+        return self
 
 
 @lru_cache

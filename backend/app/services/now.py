@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import NowEntry
@@ -75,7 +75,6 @@ async def patch(
 
 
 async def delete_one(s: AsyncSession, *, entry_id: int) -> bool:
-    from sqlalchemy import delete as sa_delete
-    res = await s.execute(sa_delete(NowEntry).where(NowEntry.id == entry_id))
+    res = await s.execute(delete(NowEntry).where(NowEntry.id == entry_id))
     await s.flush()
     return res.rowcount > 0

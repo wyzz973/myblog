@@ -7,11 +7,11 @@ from app.routers.admin.auth import router as auth_router
 from app.routers.admin.comments import router as comments_router
 from app.routers.admin.contacts import router as contacts_router
 from app.routers.admin.integrations import router as integrations_router
+from app.routers.admin.now import router as now_admin_router
+from app.routers.admin.pet import router as pet_admin_router
 from app.routers.admin.posts import router as posts_router
 from app.routers.admin.projects import router as projects_router
 from app.routers.admin.site import router as site_router
-from app.routers.admin.pet import router as pet_admin_router
-from app.routers.admin.now import router as now_admin_router
 from app.routers.admin.tags import router as tags_router
 
 router = APIRouter(prefix="/api/admin")

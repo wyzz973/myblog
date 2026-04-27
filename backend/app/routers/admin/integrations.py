@@ -47,20 +47,33 @@ async def put_github(
     login = await github_svc.ping(req.token)
     if login is None:
         raise HTTPException(422, "github token invalid")
+    # Tx 1: upsert + tested event (atomic — paired data + audit)
     await svc.upsert(s, name="github", username=req.username, secret=req.token)
-    await s.commit()
-    # trigger first sync inline (≤2s typical)
-    from app.workers.tasks import sync_github_contrib
-    try:
-        await sync_github_contrib({})
-    except Exception:  # noqa: BLE001
-        pass
-    row = await svc.get(s, name="github")
     await write_event(
-        s, type="integration.github.synced", actor=_admin.email,
-        meta={"username": req.username, "status": row.last_status},
+        s, type="integration.github.tested", actor=_admin.email,
+        meta={"username": req.username},
     )
     await s.commit()
+
+    # Trigger first sync inline (≤2s typical). Worker uses its own sessions.
+    sync_meta: dict = {"username": req.username}
+    sync_failed = False
+    try:
+        from app.workers.tasks import sync_github_contrib
+        result = await sync_github_contrib({})
+        sync_meta.update(result)
+    except Exception as e:  # noqa: BLE001
+        sync_failed = True
+        sync_meta["error"] = str(e)[:512]
+
+    # Tx 2: sync outcome event (atomic with itself; prior tested commit is durable)
+    event_type = (
+        "integration.github.failed" if sync_failed else "integration.github.synced"
+    )
+    await write_event(s, type=event_type, actor=_admin.email, meta=sync_meta)
+    await s.commit()
+
+    row = await svc.get(s, name="github")
     return GithubIntegrationGet(
         username=row.username,
         last_synced_at=row.last_synced_at,
@@ -75,13 +88,22 @@ async def sync_github(
     s: AsyncSession = Depends(get_session),
 ) -> dict:
     from app.workers.tasks import sync_github_contrib
-    result = await sync_github_contrib({})
+    try:
+        result = await sync_github_contrib({})
+    except Exception as e:  # noqa: BLE001
+        await write_event(
+            s, type="integration.github.failed", actor=_admin.email,
+            meta={"manual": True, "error": str(e)[:512]},
+        )
+        await s.commit()
+        raise HTTPException(502, "github sync failed") from e
+    row = await svc.get(s, name="github")
     await write_event(
         s, type="integration.github.synced", actor=_admin.email,
-        meta={"manual": True},
+        meta={"manual": True, **result},
     )
     await s.commit()
-    return result
+    return {**result, "last_synced_at": row.last_synced_at.isoformat() if row and row.last_synced_at else None}
 
 
 @router.get("/integrations/anthropic", response_model=AnthropicIntegrationGet)

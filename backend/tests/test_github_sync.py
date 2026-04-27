@@ -1,6 +1,6 @@
 """Mock GraphQL responses; service must hit the right query and parse correctly."""
 from datetime import date
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -43,7 +43,7 @@ VIEWER_FAKE = {"data": {"viewer": {"login": "myuser"}}}
 
 
 def _mock_post(payload: dict, status: int = 200):
-    async def _post(self, url, json=None, headers=None, timeout=None):
+    async def _post(self, url, **kwargs):  # signature matches httpx.AsyncClient.post
         return httpx.Response(status, json=payload, request=httpx.Request("POST", url))
     return _post
 
@@ -82,8 +82,10 @@ async def test_fetch_contributions_empty_user():
 
 
 async def test_sync_github_contrib_upserts_contrib_days(monkeypatch):
-    from datetime import UTC, datetime as dt
+    from datetime import datetime as dt
+
     from sqlalchemy import delete, select
+
     from app.db import AsyncSessionLocal
     from app.models import ContribDay, Integration
     from app.services import integrations
@@ -123,6 +125,7 @@ async def test_sync_github_contrib_upserts_contrib_days(monkeypatch):
 
 async def test_sync_github_contrib_marks_failure(monkeypatch):
     from sqlalchemy import delete, select
+
     from app.db import AsyncSessionLocal
     from app.models import Integration
     from app.services import integrations

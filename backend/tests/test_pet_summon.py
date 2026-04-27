@@ -14,8 +14,9 @@ async def reset_pet_config(request):
     if "client" not in request.fixturenames:
         yield
         return
-    from app.schemas.pet import PetConfig
     from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.schemas.pet import PetConfig
 
     defaults = PetConfig().model_dump()
     async with AsyncSession(engine) as s:
@@ -91,3 +92,7 @@ async def test_public_pet_summon_rate_limit(client, redis):
         assert r.status_code == 200
     r = await client.post("/api/pet/summon")
     assert r.status_code == 429
+    # Retry-After header is required for clients to back off
+    assert "retry-after" in {k.lower() for k in r.headers}
+    retry_after = int(r.headers["retry-after"])
+    assert 0 < retry_after <= 60
