@@ -88,3 +88,56 @@ async def test_media_patch_alt_404(client, admin_token, cleanup_media):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert r.status_code == 404
+
+
+from sqlalchemy import select, update
+from app.models import SiteMeta
+
+
+async def test_media_delete_removes_row(client, admin_token, cleanup_media, tmp_path, monkeypatch):
+    """Insert a Media row pointing at a path that doesn't exist on disk;
+    DELETE should remove the row + idempotently no-op on the missing file."""
+    from app.services import media_storage
+    monkeypatch.setattr(media_storage, "MEDIA_DIR", tmp_path)
+    async with AsyncSessionLocal() as s:
+        mid = await _seed_media(s, storage_path="aa/never-on-disk.png")
+        await s.commit()
+
+    r = await client.delete(
+        f"/api/admin/media/{mid}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 204
+
+    async with AsyncSessionLocal() as s:
+        gone = (await s.execute(select(Media).where(Media.id == mid))).scalar_one_or_none()
+        assert gone is None
+
+
+async def test_media_delete_404(client, admin_token, cleanup_media):
+    r = await client.delete(
+        "/api/admin/media/99999",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 404
+
+
+async def test_media_delete_clears_avatar_id_via_fk(client, admin_token, cleanup_media):
+    """site_meta.avatar_id = id; DELETE media → avatar_id becomes NULL via ON DELETE SET NULL."""
+    async with AsyncSessionLocal() as s:
+        mid = await _seed_media(s)
+        await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(avatar_id=mid))
+        await s.commit()
+
+    r = await client.delete(
+        f"/api/admin/media/{mid}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 204
+
+    async with AsyncSessionLocal() as s:
+        site = (await s.execute(select(SiteMeta).where(SiteMeta.id == 1))).scalar_one()
+        assert site.avatar_id is None
+        # Cleanup so the next test sees a clean fixture.
+        await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(avatar_id=None))
+        await s.commit()

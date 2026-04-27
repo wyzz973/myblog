@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -68,3 +68,36 @@ async def patch_media(
     )
     await s.commit()
     return _to_item(row)
+
+
+@router.delete(
+    "/media/{media_id}",
+    status_code=204,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def delete_media(
+    media_id: int,
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> Response:
+    existing = await media_svc.get(s, media_id=media_id)
+    if existing is None:
+        raise HTTPException(404, "media not found")
+    filename = existing.filename
+    was_deleted, storage_path = await media_svc.delete_one(s, media_id=media_id)
+    if not was_deleted:
+        raise HTTPException(404, "media not found")
+    await write_event(
+        s, type="media.deleted", actor=_admin.email,
+        target=str(media_id),
+        meta={"id": media_id, "filename": filename, "storage_path": storage_path},
+    )
+    await s.commit()
+
+    # File unlink AFTER commit: a crash mid-call leaves an orphan file (cleanable),
+    # never a DB row pointing to a missing file.
+    if storage_path is not None:
+        from app.services.media_storage import delete as fs_delete
+        await fs_delete(storage_path)
+
+    return Response(status_code=204)
