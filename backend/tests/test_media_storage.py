@@ -111,3 +111,27 @@ async def test_save_rejects_svg_with_onload(tmp_path, monkeypatch):
         await media_storage.save(
             SVG_ONLOAD, declared_mime="image/svg+xml", original_name="bad.svg"
         )
+
+
+async def test_delete_removes_file(tmp_path, monkeypatch):
+    from app.services import media_storage
+    monkeypatch.setattr(media_storage, "MEDIA_DIR", tmp_path)
+    res = await media_storage.save(
+        _png_bytes(), declared_mime="image/png", original_name="x.png"
+    )
+    full = tmp_path / res.storage_path
+    assert full.exists()
+    await media_storage.delete(res.storage_path)
+    assert not full.exists()
+
+
+async def test_delete_is_idempotent(tmp_path, monkeypatch):
+    from app.services import media_storage
+    monkeypatch.setattr(media_storage, "MEDIA_DIR", tmp_path)
+    # Should not raise even though the file was never created.
+    await media_storage.delete("aa/never-existed.png")
+
+
+def test_url_for_returns_media_prefix():
+    from app.services.media_storage import url_for
+    assert url_for("7f/7f3e-cat.png") == "/media/7f/7f3e-cat.png"

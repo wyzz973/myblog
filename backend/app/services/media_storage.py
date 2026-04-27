@@ -97,6 +97,15 @@ async def save(
     )
 
 
+async def delete(storage_path: str) -> None:
+    """Remove the stored file. No-op if already missing."""
+    full = MEDIA_DIR / storage_path
+    try:
+        full.unlink()
+    except FileNotFoundError:
+        return
+
+
 def _build_storage_path(original_name: str, mime_type: str) -> str:
     """Bucket prefix from UUID → "7f/7f3e1abc-orig.png"."""
     safe_name = "".join(
