@@ -1,7 +1,10 @@
 """media_storage validation + IO unit tests."""
 from __future__ import annotations
 
+from io import BytesIO
+
 import pytest
+from PIL import Image
 
 from app.services.media_storage import (
     ALLOWED_MIME,
@@ -27,10 +30,6 @@ def test_allowed_mime_set_is_exhaustive():
     assert ALLOWED_MIME == {
         "image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml",
     }
-
-
-from io import BytesIO
-from PIL import Image
 
 
 def _png_bytes(w: int = 4, h: int = 3) -> bytes:

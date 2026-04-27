@@ -22,11 +22,19 @@ def test_0004_downgrade_then_upgrade_clean():
     down = _alembic("downgrade", "0003_interactions")
     assert down.returncode == 0, f"downgrade failed:\n{down.stderr}"
 
-    # Up to head: re-creates them with JSONB extra_json + partial index.
-    up = _alembic("upgrade", "head")
+    # Verify we landed at 0003.
+    cur = _alembic("current")
+    assert cur.returncode == 0
+    assert "0003_interactions" in cur.stdout
+
+    # Step forward exactly one revision to 0004 to exercise that upgrade path.
+    up = _alembic("upgrade", "0004_integrations")
     assert up.returncode == 0, f"upgrade failed:\n{up.stderr}"
 
-    # Verify head is 0004_integrations.
     cur = _alembic("current")
     assert cur.returncode == 0
     assert "0004_integrations" in cur.stdout
+
+    # Restore head so other tests run against the latest schema.
+    final = _alembic("upgrade", "head")
+    assert final.returncode == 0, f"final upgrade failed:\n{final.stderr}"

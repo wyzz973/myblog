@@ -1,8 +1,12 @@
+from datetime import UTC, datetime
+from io import BytesIO
+
 import pytest
-from sqlalchemy import delete
+from PIL import Image
+from sqlalchemy import delete, select, update
 
 from app.db import AsyncSessionLocal
-from app.models import Media
+from app.models import Media, SiteMeta
 
 EMAIL = "hi@wangyang.dev"
 PASS = "changeme"
@@ -54,9 +58,6 @@ async def test_media_get_single_404_when_missing(client, admin_token, cleanup_me
     assert r.status_code == 404
 
 
-from datetime import UTC, datetime
-
-
 async def _seed_media(s, *, filename="cat.png", storage_path="aa/cat.png",
                        mime="image/png", size=100, alt=None) -> int:
     row = Media(
@@ -88,10 +89,6 @@ async def test_media_patch_alt_404(client, admin_token, cleanup_media):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert r.status_code == 404
-
-
-from sqlalchemy import select, update
-from app.models import SiteMeta
 
 
 async def test_media_delete_removes_row(client, admin_token, cleanup_media, tmp_path, monkeypatch):
@@ -141,10 +138,6 @@ async def test_media_delete_clears_avatar_id_via_fk(client, admin_token, cleanup
         # Cleanup so the next test sees a clean fixture.
         await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(avatar_id=None))
         await s.commit()
-
-
-from io import BytesIO
-from PIL import Image
 
 
 def _png_bytes(w=4, h=3) -> bytes:
