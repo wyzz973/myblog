@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import CheckConstraint, Date, Integer, String, Text
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -35,3 +35,6 @@ class SiteMeta(Base, TimestampMixin):
     danger_color: Mapped[str] = mapped_column(String(32), nullable=False, default="oklch(70% 0.2 25)")
     launched_at: Mapped[date] = mapped_column(Date, nullable=False, default=date(2026, 1, 1))
     pet_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    avatar_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("media.id", ondelete="SET NULL"), nullable=True
+    )
