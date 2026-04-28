@@ -18,6 +18,9 @@ q.register("prune_event_log", t.prune_event_log)
 q.register("recompute_post_word_counts", t.recompute_post_word_counts)
 q.register("sync_github_contrib", t.sync_github_contrib)
 q.register("analytics_rollup", t.analytics_rollup)
+q.register("build_export_task", t.build_export_task)
+q.register("check_pending_site_deletion", t.check_pending_site_deletion)
+q.register("prune_old_exports", t.prune_old_exports)
 
 
 class WorkerSettings:
@@ -32,6 +35,9 @@ class WorkerSettings:
         t.recompute_post_word_counts,
         t.sync_github_contrib,
         t.analytics_rollup,
+        t.build_export_task,
+        t.check_pending_site_deletion,
+        t.prune_old_exports,
     ]
     cron_jobs: list = [
         cron(t.publish_scheduled_posts, minute=set(range(0, 60))),  # every minute
@@ -39,5 +45,7 @@ class WorkerSettings:
         cron(t.prune_event_log, hour={3}, minute={0}),  # 03:00 UTC daily
         cron(t.sync_github_contrib, minute={5}),  # :05 every hour (UTC)
         cron(t.analytics_rollup, hour={3}, minute={0}),  # 03:00 UTC daily
+        cron(t.check_pending_site_deletion, minute={0}),         # hourly :00
+        cron(t.prune_old_exports, hour={3}, minute={30}),        # daily 03:30 UTC
     ]
     max_jobs = 4

@@ -38,7 +38,7 @@ def test_cron_jobs_registered_with_expected_schedules():
     assert minute == {5}, f"got {minute!r}"
 
 
-def test_all_seven_tasks_listed_in_functions():
+def test_all_ten_tasks_listed_in_functions():
     names = {f.__name__ for f in WorkerSettings.functions}
     assert names == {
         "send_email_task",
@@ -48,4 +48,7 @@ def test_all_seven_tasks_listed_in_functions():
         "recompute_post_word_counts",
         "sync_github_contrib",
         "analytics_rollup",
+        "build_export_task",
+        "check_pending_site_deletion",
+        "prune_old_exports",
     }

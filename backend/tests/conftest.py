@@ -30,6 +30,9 @@ def _register_arq_tasks() -> None:
     from app.workers import tasks as t
     q.register("send_email_task", t.send_email_task)
     q.register("analytics_rollup", t.analytics_rollup)
+    q.register("build_export_task", t.build_export_task)
+    q.register("check_pending_site_deletion", t.check_pending_site_deletion)
+    q.register("prune_old_exports", t.prune_old_exports)
 
 
 @pytest.fixture
