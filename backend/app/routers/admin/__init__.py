@@ -7,6 +7,7 @@ from app.routers.admin.api_tokens import router as api_tokens_router
 from app.routers.admin.auth import router as auth_router
 from app.routers.admin.comments import router as comments_router
 from app.routers.admin.contacts import router as contacts_router
+from app.routers.admin.danger import router as danger_router
 from app.routers.admin.integrations import router as integrations_router
 from app.routers.admin.media import router as media_router
 from app.routers.admin.now import router as now_admin_router
@@ -32,3 +33,4 @@ router.include_router(pet_admin_router, tags=["admin·pet"])
 router.include_router(now_admin_router, tags=["admin·now"])
 router.include_router(media_router, tags=["admin·media"])
 router.include_router(analytics_router, tags=["admin·analytics"])
+router.include_router(danger_router, tags=["admin·danger"])
