@@ -78,3 +78,79 @@ async def test_build_export_task_failure_path(cleanup_jobs, export_dir, monkeypa
     assert row.status == "failed"
     assert row.error and "simulated" in row.error
     assert row.completed_at is not None
+
+
+async def test_check_pending_no_schedule_is_noop(cleanup_jobs):
+    from app.workers.tasks.danger import check_pending_site_deletion
+    res = await check_pending_site_deletion({})
+    assert res == {"checked": 1, "fired": 0}
+
+
+async def test_check_pending_in_past_fires_wipe(cleanup_jobs, tmp_path, monkeypatch):
+    from app.services import media_storage
+    monkeypatch.setattr(media_storage, "_media_dir", lambda: tmp_path)
+    from app.workers.tasks.danger import check_pending_site_deletion
+
+    past = datetime.now(UTC) - timedelta(hours=1)
+    async with AsyncSessionLocal() as s:
+        await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(pending_delete_at=past))
+        await s.commit()
+
+    res = await check_pending_site_deletion({})
+    assert res == {"checked": 1, "fired": 1}
+
+    async with AsyncSessionLocal() as s:
+        sm = (await s.execute(select(SiteMeta).where(SiteMeta.id == 1))).scalar_one()
+    assert sm.pending_delete_at is None
+
+
+async def test_prune_old_exports_deletes_aged_files_and_rows(cleanup_jobs, tmp_path, monkeypatch):
+    """Seed an old zip + a recent zip + corresponding rows; verify pruning."""
+    from app.config import get_settings
+    s = get_settings()
+    monkeypatch.setattr(s, "data_dir", tmp_path)
+
+    exports_dir = tmp_path / "exports"
+    exports_dir.mkdir(parents=True, exist_ok=True)
+
+    old_zip = exports_dir / "old.zip"
+    old_zip.write_bytes(b"PK\x03\x04 stub")
+    # Set mtime to 8 days ago.
+    import os
+    eight_days_ago = (datetime.now(UTC) - timedelta(days=8)).timestamp()
+    os.utime(old_zip, (eight_days_ago, eight_days_ago))
+
+    new_zip = exports_dir / "new.zip"
+    new_zip.write_bytes(b"PK\x03\x04 stub")  # mtime ≈ now
+
+    async with AsyncSessionLocal() as s2:
+        s2.add(ExportJob(id="old", status="done", requested_by="x@x.com",
+                         created_at=datetime.now(UTC) - timedelta(days=8)))
+        s2.add(ExportJob(id="new", status="done", requested_by="x@x.com",
+                         created_at=datetime.now(UTC)))
+        await s2.commit()
+
+    from app.workers.tasks.danger import prune_old_exports
+    res = await prune_old_exports({})
+    assert res["files_deleted"] >= 1
+    assert res["rows_deleted"] >= 1
+
+    assert not old_zip.exists()
+    assert new_zip.exists()
+
+    async with AsyncSessionLocal() as s3:
+        rows = (await s3.execute(select(ExportJob))).scalars().all()
+    assert {r.id for r in rows} == {"new"}
+
+
+async def test_prune_old_exports_no_op_when_nothing_old(cleanup_jobs, tmp_path, monkeypatch):
+    from app.config import get_settings
+    s = get_settings()
+    monkeypatch.setattr(s, "data_dir", tmp_path)
+
+    exports_dir = tmp_path / "exports"
+    exports_dir.mkdir(parents=True, exist_ok=True)
+
+    from app.workers.tasks.danger import prune_old_exports
+    res = await prune_old_exports({})
+    assert res == {"files_deleted": 0, "rows_deleted": 0}
