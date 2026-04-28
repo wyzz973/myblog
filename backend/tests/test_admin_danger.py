@@ -10,7 +10,6 @@ from app.db import AsyncSessionLocal
 from app.models import Account, ExportJob, SiteMeta
 from app.services.auth import hash_password
 
-
 EMAIL = "hi@wangyang.dev"
 KNOWN_PW = "danger-test-pw"
 
@@ -197,3 +196,121 @@ async def test_download_path_traversal_rejected(client, admin_token, cleanup_job
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert r.status_code == 404
+
+
+# --- POST /api/admin/danger/delete-site, /cancel, GET /status ---
+
+HANDLE = "wangyang"
+
+
+async def test_delete_site_unauthenticated_401(client, cleanup_jobs):
+    r = await client.post("/api/admin/danger/delete-site",
+                          json={"password": "x", "handle": HANDLE})
+    assert r.status_code == 401
+
+
+async def test_delete_site_wrong_password(client, admin_token, cleanup_jobs):
+    r = await client.post(
+        "/api/admin/danger/delete-site",
+        json={"password": "WRONG", "handle": HANDLE},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 401
+    async with AsyncSessionLocal() as s:
+        sm = (await s.execute(select(SiteMeta).where(SiteMeta.id == 1))).scalar_one()
+    assert sm.pending_delete_at is None
+
+
+async def test_delete_site_wrong_handle(client, admin_token, cleanup_jobs):
+    r = await client.post(
+        "/api/admin/danger/delete-site",
+        json={"password": KNOWN_PW, "handle": "WRONG-HANDLE"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 422
+
+
+async def test_delete_site_correct_schedules(client, admin_token, cleanup_jobs):
+    r = await client.post(
+        "/api/admin/danger/delete-site",
+        json={"password": KNOWN_PW, "handle": HANDLE},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["days_remaining"] == 7
+    async with AsyncSessionLocal() as s:
+        sm = (await s.execute(select(SiteMeta).where(SiteMeta.id == 1))).scalar_one()
+    assert sm.pending_delete_at is not None
+
+
+async def test_delete_site_already_scheduled_423(client, admin_token, cleanup_jobs):
+    async with AsyncSessionLocal() as s:
+        await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(
+            pending_delete_at=datetime.now(UTC) + __import__('datetime').timedelta(days=7)
+        ))
+        await s.commit()
+    r = await client.post(
+        "/api/admin/danger/delete-site",
+        json={"password": KNOWN_PW, "handle": HANDLE},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 423
+
+
+async def test_delete_site_cancel_204(client, admin_token, cleanup_jobs):
+    async with AsyncSessionLocal() as s:
+        await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(
+            pending_delete_at=datetime.now(UTC) + __import__('datetime').timedelta(days=7)
+        ))
+        await s.commit()
+    r = await client.post(
+        "/api/admin/danger/delete-site/cancel",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 204
+    async with AsyncSessionLocal() as s:
+        sm = (await s.execute(select(SiteMeta).where(SiteMeta.id == 1))).scalar_one()
+    assert sm.pending_delete_at is None
+
+
+async def test_status_no_pending(client, admin_token, cleanup_jobs):
+    r = await client.get(
+        "/api/admin/danger/status",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["pending_delete_at"] is None
+    assert body["days_remaining"] is None
+
+
+async def test_status_with_pending(client, admin_token, cleanup_jobs):
+    async with AsyncSessionLocal() as s:
+        await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(
+            pending_delete_at=datetime.now(UTC) + __import__('datetime').timedelta(days=7)
+        ))
+        await s.commit()
+    r = await client.get(
+        "/api/admin/danger/status",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    body = r.json()
+    assert body["pending_delete_at"] is not None
+    assert body["days_remaining"] in (6, 7)
+
+
+async def test_rate_limit_429_after_first_call(client, admin_token, cleanup_jobs, export_dir):
+    """Two POSTs to /danger/* within an hour from the same IP → second is 429."""
+    r1 = await client.post(
+        "/api/admin/danger/export",
+        json={"password": KNOWN_PW},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r1.status_code == 200
+    r2 = await client.post(
+        "/api/admin/danger/export",
+        json={"password": KNOWN_PW},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r2.status_code == 429

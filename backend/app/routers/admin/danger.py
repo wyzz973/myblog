@@ -4,18 +4,22 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import current_admin, require_scope
-from app.models import Account, ExportJob
+from app.models import Account, ExportJob, SiteMeta
 from app.redis import get_redis
 from app.schemas.danger import (
+    DangerStatusResponse,
+    DeleteSiteRequest,
     ExportJobItem,
     ExportRequest,
     ExportRequestResponse,
+    ScheduleDeleteResponse,
 )
 from app.services import danger as danger_svc
 from app.services import export_builder, rate_limit
@@ -58,8 +62,8 @@ async def request_export_route(
     await _danger_rate_limit(request, redis)
     try:
         await danger_svc.verify_password_or_raise(s, admin=admin, password=req.password)
-    except danger_svc.DangerError:
-        raise HTTPException(401, "invalid credentials")
+    except danger_svc.DangerError as e:
+        raise HTTPException(401, "invalid credentials") from e
 
     # Create the row + audit event and COMMIT before enqueueing — in
     # ARQ_INLINE mode the task runs synchronously inside enqueue() and uses
@@ -133,3 +137,67 @@ async def download_export_route(
         media_type="application/zip",
         filename=f"myblog-export-{job_id}.zip",
     )
+
+
+@router.post(
+    "/danger/delete-site",
+    response_model=ScheduleDeleteResponse,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def delete_site_route(
+    req: DeleteSiteRequest,
+    request: Request,
+    admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+    redis=Depends(get_redis),
+) -> ScheduleDeleteResponse:
+    await _danger_rate_limit(request, redis)
+    try:
+        await danger_svc.verify_password_or_raise(s, admin=admin, password=req.password)
+    except danger_svc.DangerError as e:
+        raise HTTPException(401, "invalid credentials") from e
+
+    sm = (await s.execute(select(SiteMeta).where(SiteMeta.id == 1))).scalar_one()
+    if req.handle != sm.handle:
+        raise HTTPException(422, "handle mismatch")
+
+    try:
+        scheduled_at = await danger_svc.schedule_site_deletion(s, days=7)
+    except danger_svc.DangerError as exc:
+        raise HTTPException(423, "delete already scheduled") from exc
+
+    await write_event(
+        s, type="danger.delete_scheduled", actor=admin.email,
+        target=None, meta={"scheduled_at": scheduled_at.isoformat()},
+    )
+    await s.commit()
+    return ScheduleDeleteResponse(scheduled_at=scheduled_at, days_remaining=7)
+
+
+@router.post(
+    "/danger/delete-site/cancel",
+    status_code=204,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def cancel_delete_site_route(
+    admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> Response:
+    await danger_svc.cancel_site_deletion(s)
+    await write_event(
+        s, type="danger.delete_canceled", actor=admin.email,
+        target=None, meta={},
+    )
+    await s.commit()
+    return Response(status_code=204)
+
+
+@router.get(
+    "/danger/status",
+    response_model=DangerStatusResponse,
+)
+async def get_danger_status_route(
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> DangerStatusResponse:
+    return await danger_svc.get_danger_status(s)
