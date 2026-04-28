@@ -24,7 +24,6 @@ from app.models import (
 )
 from app.services import media_storage
 
-
 # Order matters: child tables before their parents to satisfy FK constraints.
 # Posts has FK to tags → wipe Posts before Tags.
 # Comments / Likes have FK to posts → wipe before posts.

@@ -36,6 +36,16 @@ def _register_arq_tasks() -> None:
 
 
 @pytest.fixture
+async def reseed_after():
+    """Use in tests that wipe site content. Restores CLI bootstrap seed
+    (tags, site_meta, projects) at teardown so alphabetically-later tests
+    that depend on a seeded Tag row still pass."""
+    yield
+    from app.cli import _seed_bootstrap
+    await _seed_bootstrap()
+
+
+@pytest.fixture
 async def redis():
     """In-memory fakeredis client. Test-isolated: cleared at fixture teardown."""
     client = fakeredis.aioredis.FakeRedis(decode_responses=True)

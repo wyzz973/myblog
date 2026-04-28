@@ -98,7 +98,7 @@ async def test_request_export_inserts_pending(admin_with_known_password, cleanup
 
 async def test_schedule_site_deletion_sets_pending_at(cleanup_export_jobs):
     async with AsyncSessionLocal() as s:
-        scheduled_at = await danger.schedule_site_deletion(s, days=7)
+        await danger.schedule_site_deletion(s, days=7)
         await s.commit()
     async with AsyncSessionLocal() as s:
         sm = (await s.execute(select(SiteMeta).where(SiteMeta.id == 1))).scalar_one()

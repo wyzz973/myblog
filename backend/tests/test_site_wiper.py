@@ -6,7 +6,7 @@ from io import BytesIO
 
 import pytest
 from PIL import Image
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select, update
 
 from app.db import AsyncSessionLocal
 from app.models import (
@@ -105,7 +105,7 @@ async def seeded_site(tmp_path, monkeypatch):
     # rows (idempotent).
 
 
-async def test_wipe_clears_content_tables(seeded_site):
+async def test_wipe_clears_content_tables(seeded_site, reseed_after):
     async with AsyncSessionLocal() as s:
         await site_wiper.wipe_site_content(s)
         await s.commit()
@@ -117,7 +117,7 @@ async def test_wipe_clears_content_tables(seeded_site):
             assert count == 0, f"{model.__name__} not wiped: {count} rows"
 
 
-async def test_wipe_preserves_admin(seeded_site):
+async def test_wipe_preserves_admin(seeded_site, reseed_after):
     async with AsyncSessionLocal() as s:
         before = (await s.execute(select(Account))).scalars().all()
         before_count = len(before)
@@ -131,7 +131,7 @@ async def test_wipe_preserves_admin(seeded_site):
     assert after[0].email == before_email
 
 
-async def test_wipe_resets_site_meta_to_defaults(seeded_site):
+async def test_wipe_resets_site_meta_to_defaults(seeded_site, reseed_after):
     async with AsyncSessionLocal() as s:
         await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(
             handle="custom", name="Custom", pending_delete_at=datetime.now(UTC)
@@ -148,7 +148,7 @@ async def test_wipe_resets_site_meta_to_defaults(seeded_site):
     assert sm.avatar_id is None
 
 
-async def test_wipe_preserves_event_log(seeded_site):
+async def test_wipe_preserves_event_log(seeded_site, reseed_after):
     async with AsyncSessionLocal() as s:
         before = (await s.execute(select(func.count()).select_from(EventLog))).scalar()
     async with AsyncSessionLocal() as s:
@@ -159,7 +159,7 @@ async def test_wipe_preserves_event_log(seeded_site):
     assert after >= before  # event_log preserved (and may have new rows from the wipe itself)
 
 
-async def test_wipe_removes_media_files_on_disk(seeded_site):
+async def test_wipe_removes_media_files_on_disk(seeded_site, reseed_after):
     media_dir = seeded_site
     f = media_dir / "aa" / "wipetest-cat.png"
     assert f.exists()

@@ -86,7 +86,7 @@ async def test_check_pending_no_schedule_is_noop(cleanup_jobs):
     assert res == {"checked": 1, "fired": 0}
 
 
-async def test_check_pending_in_past_fires_wipe(cleanup_jobs, tmp_path, monkeypatch):
+async def test_check_pending_in_past_fires_wipe(cleanup_jobs, tmp_path, monkeypatch, reseed_after):
     from app.services import media_storage
     monkeypatch.setattr(media_storage, "_media_dir", lambda: tmp_path)
     from app.workers.tasks.danger import check_pending_site_deletion
