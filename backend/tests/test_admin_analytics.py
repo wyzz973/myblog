@@ -61,3 +61,37 @@ async def test_dashboard_today_hits_visible(client, admin_token, clean_analytics
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert r.json()["hits"]["today"] == 7
+
+
+async def test_analytics_unauthenticated_401(client, clean_analytics):
+    r = await client.get("/api/admin/analytics")
+    assert r.status_code == 401
+
+
+async def test_analytics_default_30_days(client, admin_token, clean_analytics):
+    r = await client.get(
+        "/api/admin/analytics",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert "timeseries" in body
+    assert len(body["timeseries"]) == 30
+    assert all(p["hits"] == 0 for p in body["timeseries"])
+
+
+async def test_analytics_days_clamp_lower(client, admin_token, clean_analytics):
+    r = await client.get(
+        "/api/admin/analytics?days=0",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 422
+
+
+async def test_analytics_days_clamp_upper(client, admin_token, clean_analytics):
+    r = await client.get(
+        "/api/admin/analytics?days=10000",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    assert len(r.json()["timeseries"]) == 365
