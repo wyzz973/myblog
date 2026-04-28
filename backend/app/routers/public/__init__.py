@@ -4,6 +4,7 @@ from app.routers.public.comments import router as comments_router
 from app.routers.public.contacts import router as contacts_router
 from app.routers.public.contrib import router as contrib_router
 from app.routers.public.health import router as health_router
+from app.routers.public.hits import router as hits_router
 from app.routers.public.now import router as now_public_router
 from app.routers.public.pet import router as pet_public_router
 from app.routers.public.posts import router as posts_router
@@ -22,3 +23,4 @@ router.include_router(contrib_router, tags=["public"])
 router.include_router(comments_router, tags=["public·comments"])
 router.include_router(pet_public_router, tags=["public·pet"])
 router.include_router(now_public_router, tags=["public·now"])
+router.include_router(hits_router, tags=["public"])
