@@ -26,6 +26,7 @@ dependencies = [
     "typer>=0.15",
     "structlog>=24",
     "python-multipart>=0.0.18",
+    "defusedxml>=0.7",
 ]
 
 [project.optional-dependencies]
