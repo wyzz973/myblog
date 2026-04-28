@@ -307,3 +307,14 @@ Tasks are authored in detail by `writing-plans` with TDD steps. The high-level o
 - `site_meta` test fixtures must keep working. The new column is NULL-able with no default so existing rows survive migration.
 - No changes to `event_log`, ARQ tasks, integrations, or auth surface.
 - 0 P3/P4/P5-introduced ruff errors maintained.
+
+## 13. Post-implementation review fixes (2026-04-28)
+
+Code review surfaced 2 blockers + 7 important issues + 9 minor + 10 test gaps. All fixed in 2 follow-up commits before merge:
+
+- **Security**: SVG parsing migrated from stdlib `xml.etree.ElementTree` to `defusedxml.ElementTree` (`forbid_dtd/entities/external`), defeating billion-laughs / XXE; Pillow `MAX_IMAGE_PIXELS = 40_000_000` plus `DecompressionBombWarning`-as-error closes the bomb DoS vector; filename sanitization now ASCII-only (rejects RTL overrides, zero-width chars, all non-ASCII).
+- **Atomicity / correctness**: `media_svc.patch_alt` and `media_svc.delete_one` now return enough context to skip the leading `get()` in routers (no double-fetch, no TOCTOU window); `upload_media` per-file inner block now has explicit `await s2.rollback()` on exception; the catch-all `except Exception` is narrowed to `except SQLAlchemyError`.
+- **State management**: `MEDIA_DIR` module constant replaced with `_media_dir()` function reading `get_settings().data_dir` per call — no stale-state footgun; tests use a `media_dir` fixture that monkeypatches the function.
+- **Coexistence note**: `site_meta.avatar_id` and the legacy `site_meta.avatar_path` temporarily coexist in P6a; a follow-up phase derives `avatar_path` from `Media.url_for(...)` when `avatar_id` is set, then drops the legacy column. Documented in the 0005 migration docstring.
+
+New test coverage added: billion-laughs SVG regression, ASCII filename retention, RTL/non-ASCII stripping, Pillow bomb (via shrunk `MAX_IMAGE_PIXELS`), namespaced `<svg:script>` rejection, `<foreignObject>` documented-limit acceptance, zero-byte file rejection, orphan-file cleanup on per-file DB failure, three event_log type assertions (`media.uploaded` / `media.alt_updated` / `media.deleted`), `MediaPatch.alt > 512` 422 validation, empty-filename graceful fallback. Final tally: 298 tests passing, 8 ruff errors (P3/P4 baseline only — zero P6a-introduced).

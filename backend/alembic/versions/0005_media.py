@@ -3,6 +3,13 @@
 Revision ID: 0005_media
 Revises: 0004_integrations
 
+Note on site_meta.avatar_path coexistence:
+    site_meta has both `avatar_path` (pre-existing String(256), free-form path)
+    and now `avatar_id` (FK to media). They temporarily coexist in P6a — the
+    public site still serializes avatar_path. A follow-up phase (P6b or later)
+    will derive avatar_path from media.url_for(avatar.storage_path) when
+    avatar_id is set, then drop the avatar_path column. Until then, treat
+    avatar_id as the authoritative reference and avatar_path as legacy.
 """
 from collections.abc import Sequence
 
