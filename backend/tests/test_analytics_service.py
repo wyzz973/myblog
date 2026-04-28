@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import delete
 
 from app.db import AsyncSessionLocal
-from app.models import HitDaily, HitEvent
+from app.models import HitDaily, HitEvent, Post, Tag
 from app.services import analytics
 
 
@@ -132,9 +132,6 @@ async def test_top_countries_excludes_null(clean_analytics):
     assert len(result) == 1
     assert result[0].country == "US"
     assert result[0].hits == 2
-
-
-from app.models import Post, Tag
 
 
 async def _seed_post_with_tag(s, *, slug, tag_slug="general", title="Untitled"):

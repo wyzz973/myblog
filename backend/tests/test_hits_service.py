@@ -1,7 +1,7 @@
 """hits service unit tests."""
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import date
 
 import fakeredis.aioredis
 import pytest

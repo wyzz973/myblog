@@ -22,9 +22,18 @@ def test_0005_downgrade_then_upgrade_clean():
     down = _alembic("downgrade", "0004_integrations")
     assert down.returncode == 0, f"downgrade failed:\n{down.stderr}"
 
-    up = _alembic("upgrade", "head")
+    cur = _alembic("current")
+    assert cur.returncode == 0
+    assert "0004_integrations" in cur.stdout
+
+    # Step forward exactly one revision to 0005 to exercise that upgrade path.
+    up = _alembic("upgrade", "0005_media")
     assert up.returncode == 0, f"upgrade failed:\n{up.stderr}"
 
     cur = _alembic("current")
     assert cur.returncode == 0
     assert "0005_media" in cur.stdout
+
+    # Restore head so other tests run against the latest schema.
+    final = _alembic("upgrade", "head")
+    assert final.returncode == 0, f"final upgrade failed:\n{final.stderr}"

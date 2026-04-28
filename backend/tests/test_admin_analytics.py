@@ -1,8 +1,10 @@
+from datetime import date, timedelta
+
 import pytest
 from sqlalchemy import delete
 
 from app.db import AsyncSessionLocal
-from app.models import HitDaily, HitEvent
+from app.models import HitDaily, HitEvent, Post, Tag
 
 EMAIL = "hi@wangyang.dev"
 PASS = "changeme"
@@ -95,11 +97,6 @@ async def test_analytics_days_clamp_upper(client, admin_token, clean_analytics):
     )
     assert r.status_code == 200
     assert len(r.json()["timeseries"]) == 365
-
-
-from datetime import date, timedelta
-
-from app.models import Post, Tag
 
 
 async def test_analytics_posts_401(client, clean_analytics):
