@@ -14,6 +14,7 @@ from app.models import (
     LikeEvent,
     Media,
     Post,
+    Tag,
 )
 from app.schemas.analytics import (
     CommentsKPI,
@@ -208,3 +209,79 @@ async def top_countries(
         counts[c] = counts.get(c, 0) + int(n or 0)
     sorted_pairs = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:limit]
     return [CountryHits(country=c, hits=n) for c, n in sorted_pairs]
+
+
+async def per_post(
+    s: AsyncSession, *, days: int, limit: int = 50
+) -> list[PostHitsItem]:
+    today = _today_utc()
+    start = today - timedelta(days=days - 1)
+
+    # Historical sums from hit_daily, JOIN posts for title.
+    history = await s.execute(
+        select(
+            HitDaily.post_id, Post.title, func.sum(HitDaily.hits).label("h"),
+        )
+        .join(Post, Post.id == HitDaily.post_id)
+        .where(HitDaily.date >= start)
+        .where(HitDaily.date < today)
+        .where(HitDaily.post_id.isnot(None))
+        .group_by(HitDaily.post_id, Post.title)
+    )
+    counts: dict[str, tuple[str, int]] = {}
+    for post_id, title, h in history.all():
+        counts[post_id] = (title, int(h or 0))
+
+    # Today's contribution from hit_events with post_id.
+    today_rows = await s.execute(
+        select(HitEvent.post_id, Post.title, func.count(HitEvent.id))
+        .join(Post, Post.id == HitEvent.post_id)
+        .where(HitEvent.created_at >= _today_start_utc())
+        .where(HitEvent.post_id.isnot(None))
+        .group_by(HitEvent.post_id, Post.title)
+    )
+    for post_id, title, n in today_rows.all():
+        prev_title, prev = counts.get(post_id, (title, 0))
+        counts[post_id] = (prev_title, prev + int(n or 0))
+
+    sorted_items = sorted(counts.items(), key=lambda kv: kv[1][1], reverse=True)[:limit]
+    return [
+        PostHitsItem(post_id=pid, title=title, hits=n)
+        for pid, (title, n) in sorted_items
+    ]
+
+
+async def per_tag(s: AsyncSession, *, days: int) -> list[TagHitsItem]:
+    today = _today_utc()
+    start = today - timedelta(days=days - 1)
+
+    history = await s.execute(
+        select(
+            Tag.id, Tag.slug, Tag.name, func.sum(HitDaily.hits).label("h"),
+        )
+        .join(Post, Post.id == HitDaily.post_id)
+        .join(Tag, Tag.id == Post.tag_id)
+        .where(HitDaily.date >= start)
+        .where(HitDaily.date < today)
+        .group_by(Tag.id, Tag.slug, Tag.name)
+    )
+    counts: dict[int, tuple[str, str, int]] = {}
+    for tid, slug, name, h in history.all():
+        counts[tid] = (slug, name, int(h or 0))
+
+    today_rows = await s.execute(
+        select(Tag.id, Tag.slug, Tag.name, func.count(HitEvent.id))
+        .join(Post, Post.id == HitEvent.post_id)
+        .join(Tag, Tag.id == Post.tag_id)
+        .where(HitEvent.created_at >= _today_start_utc())
+        .group_by(Tag.id, Tag.slug, Tag.name)
+    )
+    for tid, slug, name, n in today_rows.all():
+        prev_slug, prev_name, prev = counts.get(tid, (slug, name, 0))
+        counts[tid] = (prev_slug, prev_name, prev + int(n or 0))
+
+    sorted_items = sorted(counts.items(), key=lambda kv: kv[1][2], reverse=True)
+    return [
+        TagHitsItem(tag_id=tid, slug=s_, name=n_, hits=h_)
+        for tid, (s_, n_, h_) in sorted_items
+    ]

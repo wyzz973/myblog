@@ -132,3 +132,80 @@ async def test_top_countries_excludes_null(clean_analytics):
     assert len(result) == 1
     assert result[0].country == "US"
     assert result[0].hits == 2
+
+
+from app.models import Post, Tag
+
+
+async def _seed_post_with_tag(s, *, slug, tag_slug="general", title="Untitled"):
+    tag = (await s.execute(
+        Tag.__table__.select().where(Tag.slug == tag_slug)
+    )).first()
+    if tag is None:
+        s.add(Tag(slug=tag_slug, name=tag_slug.title(), color="#888", sort_order=0))
+        await s.flush()
+        tag = (await s.execute(
+            Tag.__table__.select().where(Tag.slug == tag_slug)
+        )).first()
+    s.add(Post(
+        id=slug, n="1", title=title, subtitle="", date=date(2026, 4, 28),
+        read="1", lang="en", summary="", tldr="", body_md="", body_json=[],
+        word_count=0, status="published", featured=False, private=False,
+        comments_enabled=True, tag_id=tag.id,
+    ))
+    await s.flush()
+    return slug
+
+
+@pytest.fixture
+async def clean_posts_tags():
+    yield
+    async with AsyncSessionLocal() as s:
+        from sqlalchemy import delete as sa_delete
+        await s.execute(sa_delete(Post).where(Post.id.like("p6btest-%")))
+        await s.execute(sa_delete(Tag).where(Tag.slug == "p6btest-tag"))
+        await s.commit()
+
+
+async def test_per_post_groups_by_post_id(clean_analytics, clean_posts_tags):
+    yesterday = date.today() - timedelta(days=1)
+    async with AsyncSessionLocal() as s:
+        slug = await _seed_post_with_tag(
+            s, slug="p6btest-howdy", tag_slug="p6btest-tag", title="Howdy"
+        )
+        s.add(HitDaily(date=yesterday, path="/post/p6btest-howdy",
+                       hits=10, post_id=slug,
+                       referrers_top=[], countries_top=[]))
+        await s.commit()
+    async with AsyncSessionLocal() as s:
+        result = await analytics.per_post(s, days=7)
+    titles = {r.post_id: r.title for r in result}
+    assert "p6btest-howdy" in titles
+    assert titles["p6btest-howdy"] == "Howdy"
+
+
+async def test_per_post_excludes_null_post_id(clean_analytics):
+    yesterday = date.today() - timedelta(days=1)
+    async with AsyncSessionLocal() as s:
+        s.add(HitDaily(date=yesterday, path="/", hits=99, post_id=None,
+                       referrers_top=[], countries_top=[]))
+        await s.commit()
+    async with AsyncSessionLocal() as s:
+        result = await analytics.per_post(s, days=7)
+    assert all(r.hits != 99 for r in result)
+
+
+async def test_per_tag_joins_to_tags(clean_analytics, clean_posts_tags):
+    yesterday = date.today() - timedelta(days=1)
+    async with AsyncSessionLocal() as s:
+        slug = await _seed_post_with_tag(
+            s, slug="p6btest-tagjoin", tag_slug="p6btest-tag", title="Tag Join"
+        )
+        s.add(HitDaily(date=yesterday, path="/post/p6btest-tagjoin",
+                       hits=7, post_id=slug,
+                       referrers_top=[], countries_top=[]))
+        await s.commit()
+    async with AsyncSessionLocal() as s:
+        result = await analytics.per_tag(s, days=7)
+    by_slug = {t.slug: t.hits for t in result}
+    assert by_slug.get("p6btest-tag", 0) >= 7
