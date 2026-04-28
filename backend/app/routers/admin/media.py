@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import AsyncSessionLocal, get_session
@@ -11,6 +12,7 @@ from app.schemas.media import (
     MediaUploadResponse,
 )
 from app.services import media as media_svc
+from app.services import media_storage
 from app.services.event_log import write_event
 from app.services.media_storage import MediaError, url_for
 
@@ -62,11 +64,9 @@ async def patch_media(
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> MediaItem:
-    existing = await media_svc.get(s, media_id=media_id)
-    if existing is None:
+    row, old_alt = await media_svc.patch_alt(s, media_id=media_id, alt=req.alt)
+    if row is None:
         raise HTTPException(404, "media not found")
-    old_alt = existing.alt
-    row = await media_svc.patch_alt(s, media_id=media_id, alt=req.alt)
     await write_event(
         s, type="media.alt_updated", actor=_admin.email,
         target=str(media_id), meta={"id": media_id, "old": old_alt, "new": req.alt},
@@ -85,11 +85,9 @@ async def delete_media(
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> Response:
-    existing = await media_svc.get(s, media_id=media_id)
-    if existing is None:
-        raise HTTPException(404, "media not found")
-    filename = existing.filename
-    was_deleted, storage_path = await media_svc.delete_one(s, media_id=media_id)
+    was_deleted, storage_path, filename = await media_svc.delete_one(
+        s, media_id=media_id
+    )
     if not was_deleted:
         raise HTTPException(404, "media not found")
     await write_event(
@@ -102,8 +100,7 @@ async def delete_media(
     # File unlink AFTER commit: a crash mid-call leaves an orphan file (cleanable),
     # never a DB row pointing to a missing file.
     if storage_path is not None:
-        from app.services.media_storage import delete as fs_delete
-        await fs_delete(storage_path)
+        await media_storage.delete(storage_path)
 
     return Response(status_code=204)
 
@@ -116,9 +113,8 @@ async def delete_media(
 async def upload_media(
     files: list[UploadFile],
     _admin: Account = Depends(current_admin),
+    _s: AsyncSession = Depends(get_session),
 ) -> MediaUploadResponse:
-    from app.services import media_storage
-
     ok: list[MediaItem] = []
     failed: list[MediaUploadFailure] = []
 
@@ -134,59 +130,48 @@ async def upload_media(
         except MediaError as e:
             failed.append(MediaUploadFailure(filename=original, error=str(e)))
             continue
-        except Exception as e:  # noqa: BLE001
-            failed.append(
-                MediaUploadFailure(filename=original, error=f"internal: {e}")
-            )
-            continue
 
         # Per-file transaction: insert + event_log + commit. If commit fails,
-        # roll back the disk write so we don't leak orphans.
+        # we delete the disk write so we don't leak orphans.
         try:
             async with AsyncSessionLocal() as s2:
-                row = await media_svc.create(
-                    s2, save_result=save_result, original_filename=original
+                try:
+                    row = await media_svc.create(
+                        s2, save_result=save_result, original_filename=original
+                    )
+                    await write_event(
+                        s2, type="media.uploaded", actor=_admin.email,
+                        target=str(row.id),
+                        meta={
+                            "filename": original,
+                            "size": save_result.size,
+                            "mime": save_result.mime_type,
+                            "width": save_result.width,
+                            "height": save_result.height,
+                        },
+                    )
+                    await s2.commit()
+                except Exception:
+                    await s2.rollback()
+                    raise
+                item = MediaItem(
+                    id=row.id,
+                    filename=row.filename,
+                    url=url_for(row.storage_path),
+                    mime_type=row.mime_type,
+                    size=row.size,
+                    width=row.width,
+                    height=row.height,
+                    alt=row.alt,
+                    created_at=row.created_at,
                 )
-                await write_event(
-                    s2, type="media.uploaded", actor=_admin.email,
-                    target=str(row.id),
-                    meta={
-                        "filename": original,
-                        "size": save_result.size,
-                        "mime": save_result.mime_type,
-                        "width": save_result.width,
-                        "height": save_result.height,
-                    },
-                )
-                await s2.commit()
-                row_id = row.id
-                row_filename = row.filename
-                row_mime = row.mime_type
-                row_size = row.size
-                row_w = row.width
-                row_h = row.height
-                row_alt = row.alt
-                row_created = row.created_at
-                row_storage = row.storage_path
-        except Exception as e:  # noqa: BLE001
+        except SQLAlchemyError as e:
             await media_storage.delete(save_result.storage_path)
             failed.append(
                 MediaUploadFailure(filename=original, error=f"db error: {e}")
             )
             continue
 
-        ok.append(
-            MediaItem(
-                id=row_id,
-                filename=row_filename,
-                url=url_for(row_storage),
-                mime_type=row_mime,
-                size=row_size,
-                width=row_w,
-                height=row_h,
-                alt=row_alt,
-                created_at=row_created,
-            )
-        )
+        ok.append(item)
 
     return MediaUploadResponse(ok=ok, failed=failed)

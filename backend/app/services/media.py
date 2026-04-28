@@ -53,26 +53,28 @@ async def create(
 
 async def patch_alt(
     s: AsyncSession, *, media_id: int, alt: str | None
-) -> Media | None:
+) -> tuple[Media | None, str | None]:
+    """Update alt text. Returns (row, old_alt). row is None if not found."""
     row = await get(s, media_id=media_id)
     if row is None:
-        return None
+        return None, None
+    old_alt = row.alt
     row.alt = alt
     await s.flush()
     await s.refresh(row)
-    return row
+    return row, old_alt
 
 
 async def delete_one(
     s: AsyncSession, *, media_id: int
-) -> tuple[bool, str | None]:
-    """Returns (was_deleted, storage_path).
+) -> tuple[bool, str | None, str | None]:
+    """Returns (was_deleted, storage_path, filename).
     Caller commits the row delete first, THEN unlinks the file —
     so a crash leaves an orphan file (cleanable later) instead of a row pointing at nothing."""
     row = await get(s, media_id=media_id)
     if row is None:
-        return False, None
-    storage_path = row.storage_path
+        return False, None, None
+    storage_path, filename = row.storage_path, row.filename
     await s.execute(delete(Media).where(Media.id == media_id))
     await s.flush()
-    return True, storage_path
+    return True, storage_path, filename
