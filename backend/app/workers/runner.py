@@ -17,6 +17,7 @@ q.register("cleanup_expired_magic_links", t.cleanup_expired_magic_links)
 q.register("prune_event_log", t.prune_event_log)
 q.register("recompute_post_word_counts", t.recompute_post_word_counts)
 q.register("sync_github_contrib", t.sync_github_contrib)
+q.register("analytics_rollup", t.analytics_rollup)
 
 
 class WorkerSettings:
@@ -30,11 +31,13 @@ class WorkerSettings:
         t.prune_event_log,
         t.recompute_post_word_counts,
         t.sync_github_contrib,
+        t.analytics_rollup,
     ]
     cron_jobs: list = [
         cron(t.publish_scheduled_posts, minute=set(range(0, 60))),  # every minute
         cron(t.cleanup_expired_magic_links, minute={10, 40}),
         cron(t.prune_event_log, hour={3}, minute={0}),  # 03:00 UTC daily
         cron(t.sync_github_contrib, minute={5}),  # :05 every hour (UTC)
+        cron(t.analytics_rollup, hour={3}, minute={0}),  # 03:00 UTC daily
     ]
     max_jobs = 4
