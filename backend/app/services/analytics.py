@@ -126,3 +126,85 @@ async def dashboard_kpis(s: AsyncSession) -> DashboardResponse:
         ),
         media=MediaKPI(count=media_count),
     )
+
+
+async def top_paths(
+    s: AsyncSession, *, days: int, limit: int = 10
+) -> list[PathHits]:
+    today = _today_utc()
+    start = today - timedelta(days=days - 1)
+    today_start_dt = _today_start_utc()
+
+    # Historical days from hit_daily.
+    history = await s.execute(
+        select(HitDaily.path, func.sum(HitDaily.hits).label("h"))
+        .where(HitDaily.date >= start).where(HitDaily.date < today)
+        .group_by(HitDaily.path)
+    )
+    counts: dict[str, int] = {p: int(h or 0) for p, h in history.all()}
+
+    # Today's contribution from hit_events.
+    today_rows = await s.execute(
+        select(HitEvent.path, func.count(HitEvent.id))
+        .where(HitEvent.created_at >= today_start_dt)
+        .group_by(HitEvent.path)
+    )
+    for p, n in today_rows.all():
+        counts[p] = counts.get(p, 0) + int(n or 0)
+
+    sorted_pairs = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+    return [PathHits(path=p, hits=n) for p, n in sorted_pairs]
+
+
+async def _merge_jsonb_top(
+    s: AsyncSession, *, column, key: str, days: int
+) -> dict[str, int]:
+    today = _today_utc()
+    start = today - timedelta(days=days - 1)
+    res = await s.execute(
+        select(column).where(HitDaily.date >= start).where(HitDaily.date < today)
+    )
+    counts: dict[str, int] = {}
+    for (arr,) in res.all():
+        if not arr:
+            continue
+        for item in arr:
+            counts[item[key]] = counts.get(item[key], 0) + int(item["n"])
+    return counts
+
+
+async def top_referrers(
+    s: AsyncSession, *, days: int, limit: int = 10
+) -> list[ReferrerHits]:
+    counts = await _merge_jsonb_top(
+        s, column=HitDaily.referrers_top, key="r", days=days
+    )
+    # Today's contribution from hit_events.
+    today_rows = await s.execute(
+        select(HitEvent.referrer, func.count(HitEvent.id))
+        .where(HitEvent.created_at >= _today_start_utc())
+        .where(HitEvent.referrer.isnot(None))
+        .group_by(HitEvent.referrer)
+    )
+    for r, n in today_rows.all():
+        counts[r] = counts.get(r, 0) + int(n or 0)
+    sorted_pairs = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+    return [ReferrerHits(referrer=r, hits=n) for r, n in sorted_pairs]
+
+
+async def top_countries(
+    s: AsyncSession, *, days: int, limit: int = 10
+) -> list[CountryHits]:
+    counts = await _merge_jsonb_top(
+        s, column=HitDaily.countries_top, key="c", days=days
+    )
+    today_rows = await s.execute(
+        select(HitEvent.country, func.count(HitEvent.id))
+        .where(HitEvent.created_at >= _today_start_utc())
+        .where(HitEvent.country.isnot(None))
+        .group_by(HitEvent.country)
+    )
+    for c, n in today_rows.all():
+        counts[c] = counts.get(c, 0) + int(n or 0)
+    sorted_pairs = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+    return [CountryHits(country=c, hits=n) for c, n in sorted_pairs]

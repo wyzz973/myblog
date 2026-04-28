@@ -83,3 +83,52 @@ async def test_dashboard_kpis_today_count(clean_analytics):
     assert kpi.hits.today == 3
     assert kpi.hits.last_7d == 3
     assert kpi.hits.last_30d == 3
+
+
+async def test_top_paths_orders_desc(clean_analytics):
+    yesterday = date.today() - timedelta(days=1)
+    async with AsyncSessionLocal() as s:
+        s.add(HitDaily(date=yesterday, path="/big", hits=50,
+                       referrers_top=[], countries_top=[]))
+        s.add(HitDaily(date=yesterday, path="/small", hits=2,
+                       referrers_top=[], countries_top=[]))
+        await s.commit()
+    async with AsyncSessionLocal() as s:
+        result = await analytics.top_paths(s, days=7, limit=5)
+    assert [p.path for p in result] == ["/big", "/small"]
+    assert result[0].hits == 50
+
+
+async def test_top_referrers_merges_jsonb(clean_analytics):
+    yesterday = date.today() - timedelta(days=1)
+    two_ago = yesterday - timedelta(days=1)
+    async with AsyncSessionLocal() as s:
+        s.add(HitDaily(date=yesterday, path="/a", hits=10,
+                       referrers_top=[{"r": "https://hn", "n": 6}, {"r": "https://r", "n": 4}],
+                       countries_top=[]))
+        s.add(HitDaily(date=two_ago, path="/a", hits=8,
+                       referrers_top=[{"r": "https://hn", "n": 5}, {"r": "https://t", "n": 3}],
+                       countries_top=[]))
+        await s.commit()
+    async with AsyncSessionLocal() as s:
+        result = await analytics.top_referrers(s, days=7, limit=10)
+    by_ref = {p.referrer: p.hits for p in result}
+    assert by_ref["https://hn"] == 11
+    assert by_ref["https://r"] == 4
+    assert by_ref["https://t"] == 3
+
+
+async def test_top_countries_excludes_null(clean_analytics):
+    """countries_top JSON only contains non-NULL countries — confirm
+    that NULL country events from today don't appear."""
+    now = datetime.now(UTC)
+    async with AsyncSessionLocal() as s:
+        s.add(HitEvent(path="/", country="US", created_at=now))
+        s.add(HitEvent(path="/", country="US", created_at=now))
+        s.add(HitEvent(path="/", country=None, created_at=now))
+        await s.commit()
+    async with AsyncSessionLocal() as s:
+        result = await analytics.top_countries(s, days=7, limit=10)
+    assert len(result) == 1
+    assert result[0].country == "US"
+    assert result[0].hits == 2
