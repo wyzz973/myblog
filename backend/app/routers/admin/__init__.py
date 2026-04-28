@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.routers.admin.account import router as account_router
 from app.routers.admin.activity import router as activity_router
+from app.routers.admin.analytics import router as analytics_router
 from app.routers.admin.api_tokens import router as api_tokens_router
 from app.routers.admin.auth import router as auth_router
 from app.routers.admin.comments import router as comments_router
@@ -30,3 +31,4 @@ router.include_router(integrations_router, tags=["admin·integrations"])
 router.include_router(pet_admin_router, tags=["admin·pet"])
 router.include_router(now_admin_router, tags=["admin·now"])
 router.include_router(media_router, tags=["admin·media"])
+router.include_router(analytics_router, tags=["admin·analytics"])
