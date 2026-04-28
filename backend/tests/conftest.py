@@ -29,6 +29,7 @@ def _register_arq_tasks() -> None:
     from app.workers import queue as q
     from app.workers import tasks as t
     q.register("send_email_task", t.send_email_task)
+    q.register("analytics_rollup", t.analytics_rollup)
 
 
 @pytest.fixture
