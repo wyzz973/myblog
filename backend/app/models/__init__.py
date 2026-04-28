@@ -5,6 +5,7 @@ from app.models.comment import Comment
 from app.models.contact import Contact
 from app.models.contrib_day import ContribDay
 from app.models.event_log import EventLog
+from app.models.export_job import ExportJob
 from app.models.hit_daily import HitDaily
 from app.models.hit_event import HitEvent
 from app.models.integration import Integration
@@ -21,6 +22,7 @@ from app.models.tfa_recovery_code import TfaRecoveryCode
 __all__ = [
     "Base", "TimestampMixin",
     "Account", "ApiToken", "Comment", "Contact", "ContribDay", "EventLog",
+    "ExportJob",
     "HitDaily", "HitEvent",
     "Integration", "LikeEvent", "MagicLink", "Media", "NowEntry", "Post", "Project",
     "SiteMeta", "Tag", "TfaRecoveryCode",

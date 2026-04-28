@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import CheckConstraint, Date, ForeignKey, Integer, String, Text
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,3 +38,4 @@ class SiteMeta(Base, TimestampMixin):
     avatar_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("media.id", ondelete="SET NULL"), nullable=True
     )
+    pending_delete_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
