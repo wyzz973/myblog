@@ -5,6 +5,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -17,7 +18,7 @@ from app.schemas.danger import (
     ExportRequestResponse,
 )
 from app.services import danger as danger_svc
-from app.services import rate_limit
+from app.services import export_builder, rate_limit
 from app.services.client_ip import client_ip_key_part
 from app.services.event_log import write_event
 from app.workers import queue as q
@@ -106,3 +107,29 @@ async def list_exports_route(
 ) -> list[ExportJobItem]:
     rows = await danger_svc.list_exports(s, limit=20)
     return [_to_export_item(r) for r in rows]
+
+
+@router.get("/danger/export/{job_id}/download")
+async def download_export_route(
+    job_id: str,
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+):
+    row = await danger_svc.get_export(s, job_id=job_id)
+    if row is None or row.status != "done":
+        raise HTTPException(404, "export not ready")
+
+    exports_dir = export_builder._exports_dir().resolve()
+    candidate = (exports_dir / f"{job_id}.zip").resolve()
+
+    # Path safety: candidate must live inside exports_dir.
+    if exports_dir not in candidate.parents and candidate != exports_dir:
+        raise HTTPException(404, "export not ready")
+    if not candidate.exists():
+        raise HTTPException(404, "export file missing on disk")
+
+    return FileResponse(
+        path=str(candidate),
+        media_type="application/zip",
+        filename=f"myblog-export-{job_id}.zip",
+    )

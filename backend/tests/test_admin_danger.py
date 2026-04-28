@@ -138,3 +138,62 @@ async def test_list_exports_returns_recent(client, admin_token, cleanup_jobs):
     assert r.status_code == 200
     body = r.json()
     assert len(body) == 3
+
+
+# --- GET /api/admin/danger/export/{job_id}/download ---
+
+async def test_download_404_for_missing_id(client, admin_token, cleanup_jobs):
+    r = await client.get(
+        "/api/admin/danger/export/missing/download",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 404
+
+
+async def test_download_404_for_pending_status(client, admin_token, cleanup_jobs):
+    async with AsyncSessionLocal() as s:
+        s.add(ExportJob(
+            id="pending-job", status="pending", requested_by="x@x.com",
+            created_at=datetime.now(UTC),
+        ))
+        await s.commit()
+    r = await client.get(
+        "/api/admin/danger/export/pending-job/download",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 404
+
+
+async def test_download_done_job_returns_zip(client, admin_token, cleanup_jobs, export_dir):
+    job_id = "ready-job"
+    # Write a real zip file at the export path.
+    import zipfile
+    zip_path = export_dir / f"{job_id}.zip"
+    with zipfile.ZipFile(zip_path, "w") as z:
+        z.writestr("manifest.json", "{}")
+
+    async with AsyncSessionLocal() as s:
+        s.add(ExportJob(
+            id=job_id, status="done", requested_by="x@x.com",
+            file_size=zip_path.stat().st_size,
+            created_at=datetime.now(UTC), completed_at=datetime.now(UTC),
+        ))
+        await s.commit()
+
+    r = await client.get(
+        f"/api/admin/danger/export/{job_id}/download",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/zip")
+    assert "attachment" in r.headers.get("content-disposition", "")
+
+
+async def test_download_path_traversal_rejected(client, admin_token, cleanup_jobs):
+    # Even if a row existed for this id, the resolved path must be inside
+    # data/exports/. We don't seed a row — just confirm 404.
+    r = await client.get(
+        "/api/admin/danger/export/..%2F..%2Fetc%2Fpasswd/download",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 404
