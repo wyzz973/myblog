@@ -40,17 +40,19 @@ async def get_analytics(
 
 @router.get("/analytics/posts", response_model=list[PostHitsItem])
 async def get_analytics_posts(
-    days: int = Query(default=30, ge=1, le=365),
+    days: int = Query(default=30, ge=1),
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> list[PostHitsItem]:
+    days = min(days, 365)
     return await analytics_svc.per_post(s, days=days, limit=50)
 
 
 @router.get("/analytics/tags", response_model=list[TagHitsItem])
 async def get_analytics_tags(
-    days: int = Query(default=30, ge=1, le=365),
+    days: int = Query(default=30, ge=1),
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> list[TagHitsItem]:
+    days = min(days, 365)
     return await analytics_svc.per_tag(s, days=days)
