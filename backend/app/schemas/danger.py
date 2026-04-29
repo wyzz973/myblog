@@ -39,3 +39,9 @@ class ScheduleDeleteResponse(BaseModel):
 class DangerStatusResponse(BaseModel):
     pending_delete_at: datetime | None = None
     days_remaining: int | None = None
+
+
+class ImportResponse(BaseModel):
+    tables_imported: int
+    posts_imported: int
+    media_imported: int
