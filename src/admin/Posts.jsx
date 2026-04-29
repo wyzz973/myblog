@@ -1,0 +1,330 @@
+import { useCallback, useEffect, useState } from 'react';
+import { postsApi } from '../api/posts.js';
+import PostEditor from './PostEditor.jsx';
+
+const STATUS_FILTERS = [
+  { key: 'all', label: 'all' },
+  { key: 'published', label: 'published' },
+  { key: 'draft', label: 'draft' },
+  { key: 'scheduled', label: 'scheduled' },
+];
+
+export default function Posts() {
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [q, setQ] = useState('');
+  const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [editing, setEditing] = useState(null); // null | "__new__" | id
+  const [reloadTick, setReloadTick] = useState(0);
+
+  const reload = useCallback(() => setReloadTick((t) => t + 1), []);
+
+  useEffect(() => {
+    if (editing !== null) return;
+    let mounted = true;
+    setLoading(true);
+    postsApi
+      .list({
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        q: q.trim() || undefined,
+        limit: 100,
+      })
+      .then((res) => {
+        if (!mounted) return;
+        setItems(res.items || []);
+        setTotal(res.total ?? (res.items || []).length);
+        setError(null);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(err?.detail || err?.message || 'failed to load');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [statusFilter, q, editing, reloadTick]);
+
+  async function onDelete(id) {
+    // eslint-disable-next-line no-alert
+    if (!confirm(`Delete post "${id}"? This cannot be undone.`)) return;
+    try {
+      await postsApi.remove(id);
+      reload();
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      alert(`Delete failed: ${err?.detail || err?.message}`);
+    }
+  }
+
+  if (editing !== null) {
+    return (
+      <PostEditor
+        id={editing === '__new__' ? null : editing}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          reload();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div>
+      <header style={styles.header}>
+        <div>
+          <h1 style={styles.h1}>Posts</h1>
+          <p style={styles.lead}>
+            {loading ? 'loading…' : `${total} post${total === 1 ? '' : 's'} total`}
+          </p>
+        </div>
+        <button
+          type="button"
+          style={styles.btnPrimary}
+          onClick={() => setEditing('__new__')}
+        >
+          + new post
+        </button>
+      </header>
+
+      <div style={styles.toolRow}>
+        <div style={styles.chips}>
+          {STATUS_FILTERS.map((f) => {
+            const active = f.key === statusFilter;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setStatusFilter(f.key)}
+                style={{ ...styles.chip, ...(active ? styles.chipActive : null) }}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+        <input
+          type="search"
+          placeholder="search title / body…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          style={styles.search}
+        />
+      </div>
+
+      {error && <div style={styles.error}>! {error}</div>}
+
+      {!error && (
+        <div style={styles.tableWrap}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>n</th>
+                <th style={styles.th}>title</th>
+                <th style={styles.th}>tag</th>
+                <th style={styles.th}>date</th>
+                <th style={styles.th}>lang</th>
+                <th style={styles.th}>read</th>
+                <th style={{ ...styles.th, textAlign: 'right' }}>actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={7} style={styles.empty}>
+                    no posts
+                  </td>
+                </tr>
+              )}
+              {items.map((p) => (
+                <tr key={p.id} style={styles.tr}>
+                  <td style={styles.tdN}>{p.n || '—'}</td>
+                  <td style={styles.tdTitle}>
+                    <div style={styles.title}>{p.title}</div>
+                    {p.subtitle && (
+                      <div style={styles.subtitle}>{p.subtitle}</div>
+                    )}
+                    <div style={styles.idHint}>id: {p.id}</div>
+                  </td>
+                  <td style={styles.td}>
+                    <span style={styles.tagPill}>{p.tag}</span>
+                  </td>
+                  <td style={styles.td}>{p.date}</td>
+                  <td style={styles.td}>{p.lang}</td>
+                  <td style={styles.td}>{p.read || '—'}</td>
+                  <td style={{ ...styles.td, textAlign: 'right' }}>
+                    <button
+                      type="button"
+                      style={styles.btnGhost}
+                      onClick={() => setEditing(p.id)}
+                    >
+                      edit
+                    </button>
+                    <button
+                      type="button"
+                      style={styles.btnDanger}
+                      onClick={() => onDelete(p.id)}
+                    >
+                      delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const styles = {
+  header: {
+    display: 'flex',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+    gap: 12,
+  },
+  h1: { fontSize: 20, margin: 0, fontWeight: 600, color: 'var(--fg)' },
+  lead: { fontSize: 12, color: 'var(--fg-3)', margin: '4px 0 0' },
+  btnPrimary: {
+    background: 'var(--accent)',
+    color: '#0a0b0d',
+    fontWeight: 600,
+    padding: '8px 14px',
+    border: 0,
+    borderRadius: 4,
+    cursor: 'pointer',
+    fontSize: 12,
+    fontFamily: 'inherit',
+    letterSpacing: '0.04em',
+  },
+  toolRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    gap: 12,
+  },
+  chips: { display: 'flex', gap: 6 },
+  chip: {
+    background: 'transparent',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-3)',
+    padding: '4px 12px',
+    borderRadius: 999,
+    fontSize: 11,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+    letterSpacing: '0.04em',
+  },
+  chipActive: {
+    color: 'var(--fg)',
+    borderColor: 'color-mix(in oklab, var(--accent) 50%, transparent)',
+    background: 'color-mix(in oklab, var(--accent) 14%, transparent)',
+  },
+  search: {
+    background: 'var(--bg)',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg)',
+    padding: '6px 10px',
+    fontFamily: 'inherit',
+    fontSize: 12,
+    borderRadius: 4,
+    minWidth: 220,
+  },
+  tableWrap: {
+    border: '1px solid var(--line)',
+    borderRadius: 6,
+    overflow: 'hidden',
+    background: 'var(--bg-2)',
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    fontSize: 12,
+  },
+  th: {
+    textAlign: 'left',
+    padding: '10px 12px',
+    fontSize: 10,
+    color: 'var(--fg-4)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    borderBottom: '1px solid var(--line)',
+    fontWeight: 500,
+  },
+  tr: {
+    borderBottom: '1px solid var(--line)',
+  },
+  td: {
+    padding: '10px 12px',
+    color: 'var(--fg-2)',
+    verticalAlign: 'top',
+  },
+  tdN: {
+    padding: '10px 12px',
+    color: 'var(--accent)',
+    fontVariantNumeric: 'tabular-nums',
+    verticalAlign: 'top',
+    width: 60,
+  },
+  tdTitle: {
+    padding: '10px 12px',
+    verticalAlign: 'top',
+    minWidth: 240,
+  },
+  title: { color: 'var(--fg)', fontWeight: 500 },
+  subtitle: { color: 'var(--fg-3)', fontSize: 11, marginTop: 2 },
+  idHint: { color: 'var(--fg-4)', fontSize: 10, marginTop: 4 },
+  tagPill: {
+    display: 'inline-block',
+    padding: '2px 8px',
+    fontSize: 10,
+    borderRadius: 3,
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-3)',
+    letterSpacing: '0.04em',
+  },
+  empty: {
+    padding: '40px 12px',
+    textAlign: 'center',
+    color: 'var(--fg-4)',
+    fontSize: 12,
+  },
+  btnGhost: {
+    background: 'transparent',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-2)',
+    padding: '4px 10px',
+    borderRadius: 4,
+    fontSize: 11,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+    marginRight: 6,
+  },
+  btnDanger: {
+    background: 'transparent',
+    border: '1px solid color-mix(in oklab, var(--danger) 60%, transparent)',
+    color: 'var(--danger)',
+    padding: '4px 10px',
+    borderRadius: 4,
+    fontSize: 11,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+  },
+  error: {
+    color: 'var(--danger)',
+    fontSize: 12,
+    border: '1px solid var(--danger)',
+    padding: '10px 12px',
+    borderRadius: 4,
+    marginBottom: 14,
+  },
+};
