@@ -5,8 +5,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.models import ContribDay, Post, SiteMeta
+from app.models import ContribDay, Media, Post, SiteMeta
 from app.schemas.site import ProfilePayload, SitePayload
+from app.services.media_storage import url_for
 
 router = APIRouter()
 
@@ -15,6 +16,23 @@ def _format_uptime(launched: date) -> str:
     days = (date.today() - launched).days
     years, rest = divmod(days, 365)
     return f"{years}y {rest}d"
+
+
+async def _derive_avatar_path(s: AsyncSession, sm: SiteMeta) -> str | None:
+    """If ``avatar_id`` points at a Media row, return ``url_for(storage_path)``;
+    otherwise fall back to the legacy ``avatar_path`` column.
+
+    The FK is ``ON DELETE SET NULL``, so a missing media row implies
+    ``avatar_id is None`` already.
+    """
+    if sm.avatar_id is None:
+        return sm.avatar_path
+    storage_path = (
+        await s.execute(select(Media.storage_path).where(Media.id == sm.avatar_id))
+    ).scalar_one_or_none()
+    if storage_path is None:
+        return sm.avatar_path
+    return url_for(storage_path)
 
 
 @router.get("/site", response_model=SitePayload)
@@ -49,6 +67,7 @@ async def get_profile(s: AsyncSession = Depends(get_session)) -> ProfilePayload:
     sm = (await s.execute(select(SiteMeta).where(SiteMeta.id == 1))).scalar_one()
     return ProfilePayload(
         name=sm.name, name_en=sm.name_en, role=sm.role, bio=sm.bio,
-        location=sm.location, pronouns=sm.pronouns, avatar_path=sm.avatar_path,
+        location=sm.location, pronouns=sm.pronouns,
+        avatar_path=await _derive_avatar_path(s, sm),
         typing_line=sm.typing_line, stack_chips=sm.stack_chips,
     )
