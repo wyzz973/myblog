@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
 
 const NAV = [
-  { to: '/admin/dashboard', label: 'Dashboard', ready: true },
+  { to: '/admin/dashboard', label: 'Dashboard' },
   { to: '/admin/analytics', label: 'Analytics' },
   { to: '/admin/posts', label: 'Posts' },
   { to: '/admin/media', label: 'Media' },
@@ -47,7 +47,6 @@ export default function Layout() {
               })}
             >
               <span>{item.label}</span>
-              {!item.ready && <span style={styles.soon}>soon</span>}
             </NavLink>
           ))}
         </nav>
@@ -72,15 +71,6 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
-    </div>
-  );
-}
-
-export function ComingSoon({ title }) {
-  return (
-    <div style={styles.placeholder}>
-      <div style={styles.placeholderTitle}>{title}</div>
-      <div style={styles.placeholderBody}>Coming soon</div>
     </div>
   );
 }
@@ -138,15 +128,6 @@ const styles = {
     border: '1px solid color-mix(in oklab, var(--accent) 40%, transparent)',
     color: 'var(--fg)',
   },
-  soon: {
-    fontSize: 9,
-    color: 'var(--fg-4)',
-    border: '1px solid var(--line-2)',
-    padding: '1px 5px',
-    borderRadius: 3,
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-  },
   main: {
     display: 'flex',
     flexDirection: 'column',
@@ -184,22 +165,5 @@ const styles = {
     padding: '22px 24px 40px',
     flex: 1,
     minWidth: 0,
-  },
-  placeholder: {
-    border: '1px dashed var(--line-2)',
-    borderRadius: 6,
-    padding: '40px 20px',
-    textAlign: 'center',
-    color: 'var(--fg-3)',
-  },
-  placeholderTitle: {
-    fontSize: 14,
-    color: 'var(--fg)',
-    marginBottom: 6,
-    textTransform: 'capitalize',
-  },
-  placeholderBody: {
-    fontSize: 12,
-    color: 'var(--fg-4)',
   },
 };
