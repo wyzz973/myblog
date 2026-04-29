@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSite, usePosts } from '../api/hooks.js';
+import { sendHit } from '../utils/beacon.js';
 
 function CodeBlock({ code }) {
   const [copied, setCopied] = useState(false);
@@ -79,6 +80,11 @@ export default function Reader({ post, onBack, onOpenPost }) {
   useEffect(() => {
     scrollRef.current?.scrollTo(0, 0);
     setProgress(0);
+  }, [post?.id]);
+
+  useEffect(() => {
+    if (!post?.id) return;
+    sendHit({ path: window.location.pathname, post_id: post.id });
   }, [post?.id]);
 
   if (!post) return null;
