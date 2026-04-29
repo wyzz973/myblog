@@ -1,6 +1,7 @@
 """danger service unit tests."""
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -18,29 +19,6 @@ async def _reset_pool():
     await _db.engine.dispose()
     yield
     await _db.engine.dispose()
-
-
-@pytest.fixture(autouse=True)
-def _register_noop_export_task(monkeypatch):
-    """Stub the build_export_task in inline-mode registry so danger
-    service tests don't depend on the task implementation."""
-    # Force inline mode (the session conftest may have cached arq_inline=False
-    # before ARQ_INLINE was set in the env).
-    monkeypatch.setenv("ARQ_INLINE", "true")
-    from app.config import get_settings
-    get_settings.cache_clear()
-
-    from app.workers import queue as q
-    async def _noop(ctx, **kwargs):
-        return {"stub": True}
-    prev = q._TASK_REGISTRY.get("build_export_task")
-    q._TASK_REGISTRY["build_export_task"] = _noop
-    yield
-    if prev is None:
-        q._TASK_REGISTRY.pop("build_export_task", None)
-    else:
-        q._TASK_REGISTRY["build_export_task"] = prev
-    get_settings.cache_clear()
 
 
 @pytest.fixture
@@ -81,19 +59,6 @@ async def test_verify_password_wrong(admin_with_known_password):
     async with AsyncSessionLocal() as s:
         with pytest.raises(danger.DangerError):
             await danger.verify_password_or_raise(s, admin=admin, password="WRONG")
-
-
-async def test_request_export_inserts_pending(admin_with_known_password, cleanup_export_jobs):
-    admin, _ = admin_with_known_password
-    async with AsyncSessionLocal() as s:
-        job = await danger.request_export(s, admin=admin)
-        await s.commit()
-    async with AsyncSessionLocal() as s:
-        rows = (await s.execute(select(ExportJob))).scalars().all()
-    assert len(rows) == 1
-    assert rows[0].id == job.id
-    assert rows[0].status == "pending"
-    assert rows[0].requested_by == admin.email
 
 
 async def test_schedule_site_deletion_sets_pending_at(cleanup_export_jobs):
@@ -155,9 +120,17 @@ async def test_get_danger_status_with_pending(cleanup_export_jobs):
 
 async def test_list_exports_orders_desc(admin_with_known_password, cleanup_export_jobs):
     admin, _ = admin_with_known_password
+    base = datetime.now(UTC)
     async with AsyncSessionLocal() as s:
-        for _ in range(3):
-            await danger.request_export(s, admin=admin)
+        for i in range(3):
+            s.add(
+                ExportJob(
+                    id=uuid.uuid4().hex,
+                    status="pending",
+                    requested_by=admin.email,
+                    created_at=base + timedelta(seconds=i),
+                )
+            )
         await s.commit()
     async with AsyncSessionLocal() as s:
         rows = await danger.list_exports(s, limit=10)

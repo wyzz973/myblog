@@ -2,7 +2,6 @@
 delete scheduling, status."""
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
@@ -11,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Account, ExportJob, SiteMeta
 from app.schemas.danger import DangerStatusResponse
 from app.services.auth import verify_password
-from app.workers import queue as q
 
 
 class DangerError(Exception):
@@ -24,20 +22,6 @@ async def verify_password_or_raise(
 ) -> None:
     if not verify_password(admin.password_hash, password):
         raise DangerError("invalid credentials")
-
-
-async def request_export(s: AsyncSession, *, admin: Account) -> ExportJob:
-    job = ExportJob(
-        id=uuid.uuid4().hex,
-        status="pending",
-        requested_by=admin.email,
-        created_at=datetime.now(UTC),
-    )
-    s.add(job)
-    await s.flush()
-    await s.refresh(job)
-    await q.enqueue("build_export_task", job_id=job.id)
-    return job
 
 
 async def get_export(s: AsyncSession, *, job_id: str) -> ExportJob | None:
