@@ -1,0 +1,454 @@
+import { useCallback, useEffect, useState } from 'react';
+import { commentsApi } from '../api/comments.js';
+
+// Backend status enum is pending|approved|spam; "all" is a frontend-only
+// pseudo-filter that omits the status query param.
+const TABS = [
+  { key: 'pending', label: 'pending' },
+  { key: 'approved', label: 'approved' },
+  { key: 'spam', label: 'spam' },
+  { key: 'all', label: 'all' },
+];
+
+export default function Comments() {
+  const [tab, setTab] = useState('pending');
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [reloadTick, setReloadTick] = useState(0);
+  const [replyOpen, setReplyOpen] = useState(null); // id of comment whose reply form is open
+  const [replyText, setReplyText] = useState('');
+
+  const reload = useCallback(() => setReloadTick((t) => t + 1), []);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    commentsApi
+      .list({ status: tab === 'all' ? undefined : tab })
+      .then((rows) => {
+        if (!mounted) return;
+        setItems(rows || []);
+        setError(null);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(err?.detail || err?.message || 'failed to load');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [tab, reloadTick]);
+
+  async function setStatus(c, status) {
+    setBusyId(c.id);
+    // Optimistic
+    const prev = items;
+    setItems((arr) =>
+      arr.map((x) => (x.id === c.id ? { ...x, status } : x)),
+    );
+    try {
+      const res = await commentsApi.patch(c.id, { status });
+      // Reconcile from server response
+      setItems((arr) =>
+        arr.map((x) =>
+          x.id === c.id ? { ...x, status: res.status, flag: res.flag } : x,
+        ),
+      );
+      // If we just moved a comment out of the current tab, drop it.
+      if (tab !== 'all' && res.status !== tab) {
+        setItems((arr) => arr.filter((x) => x.id !== c.id));
+      }
+    } catch (err) {
+      setItems(prev);
+      // eslint-disable-next-line no-alert
+      alert(`update failed: ${err?.detail || err?.message}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onDelete(c) {
+    // eslint-disable-next-line no-alert
+    if (!confirm(`Delete comment by "${c.who}"? This cannot be undone.`)) return;
+    setBusyId(c.id);
+    const prev = items;
+    setItems((arr) => arr.filter((x) => x.id !== c.id));
+    try {
+      await commentsApi.remove(c.id);
+    } catch (err) {
+      setItems(prev);
+      // eslint-disable-next-line no-alert
+      alert(`delete failed: ${err?.detail || err?.message}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function submitReply(c) {
+    const text = replyText.trim();
+    if (!text) return;
+    setBusyId(c.id);
+    try {
+      await commentsApi.patch(c.id, { reply_body: text });
+      setReplyOpen(null);
+      setReplyText('');
+      reload();
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      alert(`reply failed: ${err?.detail || err?.message}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div>
+      <header style={styles.header}>
+        <div>
+          <h1 style={styles.h1}>Comments</h1>
+          <p style={styles.lead}>
+            {loading
+              ? 'loading…'
+              : `${items.length} ${tab === 'all' ? 'total' : tab}`}
+          </p>
+        </div>
+        <div style={styles.tabs}>
+          {TABS.map((t) => {
+            const active = t.key === tab;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                style={{ ...styles.tab, ...(active ? styles.tabActive : null) }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      </header>
+
+      {error && <div style={styles.error}>! {error}</div>}
+
+      <div style={styles.list}>
+        {items.length === 0 && !loading && !error && (
+          <div style={styles.empty}>no {tab === 'all' ? '' : tab + ' '}comments</div>
+        )}
+        {items.map((c) => {
+          const isBusy = busyId === c.id;
+          const replyForThis = replyOpen === c.id;
+          return (
+            <article key={c.id} style={styles.card}>
+              <header style={styles.cardHead}>
+                <div style={styles.who}>
+                  <span style={styles.whoName}>{c.who}</span>
+                  {c.parent_id && (
+                    <span style={styles.replyBadge}>reply to #{c.parent_id}</span>
+                  )}
+                  {c.flag && <span style={styles.flagBadge}>flag</span>}
+                  <StatusPill status={c.status} />
+                </div>
+                <div style={styles.meta}>
+                  <span style={styles.metaLink}>post: {c.post_id}</span>
+                  <span style={styles.dim}>·</span>
+                  <span style={styles.dim}>{fmtDate(c.created_at)}</span>
+                  <span style={styles.dim}>· #{c.id}</span>
+                </div>
+              </header>
+              <div style={styles.body}>{c.body}</div>
+              <footer style={styles.actions}>
+                {c.status !== 'approved' && (
+                  <button
+                    type="button"
+                    style={styles.btnAction}
+                    onClick={() => setStatus(c, 'approved')}
+                    disabled={isBusy}
+                  >
+                    approve
+                  </button>
+                )}
+                {c.status !== 'spam' && (
+                  <button
+                    type="button"
+                    style={styles.btnAction}
+                    onClick={() => setStatus(c, 'spam')}
+                    disabled={isBusy}
+                  >
+                    mark spam
+                  </button>
+                )}
+                {c.status !== 'pending' && (
+                  <button
+                    type="button"
+                    style={styles.btnAction}
+                    onClick={() => setStatus(c, 'pending')}
+                    disabled={isBusy}
+                  >
+                    re-queue
+                  </button>
+                )}
+                <button
+                  type="button"
+                  style={styles.btnAction}
+                  onClick={() => {
+                    setReplyOpen(replyForThis ? null : c.id);
+                    setReplyText('');
+                  }}
+                  disabled={isBusy}
+                >
+                  {replyForThis ? 'cancel reply' : 'reply'}
+                </button>
+                <button
+                  type="button"
+                  style={styles.btnDanger}
+                  onClick={() => onDelete(c)}
+                  disabled={isBusy}
+                >
+                  delete
+                </button>
+              </footer>
+              {replyForThis && (
+                <div style={styles.replyBox}>
+                  <textarea
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    placeholder="reply as admin…"
+                    style={styles.replyTextarea}
+                    rows={3}
+                  />
+                  <div style={styles.replyBtns}>
+                    <button
+                      type="button"
+                      style={styles.btnPrimary}
+                      onClick={() => submitReply(c)}
+                      disabled={isBusy || !replyText.trim()}
+                    >
+                      {isBusy ? 'sending…' : 'send reply →'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ status }) {
+  const map = {
+    pending: { color: 'var(--accent)', label: 'pending' },
+    approved: { color: '#7dd3a4', label: 'approved' },
+    spam: { color: 'var(--danger)', label: 'spam' },
+  };
+  const m = map[status] || { color: 'var(--fg-3)', label: status };
+  return (
+    <span
+      style={{
+        ...styles.statusPill,
+        color: m.color,
+        borderColor: `color-mix(in oklab, ${m.color} 50%, transparent)`,
+      }}
+    >
+      {m.label}
+    </span>
+  );
+}
+
+function fmtDate(s) {
+  if (!s) return '';
+  try {
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return s;
+    return d.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return s;
+  }
+}
+
+const styles = {
+  header: {
+    display: 'flex',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  h1: { fontSize: 20, margin: 0, fontWeight: 600, color: 'var(--fg)' },
+  lead: { fontSize: 12, color: 'var(--fg-3)', margin: '4px 0 0' },
+  tabs: { display: 'flex', gap: 4 },
+  tab: {
+    background: 'transparent',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-3)',
+    padding: '5px 14px',
+    borderRadius: 4,
+    fontSize: 11,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+    letterSpacing: '0.04em',
+  },
+  tabActive: {
+    color: 'var(--fg)',
+    borderColor: 'color-mix(in oklab, var(--accent) 50%, transparent)',
+    background: 'color-mix(in oklab, var(--accent) 14%, transparent)',
+  },
+  list: { display: 'flex', flexDirection: 'column', gap: 10 },
+  card: {
+    background: 'var(--bg-2)',
+    border: '1px solid var(--line)',
+    borderRadius: 6,
+    padding: '12px 14px',
+  },
+  cardHead: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 6,
+  },
+  who: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  whoName: { fontSize: 13, color: 'var(--fg)', fontWeight: 500 },
+  replyBadge: {
+    fontSize: 10,
+    color: 'var(--fg-4)',
+    border: '1px solid var(--line-2)',
+    padding: '1px 6px',
+    borderRadius: 3,
+    letterSpacing: '0.04em',
+  },
+  flagBadge: {
+    fontSize: 10,
+    color: 'var(--danger)',
+    border: '1px solid color-mix(in oklab, var(--danger) 50%, transparent)',
+    padding: '1px 6px',
+    borderRadius: 3,
+    letterSpacing: '0.04em',
+  },
+  statusPill: {
+    fontSize: 10,
+    padding: '1px 8px',
+    border: '1px solid',
+    borderRadius: 999,
+    letterSpacing: '0.06em',
+    textTransform: 'lowercase',
+  },
+  meta: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 11,
+    color: 'var(--fg-3)',
+  },
+  metaLink: {
+    color: 'var(--fg-3)',
+    background: 'var(--bg)',
+    border: '1px solid var(--line-2)',
+    padding: '1px 6px',
+    borderRadius: 3,
+    fontSize: 10,
+  },
+  dim: { color: 'var(--fg-4)' },
+  body: {
+    fontSize: 13,
+    color: 'var(--fg-2)',
+    whiteSpace: 'pre-wrap',
+    lineHeight: 1.55,
+    padding: '6px 0 8px',
+  },
+  actions: {
+    display: 'flex',
+    gap: 6,
+    flexWrap: 'wrap',
+    paddingTop: 8,
+    borderTop: '1px dashed var(--line)',
+  },
+  btnAction: {
+    background: 'transparent',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-2)',
+    padding: '4px 10px',
+    borderRadius: 4,
+    fontSize: 11,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+  },
+  btnDanger: {
+    background: 'transparent',
+    border: '1px solid color-mix(in oklab, var(--danger) 60%, transparent)',
+    color: 'var(--danger)',
+    padding: '4px 10px',
+    borderRadius: 4,
+    fontSize: 11,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+    marginLeft: 'auto',
+  },
+  btnPrimary: {
+    background: 'var(--accent)',
+    color: '#0a0b0d',
+    fontWeight: 600,
+    padding: '6px 14px',
+    border: 0,
+    borderRadius: 4,
+    cursor: 'pointer',
+    fontSize: 12,
+    fontFamily: 'inherit',
+  },
+  replyBox: {
+    marginTop: 10,
+    padding: 10,
+    background: 'var(--bg)',
+    border: '1px solid var(--line)',
+    borderRadius: 4,
+  },
+  replyTextarea: {
+    width: '100%',
+    background: 'var(--bg-2)',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg)',
+    padding: '8px 10px',
+    fontFamily: 'inherit',
+    fontSize: 12,
+    borderRadius: 4,
+    outline: 'none',
+    resize: 'vertical',
+    boxSizing: 'border-box',
+  },
+  replyBtns: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    marginTop: 8,
+  },
+  empty: {
+    border: '1px dashed var(--line-2)',
+    borderRadius: 6,
+    padding: '40px 20px',
+    textAlign: 'center',
+    color: 'var(--fg-4)',
+    fontSize: 12,
+  },
+  error: {
+    color: 'var(--danger)',
+    fontSize: 12,
+    border: '1px solid var(--danger)',
+    padding: '10px 12px',
+    borderRadius: 4,
+    marginBottom: 14,
+  },
+};
