@@ -5,8 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import current_admin, require_scope
-from app.models import Account, SiteMeta
+from app.models import Account, Media, SiteMeta
 from app.services.event_log import write_event
+from app.services.media_storage import url_for
 
 router = APIRouter()
 
@@ -54,13 +55,31 @@ def _apply(sm: SiteMeta, payload: BaseModel) -> None:
         setattr(sm, k, v)
 
 
+async def _derive_avatar_path(s: AsyncSession, sm: SiteMeta) -> str | None:
+    """Resolve ``avatar_path`` from ``avatar_id`` if set, else the legacy column."""
+    if sm.avatar_id is None:
+        return sm.avatar_path
+    storage_path = (
+        await s.execute(select(Media.storage_path).where(Media.id == sm.avatar_id))
+    ).scalar_one_or_none()
+    if storage_path is None:
+        return sm.avatar_path
+    return url_for(storage_path)
+
+
+async def _profile_response(s: AsyncSession, sm: SiteMeta) -> dict:
+    out = {k: getattr(sm, k) for k in ProfileIn.model_fields}
+    out["avatar_path"] = await _derive_avatar_path(s, sm)
+    return out
+
+
 @router.get("/profile")
 async def get_profile(
     _: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> dict:
     sm = await _fetch(s)
-    return {k: getattr(sm, k) for k in ProfileIn.model_fields}
+    return await _profile_response(s, sm)
 
 
 @router.put("/profile", dependencies=[Depends(require_scope("write"))])
@@ -72,7 +91,7 @@ async def put_profile(
     sm = await _fetch(s)
     _apply(sm, payload)
     await write_event(s, type="identity.updated", actor=admin.email)
-    return {k: getattr(sm, k) for k in ProfileIn.model_fields}
+    return await _profile_response(s, sm)
 
 
 @router.get("/site")
