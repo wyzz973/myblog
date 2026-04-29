@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import delete, select
 
 from app.db import AsyncSessionLocal
-from app.models import EventLog
+from app.models import EventLog, EventLogArchive
 from app.workers.tasks import prune_event_log
 
 
@@ -20,6 +20,9 @@ async def _reset_pool():
 async def seeded_events():
     async with AsyncSessionLocal() as s:
         await s.execute(delete(EventLog).where(EventLog.type.like("p5.test.%")))
+        await s.execute(
+            delete(EventLogArchive).where(EventLogArchive.type.like("p5.test.%"))
+        )
         s.add_all([
             EventLog(type="p5.test.young", actor="t", target="x", meta={},
                      created_at=datetime.now(UTC) - timedelta(days=30)),
@@ -32,12 +35,16 @@ async def seeded_events():
     yield
     async with AsyncSessionLocal() as s:
         await s.execute(delete(EventLog).where(EventLog.type.like("p5.test.%")))
+        await s.execute(
+            delete(EventLogArchive).where(EventLogArchive.type.like("p5.test.%"))
+        )
         await s.commit()
 
 
 async def test_prune_keeps_under_90_days(seeded_events):
     result = await prune_event_log({})
-    assert result["deleted"] == 2
+    # Two of three rows older than 90d are archived (out of the live table).
+    assert result["archived"] == 2
 
     async with AsyncSessionLocal() as s:
         rows = (await s.execute(
