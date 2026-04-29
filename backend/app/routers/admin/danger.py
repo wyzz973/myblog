@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,10 +19,11 @@ from app.schemas.danger import (
     ExportJobItem,
     ExportRequest,
     ExportRequestResponse,
+    ImportResponse,
     ScheduleDeleteResponse,
 )
 from app.services import danger as danger_svc
-from app.services import export_builder, rate_limit
+from app.services import export_builder, rate_limit, site_importer
 from app.services.client_ip import client_ip_key_part
 from app.services.event_log import write_event
 from app.workers import queue as q
@@ -201,3 +202,38 @@ async def get_danger_status_route(
     s: AsyncSession = Depends(get_session),
 ) -> DangerStatusResponse:
     return await danger_svc.get_danger_status(s)
+
+
+@router.post(
+    "/danger/import",
+    response_model=ImportResponse,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def import_site_route(
+    request: Request,
+    file: UploadFile = File(...),
+    password: str = Form(...),
+    admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+    redis=Depends(get_redis),
+) -> ImportResponse:
+    await _danger_rate_limit(request, redis)
+    try:
+        await danger_svc.verify_password_or_raise(s, admin=admin, password=password)
+    except danger_svc.DangerError as e:
+        raise HTTPException(401, "invalid credentials") from e
+
+    zip_bytes = await file.read()
+    try:
+        result = await site_importer.import_site_from_zip(s, zip_bytes=zip_bytes)
+    except site_importer.ImportError as e:
+        # Wipe is gated behind validation; if we get here mid-restore the
+        # session rollback (FastAPI dep teardown) cleans up DB state.
+        raise HTTPException(422, f"invalid export bundle: {e}") from e
+
+    await write_event(
+        s, type="danger.import_completed", actor=admin.email,
+        target=None, meta=result,
+    )
+    await s.commit()
+    return ImportResponse(**result)
