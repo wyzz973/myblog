@@ -1,4 +1,4 @@
-import { SITE } from '../data.js';
+import { useSite } from '../api/hooks.js';
 
 function Logo() {
   return <div className="logo">w</div>;
@@ -13,6 +13,7 @@ function scrollToId(id) {
 }
 
 export default function TopBar({ theme, setTheme, onOpenPalette, onNav }) {
+  const { data: site } = useSite();
   const go = (e, id) => {
     e.preventDefault();
     onNav?.('home');
@@ -34,7 +35,7 @@ export default function TopBar({ theme, setTheme, onOpenPalette, onNav }) {
       <div className="spacer" />
       <span className="row" style={{ gap: 6 }}>
         <span className="dot" />
-        <span>online · {SITE.location}</span>
+        <span>online{site?.location ? ` · ${site.location}` : ''}</span>
       </span>
       <button className="kbd-hint" onClick={onOpenPalette}>
         <kbd>⌘</kbd><kbd>K</kbd> search
