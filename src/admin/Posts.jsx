@@ -9,6 +9,8 @@ const STATUS_FILTERS = [
   { key: 'scheduled', label: 'scheduled' },
 ];
 
+const PAGE_SIZE_OPTIONS = [20, 50, 100];
+
 export default function Posts() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [q, setQ] = useState('');
@@ -18,8 +20,14 @@ export default function Posts() {
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null); // null | "__new__" | id
   const [reloadTick, setReloadTick] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [page, setPage] = useState(1); // 1-based
 
   const reload = useCallback(() => setReloadTick((t) => t + 1), []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, q, pageSize]);
 
   useEffect(() => {
     if (editing !== null) return;
@@ -29,7 +37,8 @@ export default function Posts() {
       .list({
         status: statusFilter === 'all' ? undefined : statusFilter,
         q: q.trim() || undefined,
-        limit: 100,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
       })
       .then((res) => {
         if (!mounted) return;
@@ -47,7 +56,13 @@ export default function Posts() {
     return () => {
       mounted = false;
     };
-  }, [statusFilter, q, editing, reloadTick]);
+  }, [statusFilter, q, editing, reloadTick, pageSize, page]);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const onPage = useCallback(
+    (n) => setPage(Math.min(Math.max(1, n), totalPages)),
+    [totalPages],
+  );
 
   async function onDelete(id) {
     // eslint-disable-next-line no-alert
@@ -177,6 +192,46 @@ export default function Posts() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!error && total > 0 && (
+        <div style={styles.pager}>
+          <div style={styles.pagerInfo}>
+            page {page} / {totalPages} · showing {items.length} of {total}
+          </div>
+          <div style={styles.pagerControls}>
+            <label style={styles.pagerLabel}>
+              <span style={styles.dim}>per page</span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                style={styles.pagerSelect}
+              >
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              style={styles.btnGhost}
+              onClick={() => onPage(page - 1)}
+              disabled={page <= 1 || loading}
+            >
+              ← prev
+            </button>
+            <button
+              type="button"
+              style={styles.btnGhost}
+              onClick={() => onPage(page + 1)}
+              disabled={page >= totalPages || loading}
+            >
+              next →
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -327,4 +382,36 @@ const styles = {
     borderRadius: 4,
     marginBottom: 14,
   },
+  pager: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    fontSize: 11,
+    color: 'var(--fg-3)',
+  },
+  pagerInfo: { letterSpacing: '0.04em' },
+  pagerControls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pagerLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 11,
+    color: 'var(--fg-3)',
+    marginRight: 6,
+  },
+  pagerSelect: {
+    background: 'var(--bg-2)',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-2)',
+    fontSize: 11,
+    fontFamily: 'inherit',
+    padding: '3px 6px',
+    borderRadius: 4,
+  },
+  dim: { color: 'var(--fg-4)' },
 };
