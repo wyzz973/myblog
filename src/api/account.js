@@ -1,8 +1,4 @@
-// Admin account API client (2FA + magic-link).
-//
-// Note: there is no /api/admin/account password-change endpoint exposed at
-// time of writing — see backend/app/routers/admin/account.py. The Account
-// screen surfaces a placeholder for that section.
+// Admin account API client (password + 2FA + magic-link).
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '';
 const TOKEN_KEY = 'myblog.admin.token';
@@ -71,6 +67,16 @@ export const apiAccount = {
     return req('/account/magic-link', {
       method: 'PATCH',
       body: JSON.stringify({ enabled }),
+    });
+  },
+  // POST { current_password, new_password } → 204
+  changePassword(currentPassword, newPassword) {
+    return req('/account/password', {
+      method: 'POST',
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
     });
   },
 };

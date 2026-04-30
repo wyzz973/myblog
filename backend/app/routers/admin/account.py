@@ -6,6 +6,7 @@ from app.deps import current_session_admin
 from app.models import Account
 from app.schemas.auth import (
     MagicLinkToggleRequest,
+    PasswordChangeRequest,
     TfaDisableRequest,
     TfaEnableRequest,
     TfaRecoveryCodesResponse,
@@ -13,6 +14,7 @@ from app.schemas.auth import (
     TfaSetupResponse,
 )
 from app.services import recovery_codes, secret_box, totp
+from app.services.auth import hash_password, verify_password
 from app.services.event_log import write_event
 
 router = APIRouter()
@@ -67,6 +69,22 @@ async def tfa_disable(
     from app.models import TfaRecoveryCode
     await s.execute(_del(TfaRecoveryCode).where(TfaRecoveryCode.account_id == admin.id))
     await write_event(s, type="account.2fa.disabled", actor=admin.email)
+    await s.commit()
+    return Response(status_code=204)
+
+
+@router.post("/account/password", status_code=204)
+async def change_password(
+    req: PasswordChangeRequest,
+    admin: Account = Depends(current_session_admin),
+    s: AsyncSession = Depends(get_session),
+) -> Response:
+    if not verify_password(admin.password_hash, req.current_password):
+        raise HTTPException(400, "current password is incorrect")
+    if req.new_password == req.current_password:
+        raise HTTPException(400, "new password must differ from current")
+    admin.password_hash = hash_password(req.new_password)
+    await write_event(s, type="account.password.changed", actor=admin.email)
     await s.commit()
     return Response(status_code=204)
 

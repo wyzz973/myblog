@@ -65,6 +65,11 @@ class MagicLinkToggleRequest(_Strict):
     enabled: bool
 
 
+class PasswordChangeRequest(_Strict):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class ApiTokenCreateRequest(_Strict):
     name: str = Field(min_length=1, max_length=64)
     scope: Literal["read", "write"]

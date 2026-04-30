@@ -300,12 +300,89 @@ function MagicLinkSection() {
 // --- Password ---------------------------------------------------------------
 
 function PasswordSection() {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState(false);
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    setError(null);
+    setDone(false);
+    if (next.length < 8) {
+      setError('new password must be at least 8 characters');
+      return;
+    }
+    if (next !== confirm) {
+      setError('new password and confirmation do not match');
+      return;
+    }
+    if (next === current) {
+      setError('new password must differ from current');
+      return;
+    }
+    setBusy(true);
+    try {
+      await apiAccount.changePassword(current, next);
+      setCurrent('');
+      setNext('');
+      setConfirm('');
+      setDone(true);
+    } catch (err) {
+      setError(err?.detail || err?.message || 'failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <Card title="Password" subtitle="Account password">
-      <div style={styles.muted}>
-        The admin API does not currently expose a password-change endpoint.
-        Reset via your seed/CLI workflow until a route is added.
-      </div>
+    <Card title="Password" subtitle="Change account password">
+      <form onSubmit={onSubmit} style={{ display: 'grid', gap: 10, maxWidth: 380 }}>
+        <label style={styles.label}>
+          <span style={styles.labelText}>current password</span>
+          <input
+            type="password"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            autoComplete="current-password"
+            required
+            style={styles.input}
+          />
+        </label>
+        <label style={styles.label}>
+          <span style={styles.labelText}>new password</span>
+          <input
+            type="password"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+            autoComplete="new-password"
+            minLength={8}
+            required
+            style={styles.input}
+          />
+        </label>
+        <label style={styles.label}>
+          <span style={styles.labelText}>confirm new password</span>
+          <input
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            autoComplete="new-password"
+            minLength={8}
+            required
+            style={styles.input}
+          />
+        </label>
+        <div>
+          <button type="submit" style={styles.btn} disabled={busy}>
+            {busy ? 'saving…' : 'change password'}
+          </button>
+        </div>
+        {done && <div style={styles.success}>password changed</div>}
+        {error && <div style={styles.error}>! {error}</div>}
+      </form>
     </Card>
   );
 }
@@ -483,5 +560,13 @@ const styles = {
     padding: '6px 10px',
     borderRadius: 4,
     background: 'color-mix(in oklab, var(--danger) 10%, transparent)',
+  },
+  success: {
+    color: 'var(--accent)',
+    fontSize: 11,
+    border: '1px solid color-mix(in oklab, var(--accent) 40%, transparent)',
+    padding: '6px 10px',
+    borderRadius: 4,
+    background: 'color-mix(in oklab, var(--accent) 8%, transparent)',
   },
 };
