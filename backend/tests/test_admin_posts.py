@@ -42,7 +42,14 @@ async def test_create_post_then_get(client, auth):
 
     g = await client.get("/api/admin/posts/test-post-1", headers=auth)
     assert g.status_code == 200
-    assert g.json()["title"] == "Test post"
+    detail = g.json()
+    assert detail["title"] == "Test post"
+    # body_md is the raw markdown body (without frontmatter), so the editor
+    # can round-trip an existing post.
+    assert "body_md" in detail
+    assert "## Heading" in detail["body_md"]
+    assert "A paragraph." in detail["body_md"]
+    assert "---" not in detail["body_md"]
 
     # Cleanup
     await client.delete("/api/admin/posts/test-post-1", headers=auth)

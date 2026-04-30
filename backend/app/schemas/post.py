@@ -19,6 +19,9 @@ class PostSummary(BaseModel):
 class PostDetail(PostSummary):
     tldr: str | None
     body: list[dict[str, Any]]
+    # Raw markdown body. Only the admin endpoints populate it (so the editor
+    # can round-trip an existing post); the public endpoint omits it.
+    body_md: str | None = None
     likes: int
     word_count: int
 

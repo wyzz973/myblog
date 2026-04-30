@@ -33,14 +33,6 @@ export default function PostEditor({ id, onClose, onSaved }) {
   const [previewing, setPreviewing] = useState(false);
   const debounceRef = useRef(null);
 
-  // Load existing post — but we need the *raw* markdown. The PostDetail returns
-  // parsed `body` blocks, not the raw markdown. So we reconstruct an editable
-  // markdown from the available fields by serialising frontmatter + a fenced
-  // placeholder telling the editor we have to refetch the body source.
-  // Since the backend stores body_md but does not currently expose it on
-  // PostDetail, we degrade gracefully: prefill what we can from PostDetail and
-  // ask the user to paste / re-edit the body. (Caveat documented in the
-  // closeout report.)
   useEffect(() => {
     if (isNew) return;
     let mounted = true;
@@ -66,10 +58,7 @@ export default function PostEditor({ id, onClose, onSaved }) {
         ]
           .filter(Boolean)
           .join('\n');
-        const bodyHint =
-          '<!-- body source not echoed by GET /posts/{id}; '
-          + 'paste your markdown body here, then save. -->\n';
-        setMarkdown(fmLines + bodyHint);
+        setMarkdown(fmLines + (p.body_md ?? ''));
         setLoadError(null);
       })
       .catch((err) => {

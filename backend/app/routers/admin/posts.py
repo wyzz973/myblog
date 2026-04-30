@@ -27,7 +27,8 @@ def _detail(p: Post) -> PostDetail:
     return PostDetail(
         id=p.id, n=p.n, title=p.title, subtitle=p.subtitle, tag=p.tag.slug,
         date=p.date, read=p.read, lang=p.lang, summary=p.summary,
-        tldr=p.tldr, body=p.body_json, likes=0, word_count=p.word_count,
+        tldr=p.tldr, body=p.body_json, body_md=p.body_md,
+        likes=0, word_count=p.word_count,
     )
 
 
@@ -92,7 +93,7 @@ async def get_post(
     return PostDetail(
         id=post.id, n=post.n, title=post.title, subtitle=post.subtitle, tag=post.tag.slug,
         date=post.date, read=post.read, lang=post.lang, summary=post.summary,
-        tldr=post.tldr, body=post.body_json,
+        tldr=post.tldr, body=post.body_json, body_md=post.body_md,
         likes=await likes.get_count(s, post_id=post.id),
         word_count=post.word_count,
     )
