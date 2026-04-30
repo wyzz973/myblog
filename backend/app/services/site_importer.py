@@ -327,6 +327,10 @@ async def import_site_from_zip(
         if sm_rows:
             sm_row = _coerce_row("site_meta", sm_rows[0])
             sm_row.pop("id", None)
+            # avatar_path was a legacy free-form column on site_meta, dropped
+            # after avatar_id (FK to media) became authoritative. Pre-drop
+            # exports may still carry it; ignore on import.
+            sm_row.pop("avatar_path", None)
             # Preserve admin's deletion-cancel state: pending_delete_at on the
             # imported snapshot is irrelevant to the freshly-imported site.
             sm_row["pending_delete_at"] = None

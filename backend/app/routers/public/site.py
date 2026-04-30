@@ -19,19 +19,14 @@ def _format_uptime(launched: date) -> str:
 
 
 async def _derive_avatar_path(s: AsyncSession, sm: SiteMeta) -> str | None:
-    """If ``avatar_id`` points at a Media row, return ``url_for(storage_path)``;
-    otherwise fall back to the legacy ``avatar_path`` column.
-
-    The FK is ``ON DELETE SET NULL``, so a missing media row implies
-    ``avatar_id is None`` already.
-    """
+    """If ``avatar_id`` points at a Media row, return ``url_for(storage_path)``."""
     if sm.avatar_id is None:
-        return sm.avatar_path
+        return None
     storage_path = (
         await s.execute(select(Media.storage_path).where(Media.id == sm.avatar_id))
     ).scalar_one_or_none()
     if storage_path is None:
-        return sm.avatar_path
+        return None
     return url_for(storage_path)
 
 

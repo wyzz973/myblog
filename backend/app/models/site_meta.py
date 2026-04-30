@@ -24,7 +24,6 @@ class SiteMeta(Base, TimestampMixin):
     email: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     github: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     pronouns: Mapped[str | None] = mapped_column(String(32))
-    avatar_path: Mapped[str | None] = mapped_column(String(256))
     typing_line: Mapped[str] = mapped_column(Text, nullable=False, default="")
     stack_chips: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     footer_note: Mapped[str] = mapped_column(String(256), nullable=False, default="")

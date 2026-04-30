@@ -65,7 +65,7 @@ export default function Profile() {
       if (norm(profile[f.key]) !== norm(draft[f.key])) return true;
     }
     if (norm(profile.bio) !== norm(draft.bio)) return true;
-    if (norm(profile.avatar_path) !== norm(draft.avatar_path)) return true;
+    if ((profile.avatar_id ?? null) !== (draft.avatar_id ?? null)) return true;
     if (chipsKey(profile.stack_chips) !== chipsKey(draft.stack_chips)) return true;
     return false;
   }, [profile, draft]);
@@ -95,8 +95,8 @@ export default function Profile() {
       if (norm(profile.bio) !== norm(draft.bio)) {
         patch.bio = draft.bio || '';
       }
-      if (norm(profile.avatar_path) !== norm(draft.avatar_path)) {
-        patch.avatar_path = draft.avatar_path || null;
+      if ((profile.avatar_id ?? null) !== (draft.avatar_id ?? null)) {
+        patch.avatar_id = draft.avatar_id ?? null;
       }
       if (chipsKey(profile.stack_chips) !== chipsKey(draft.stack_chips)) {
         patch.stack_chips = draft.stack_chips || [];
@@ -145,11 +145,11 @@ export default function Profile() {
               >
                 choose from media…
               </button>
-              {draft.avatar_path && (
+              {draft.avatar_id != null && (
                 <button
                   type="button"
                   style={styles.btnGhostDanger}
-                  onClick={() => setField('avatar_path', null)}
+                  onClick={() => setDraft((d) => ({ ...d, avatar_id: null, avatar_path: null }))}
                 >
                   remove avatar
                 </button>
@@ -236,10 +236,10 @@ export default function Profile() {
 
       {pickerOpen && (
         <AvatarPicker
-          current={draft.avatar_path}
+          current={draft.avatar_id}
           onClose={() => setPickerOpen(false)}
           onPick={(item) => {
-            setField('avatar_path', item.url);
+            setDraft((d) => ({ ...d, avatar_id: item.id, avatar_path: item.url }));
             setPickerOpen(false);
           }}
         />
@@ -366,7 +366,7 @@ function AvatarPicker({ current, onClose, onPick }) {
           {items && items.length > 0 && (
             <div style={styles.pickerGrid}>
               {items.map((m) => {
-                const active = m.url === current;
+                const active = m.id === current;
                 return (
                   <button
                     key={m.id}

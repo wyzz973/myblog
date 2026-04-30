@@ -50,7 +50,6 @@ SITE_META_DEFAULTS = {
     "email": "hi@wangyang.dev",
     "github": "wangyang",
     "pronouns": None,
-    "avatar_path": None,
     "avatar_id": None,
     "typing_line": (
         "// building backends that don't flinch.\n// training models that ship."

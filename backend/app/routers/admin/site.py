@@ -19,7 +19,7 @@ class ProfileIn(BaseModel):
     bio: str | None = None
     location: str | None = None
     pronouns: str | None = None
-    avatar_path: str | None = None
+    avatar_id: int | None = None
     typing_line: str | None = None
     stack_chips: list[str] | None = None
 
@@ -56,14 +56,14 @@ def _apply(sm: SiteMeta, payload: BaseModel) -> None:
 
 
 async def _derive_avatar_path(s: AsyncSession, sm: SiteMeta) -> str | None:
-    """Resolve ``avatar_path`` from ``avatar_id`` if set, else the legacy column."""
+    """Resolve ``avatar_path`` from the linked Media row, if any."""
     if sm.avatar_id is None:
-        return sm.avatar_path
+        return None
     storage_path = (
         await s.execute(select(Media.storage_path).where(Media.id == sm.avatar_id))
     ).scalar_one_or_none()
     if storage_path is None:
-        return sm.avatar_path
+        return None
     return url_for(storage_path)
 
 

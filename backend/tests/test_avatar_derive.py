@@ -1,10 +1,10 @@
-"""Phase 7: avatar_path is derived from avatar_id at site response time.
+"""``avatar_path`` is derived from ``avatar_id`` at site response time.
 
-When ``site_meta.avatar_id`` is set, ``avatar_path`` in serialized site
-responses (public ``GET /api/profile`` and admin ``GET /api/admin/profile``)
-must be derived from the linked Media row's ``storage_path`` via
-``media_storage.url_for``. When ``avatar_id`` is NULL, fall back to the
-legacy ``avatar_path`` column.
+After 0009 dropped the legacy free-form ``avatar_path`` column, the FK
+to ``media`` is the only authoritative source. Public ``GET /api/profile``
+and admin ``GET /api/admin/profile`` derive ``avatar_path`` from the
+linked Media row's ``storage_path`` via ``media_storage.url_for``; when
+``avatar_id`` is NULL the response avatar_path is ``None``.
 """
 from datetime import UTC, datetime
 
@@ -36,14 +36,11 @@ async def admin_token(client):
 
 @pytest.fixture
 async def restore_site_meta():
-    """Reset legacy avatar_path + avatar_id after the test so other tests
-    see clean SiteMeta state."""
+    """Reset avatar_id + Media after the test so other tests see clean state."""
     yield
     async with AsyncSessionLocal() as s:
         await s.execute(
-            update(SiteMeta)
-            .where(SiteMeta.id == 1)
-            .values(avatar_id=None, avatar_path=None)
+            update(SiteMeta).where(SiteMeta.id == 1).values(avatar_id=None)
         )
         await s.execute(delete(Media))
         await s.commit()
@@ -65,20 +62,18 @@ async def _seed_media(s, *, storage_path: str) -> int:
     return row.id
 
 
-async def test_public_profile_avatar_id_none_uses_legacy_column(
+async def test_public_profile_avatar_id_none_returns_null(
     client, restore_site_meta
 ):
     async with AsyncSessionLocal() as s:
         await s.execute(
-            update(SiteMeta)
-            .where(SiteMeta.id == 1)
-            .values(avatar_id=None, avatar_path="/legacy/old-avatar.png")
+            update(SiteMeta).where(SiteMeta.id == 1).values(avatar_id=None)
         )
         await s.commit()
 
     r = await client.get("/api/profile")
     assert r.status_code == 200
-    assert r.json()["avatar_path"] == "/legacy/old-avatar.png"
+    assert r.json()["avatar_path"] is None
 
 
 async def test_public_profile_avatar_id_set_derives_from_media(
@@ -87,26 +82,21 @@ async def test_public_profile_avatar_id_set_derives_from_media(
     async with AsyncSessionLocal() as s:
         mid = await _seed_media(s, storage_path="ab/new-avatar.png")
         await s.execute(
-            update(SiteMeta)
-            .where(SiteMeta.id == 1)
-            .values(avatar_id=mid, avatar_path="/legacy/should-be-ignored.png")
+            update(SiteMeta).where(SiteMeta.id == 1).values(avatar_id=mid)
         )
         await s.commit()
 
     r = await client.get("/api/profile")
     assert r.status_code == 200
-    # Derived from media.storage_path → /media/<storage_path>, not the legacy column.
     assert r.json()["avatar_path"] == "/media/ab/new-avatar.png"
 
 
-async def test_admin_profile_avatar_id_none_uses_legacy_column(
+async def test_admin_profile_avatar_id_none_returns_null(
     client, admin_token, restore_site_meta
 ):
     async with AsyncSessionLocal() as s:
         await s.execute(
-            update(SiteMeta)
-            .where(SiteMeta.id == 1)
-            .values(avatar_id=None, avatar_path="/legacy/admin-old.png")
+            update(SiteMeta).where(SiteMeta.id == 1).values(avatar_id=None)
         )
         await s.commit()
 
@@ -115,7 +105,7 @@ async def test_admin_profile_avatar_id_none_uses_legacy_column(
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert r.status_code == 200
-    assert r.json()["avatar_path"] == "/legacy/admin-old.png"
+    assert r.json()["avatar_path"] is None
 
 
 async def test_admin_profile_avatar_id_set_derives_from_media(
@@ -124,9 +114,7 @@ async def test_admin_profile_avatar_id_set_derives_from_media(
     async with AsyncSessionLocal() as s:
         mid = await _seed_media(s, storage_path="cd/admin-avatar.png")
         await s.execute(
-            update(SiteMeta)
-            .where(SiteMeta.id == 1)
-            .values(avatar_id=mid, avatar_path="/legacy/ignored.png")
+            update(SiteMeta).where(SiteMeta.id == 1).values(avatar_id=mid)
         )
         await s.commit()
 
@@ -156,3 +144,43 @@ async def test_admin_profile_put_response_also_derives(
     )
     assert r.status_code == 200
     assert r.json()["avatar_path"] == "/media/ef/put-avatar.png"
+
+
+async def test_admin_profile_put_avatar_id_links_media(
+    client, admin_token, restore_site_meta
+):
+    """Setting avatar_id via PUT writes the FK and the response uses the new derive."""
+    async with AsyncSessionLocal() as s:
+        mid = await _seed_media(s, storage_path="gh/picked.png")
+        await s.commit()
+
+    r = await client.put(
+        "/api/admin/profile",
+        json={"avatar_id": mid},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["avatar_id"] == mid
+    assert body["avatar_path"] == "/media/gh/picked.png"
+
+
+async def test_admin_profile_put_avatar_id_none_clears_avatar(
+    client, admin_token, restore_site_meta
+):
+    async with AsyncSessionLocal() as s:
+        mid = await _seed_media(s, storage_path="ij/initial.png")
+        await s.execute(
+            update(SiteMeta).where(SiteMeta.id == 1).values(avatar_id=mid)
+        )
+        await s.commit()
+
+    r = await client.put(
+        "/api/admin/profile",
+        json={"avatar_id": None},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["avatar_id"] is None
+    assert body["avatar_path"] is None
