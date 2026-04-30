@@ -40,28 +40,26 @@ WIPE_ORDER = [
 
 
 SITE_META_DEFAULTS = {
-    "handle": "wangyang",
-    "name": "汪洋",
-    "name_en": "Wang Yang",
-    "role": "Backend / AI Full-Stack Engineer",
-    "tagline": "Backends that don't flinch. Models that ship.",
-    "bio": "I build backend systems and AI agents.",
-    "location": "Hangzhou, CN",
-    "email": "hi@wangyang.dev",
-    "github": "wangyang",
+    "handle": "admin",
+    "name": "",
+    "name_en": "",
+    "role": "",
+    "tagline": "",
+    "bio": "",
+    "location": "",
+    "email": "",
+    "github": "",
     "pronouns": None,
     "avatar_id": None,
-    "typing_line": (
-        "// building backends that don't flinch.\n// training models that ship."
-    ),
-    "stack_chips": ["Java", "Python", "PyTorch", "Agents", "Segmentation"],
-    "footer_note": "© 2026 Wang Yang · hand-coded · cookie-less analytics",
+    "typing_line": "",
+    "stack_chips": [],
+    "footer_note": "",
     "default_theme": "dark",
     "accent_color": "oklch(82% 0.17 152)",
     "accent2_color": "oklch(80% 0.15 70)",
     "violet_color": "oklch(72% 0.18 295)",
     "danger_color": "oklch(70% 0.2 25)",
-    "launched_at": date(2023, 1, 1),
+    # launched_at is filled at wipe time, not module load time.
     "pet_config": {},
     "pending_delete_at": None,
 }
@@ -92,9 +90,11 @@ async def wipe_site_content(s: AsyncSession) -> dict:
         rows_destroyed += res.rowcount or 0
         tables_wiped += 1
 
-    # Step 3: reset site_meta to defaults.
+    # Step 3: reset site_meta to defaults (launched_at = today).
     await s.execute(
-        update(SiteMeta).where(SiteMeta.id == 1).values(**SITE_META_DEFAULTS)
+        update(SiteMeta).where(SiteMeta.id == 1).values(
+            **SITE_META_DEFAULTS, launched_at=date.today(),
+        )
     )
     await s.flush()
     return {"tables_wiped": tables_wiped, "rows_destroyed_total": rows_destroyed}

@@ -200,7 +200,7 @@ async def test_download_path_traversal_rejected(client, admin_token, cleanup_job
 
 # --- POST /api/admin/danger/delete-site, /cancel, GET /status ---
 
-HANDLE = "wangyang"
+HANDLE = "admin"  # site_meta.handle default after cli.DEFAULT_PROJECTS clean-up
 
 
 async def test_delete_site_unauthenticated_401(client, cleanup_jobs):

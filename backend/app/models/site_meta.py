@@ -14,9 +14,9 @@ class SiteMeta(Base, TimestampMixin):
     __table_args__ = (CheckConstraint("id = 1", name="ck_site_meta_singleton"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
-    handle: Mapped[str] = mapped_column(String(64), nullable=False, default="wangyang")
-    name: Mapped[str] = mapped_column(String(64), nullable=False, default="汪洋")
-    name_en: Mapped[str] = mapped_column(String(64), nullable=False, default="Wang Yang")
+    handle: Mapped[str] = mapped_column(String(64), nullable=False, default="admin")
+    name: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    name_en: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     role: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     tagline: Mapped[str] = mapped_column(String(256), nullable=False, default="")
     bio: Mapped[str] = mapped_column(Text, nullable=False, default="")

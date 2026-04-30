@@ -38,11 +38,30 @@ def _register_arq_tasks() -> None:
 @pytest.fixture
 async def reseed_after():
     """Use in tests that wipe site content. Restores CLI bootstrap seed
-    (tags, site_meta, projects) at teardown so alphabetically-later tests
-    that depend on a seeded Tag row still pass."""
+    (site_meta singleton + the 'devtools' fixture tag) at teardown so
+    alphabetically-later tests that depend on a seeded Tag row still pass."""
     yield
     from app.cli import _seed_bootstrap
     await _seed_bootstrap()
+    await _ensure_devtools_tag_exists()
+
+
+async def _ensure_devtools_tag_exists() -> None:
+    """The 'devtools' tag is referenced by post fixtures (GOOD_MD, export
+    builder seeds). It used to come from cli.DEFAULT_TAGS but the project
+    no longer ships seeded tags, so tests provision it directly."""
+    from sqlalchemy import select
+    from app.db import AsyncSessionLocal
+    from app.models import Tag
+    async with AsyncSessionLocal() as s:
+        existing = (
+            await s.execute(select(Tag).where(Tag.slug == "devtools"))
+        ).scalar_one_or_none()
+        if existing is None:
+            s.add(Tag(slug="devtools", name="devtools", color="#7dd3a4", sort_order=0))
+            await s.commit()
+
+
 
 
 @pytest.fixture
@@ -60,6 +79,10 @@ async def client(redis) -> AsyncIterator[AsyncClient]:
     """httpx.AsyncClient with the app's get_redis dependency overridden to fakeredis."""
     from app import db as _db
     from app.redis import get_redis
+
+    # Most async tests live behind this fixture and reference 'devtools' in
+    # post frontmatter. Ensure the tag exists before each test (idempotent).
+    await _ensure_devtools_tag_exists()
 
     app = create_app()
 

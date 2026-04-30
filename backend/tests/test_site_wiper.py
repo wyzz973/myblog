@@ -69,8 +69,9 @@ async def seeded_site(tmp_path, monkeypatch):
         # now entry
         s.add(NowEntry(body_md="hi", listening="", reading="",
                        is_current=True, created_at=datetime.now(UTC)))
-        # contrib_day
-        s.add(ContribDay(day=datetime.now(UTC).date(), count=3))
+        # contrib_day — pick a future date that real GitHub-sync data won't touch
+        from datetime import timedelta
+        s.add(ContribDay(day=datetime.now(UTC).date() + timedelta(days=400), count=3))
         # like
         s.add(LikeEvent(post_id="wipetest", ip_hash="abc",
                         day=datetime.now(UTC).date(), created_at=datetime.now(UTC)))
@@ -78,10 +79,19 @@ async def seeded_site(tmp_path, monkeypatch):
         s.add(HitEvent(path="/", created_at=datetime.now(UTC)))
         s.add(HitDaily(date=datetime.now(UTC).date(), path="/",
                        hits=3, referrers_top=[], countries_top=[]))
-        # integration
-        s.add(Integration(name="github", secret_encrypted="x",
-                          extra_json={}, created_at=datetime.now(UTC),
-                          updated_at=datetime.now(UTC)))
+        # integration — upsert so a pre-configured prod PAT (if present) is
+        # overwritten with a placeholder that the wipe test can verify is
+        # deleted, instead of a duplicate-PK error from the fixture.
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        await s.execute(
+            pg_insert(Integration)
+            .values(name="github", secret_encrypted="x", extra_json={},
+                    created_at=datetime.now(UTC), updated_at=datetime.now(UTC))
+            .on_conflict_do_update(
+                index_elements=[Integration.name],
+                set_={"secret_encrypted": "x", "extra_json": {}},
+            )
+        )
         # media file on disk + DB row
         bucket_dir = tmp_path / "aa"
         bucket_dir.mkdir(parents=True, exist_ok=True)
@@ -142,8 +152,8 @@ async def test_wipe_resets_site_meta_to_defaults(seeded_site, reseed_after):
         await s.commit()
     async with AsyncSessionLocal() as s:
         sm = (await s.execute(select(SiteMeta).where(SiteMeta.id == 1))).scalar_one()
-    assert sm.handle == "wangyang"
-    assert sm.name == "汪洋"
+    assert sm.handle == "admin"
+    assert sm.name == ""
     assert sm.pending_delete_at is None
     assert sm.avatar_id is None
 

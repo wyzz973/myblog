@@ -15,11 +15,10 @@ async def auth(client):
 # ---------------------------------------------------------------------------
 
 
-async def test_tags_list_returns_seeded(client, auth):
+async def test_tags_list_returns_array(client, auth):
     r = await client.get("/api/admin/tags", headers=auth)
     assert r.status_code == 200
-    body = r.json()
-    assert any(t["slug"] == "backend" for t in body)
+    assert isinstance(r.json(), list)
 
 
 async def test_tags_create_patch_delete(client, auth):
@@ -69,10 +68,10 @@ async def test_tags_reorder_rejects_bad_payload(client, auth):
 # ---------------------------------------------------------------------------
 
 
-async def test_projects_list_seeded(client, auth):
+async def test_projects_list_returns_array(client, auth):
     r = await client.get("/api/admin/projects", headers=auth)
     assert r.status_code == 200
-    assert len(r.json()) >= 1
+    assert isinstance(r.json(), list)
 
 
 async def test_projects_create_patch_delete(client, auth):

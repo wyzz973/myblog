@@ -16,51 +16,12 @@ seed_app = typer.Typer(no_args_is_help=True)
 app.add_typer(seed_app, name="seed")
 
 
-DEFAULT_TAGS = [
-    {"slug": "backend", "name": "backend", "color": "#7aa7ff"},
-    {"slug": "ai", "name": "ai", "color": "#b794ff"},
-    {"slug": "ml", "name": "ml", "color": "#ffb86b"},
-    {"slug": "devtools", "name": "devtools", "color": "#7dd3a4"},
-    {"slug": "infra", "name": "infra", "color": "#f47174"},
-]
-
-DEFAULT_PROJECTS = [
-    (
-        "segformer-lite",
-        "Tiny, quant-friendly segmentation model. 3.2MB, runs on ESP32-S3.",
-        "Python",
-        1240,
-        "active",
-    ),
-    (
-        "agentkit-jvm",
-        "LangChain-style agent primitives, native Java. Zero Python in prod.",
-        "Java",
-        812,
-        "active",
-    ),
-    (
-        "pghelper-debug",
-        "Runtime diagnostic for PageHelper — tells you why your page didn't page.",
-        "Java",
-        203,
-        "maintained",
-    ),
-    (
-        "dotfiles",
-        "Terminal, editor, and kernel tunings I run on every box.",
-        "Shell",
-        96,
-        "active",
-    ),
-    (
-        "term-i18n",
-        "Lint your SSH/locale config across a fleet. Catches the Termius bug at scale.",
-        "Go",
-        61,
-        "active",
-    ),
-]
+# No default seed content. Tags are user-created in admin; projects come from
+# the GitHub integration sync. The bootstrap seeder still creates the
+# site_meta singleton row but with empty content fields so the operator fills
+# real values via the admin UI.
+DEFAULT_TAGS: list[dict] = []
+DEFAULT_PROJECTS: list[tuple] = []
 
 
 async def _seed_admin(email: str, password: str) -> None:
@@ -114,25 +75,7 @@ async def _seed_bootstrap() -> None:
             await s.execute(select(SiteMeta).where(SiteMeta.id == 1))
         ).scalar_one_or_none()
         if sm is None:
-            sm = SiteMeta(
-                id=1,
-                handle="wangyang",
-                name="汪洋",
-                name_en="Wang Yang",
-                role="Backend / AI Full-Stack Engineer",
-                tagline="Backends that don't flinch. Models that ship.",
-                bio="I build backend systems and AI agents.",
-                location="Hangzhou, CN",
-                email="hi@wangyang.dev",
-                github="wangyang",
-                typing_line=(
-                    "// building backends that don't flinch.\n"
-                    "// training models that ship."
-                ),
-                stack_chips=["Java", "Python", "PyTorch", "Agents", "Segmentation"],
-                footer_note="© 2026 Wang Yang · hand-coded · cookie-less analytics",
-                launched_at=date(2023, 1, 1),
-            )
+            sm = SiteMeta(id=1, handle="admin", launched_at=date.today())
             s.add(sm)
 
         # projects
