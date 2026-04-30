@@ -9,7 +9,7 @@ from app.workers.tasks.danger import (
     prune_old_exports,
 )
 from app.workers.tasks.email import send_email_task
-from app.workers.tasks.github import sync_github_contrib
+from app.workers.tasks.github import sync_github_contrib, sync_github_repos
 from app.workers.tasks.housekeeping import prune_event_log
 from app.workers.tasks.posts import publish_scheduled_posts, recompute_post_word_counts
 
@@ -24,4 +24,5 @@ __all__ = [
     "recompute_post_word_counts",
     "send_email_task",
     "sync_github_contrib",
+    "sync_github_repos",
 ]

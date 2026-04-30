@@ -87,9 +87,10 @@ async def sync_github(
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> dict:
-    from app.workers.tasks import sync_github_contrib
+    from app.workers.tasks import sync_github_contrib, sync_github_repos
     try:
-        result = await sync_github_contrib({})
+        contrib = await sync_github_contrib({})
+        repos = await sync_github_repos({})
     except Exception as e:  # noqa: BLE001
         await write_event(
             s, type="integration.github.failed", actor=_admin.email,
@@ -100,10 +101,14 @@ async def sync_github(
     row = await svc.get(s, name="github")
     await write_event(
         s, type="integration.github.synced", actor=_admin.email,
-        meta={"manual": True, **result},
+        meta={"manual": True, **contrib, "repos": repos.get("count", 0)},
     )
     await s.commit()
-    return {**result, "last_synced_at": row.last_synced_at.isoformat() if row and row.last_synced_at else None}
+    return {
+        **contrib,
+        "repos_synced": repos.get("count", 0),
+        "last_synced_at": row.last_synced_at.isoformat() if row and row.last_synced_at else None,
+    }
 
 
 @router.get("/integrations/anthropic", response_model=AnthropicIntegrationGet)

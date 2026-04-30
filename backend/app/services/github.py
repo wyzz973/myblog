@@ -1,4 +1,4 @@
-"""GitHub GraphQL client (only contribution counts; YAGNI for the rest)."""
+"""GitHub GraphQL client: contribution counts + owned public repos."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -100,4 +100,61 @@ async def fetch_contributions(token: str, login: str, weeks: int = 52) -> list[d
             out.append({"day": day, "count": count, "level": _level(count)})
     if weeks > 0 and len(out) > weeks * 7:
         out = out[-weeks * 7 :]
+    return out
+
+
+async def fetch_repos(token: str, login: str, limit: int = 30) -> list[dict]:
+    """Returns the user's public, owner-affiliated repos sorted by stars desc.
+
+    Each item: {name, description, lang, stars, archived, fork}.
+    """
+    query = """
+    query($login: String!, $limit: Int!) {
+      user(login: $login) {
+        repositories(
+          first: $limit,
+          ownerAffiliations: OWNER,
+          privacy: PUBLIC,
+          orderBy: {field: STARGAZERS, direction: DESC}
+        ) {
+          nodes {
+            name
+            description
+            primaryLanguage { name }
+            stargazerCount
+            isArchived
+            isFork
+          }
+        }
+      }
+    }
+    """
+    headers = {"Authorization": f"bearer {token}"}
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            API,
+            json={"query": query, "variables": {"login": login, "limit": limit}},
+            headers=headers,
+            timeout=HTTP_TIMEOUT,
+        )
+    if r.status_code != 200:
+        log.warning("github.repos_http_error", status=r.status_code, body=r.text[:256], login=login)
+        return []
+    payload = r.json()
+    if payload.get("errors"):
+        log.warning("github.repos_graphql_error", errors=payload["errors"], login=login)
+        return []
+    user = payload.get("data", {}).get("user")
+    if user is None:
+        return []
+    out: list[dict] = []
+    for n in user["repositories"]["nodes"]:
+        out.append({
+            "name": n["name"],
+            "description": n.get("description") or "",
+            "lang": (n.get("primaryLanguage") or {}).get("name") or "",
+            "stars": int(n["stargazerCount"]),
+            "archived": bool(n["isArchived"]),
+            "fork": bool(n["isFork"]),
+        })
     return out
