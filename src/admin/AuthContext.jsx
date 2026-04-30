@@ -1,7 +1,31 @@
-import { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import { apiAdmin, getToken, setToken, clearToken } from '../api/admin.js';
 
 const AuthContext = createContext(null);
+
+// Install once: any /api/admin/* response with 401 clears the token and bounces
+// to the login screen, so a stale JWT doesn't leave the app stuck on an
+// unrecoverable error card. Patch is idempotent across HMR reloads.
+function installAuthFetchInterceptor(onUnauthorized) {
+  if (typeof window === 'undefined') return;
+  if (window.__myblogFetchPatched) {
+    window.__myblogOnUnauthorized = onUnauthorized;
+    return;
+  }
+  const original = window.fetch.bind(window);
+  window.__myblogOnUnauthorized = onUnauthorized;
+  window.__myblogFetchPatched = true;
+  window.fetch = async (input, init) => {
+    const r = await original(input, init);
+    if (r.status === 401) {
+      const url = typeof input === 'string' ? input : input?.url || '';
+      if (url.includes('/api/admin/') && !url.includes('/api/admin/auth/login')) {
+        window.__myblogOnUnauthorized?.();
+      }
+    }
+    return r;
+  };
+}
 
 export function AuthProvider({ children }) {
   const [token, setTokenState] = useState(() => getToken());
@@ -37,6 +61,16 @@ export function AuthProvider({ children }) {
     } catch {
       /* ignore */
     }
+  }, []);
+
+  useEffect(() => {
+    installAuthFetchInterceptor(() => {
+      clearToken();
+      setTokenState(null);
+      if (window.location.pathname.startsWith('/admin') && window.location.pathname !== '/admin') {
+        window.location.replace('/admin');
+      }
+    });
   }, []);
 
   const value = useMemo(
