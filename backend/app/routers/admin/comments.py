@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import current_admin, require_scope
-from app.models import Account, SiteMeta
+from app.models import Account, Post, SiteMeta
 from app.schemas.comment import (
     AdminCommentItem,
     AdminCommentPatchRequest,
@@ -30,9 +30,17 @@ async def list_comments(
     rows = await comments.list_admin(
         s, status=status, post_id=post_id, limit=limit, offset=offset
     )
+    post_ids = {r.post_id for r in rows}
+    titles: dict[str, str] = {}
+    if post_ids:
+        title_rows = (
+            await s.execute(_select(Post.id, Post.title).where(Post.id.in_(post_ids)))
+        ).all()
+        titles = {pid: title for pid, title in title_rows}
     return [
         AdminCommentItem(
-            id=r.id, post_id=r.post_id, parent_id=r.parent_id,
+            id=r.id, post_id=r.post_id, post_title=titles.get(r.post_id),
+            parent_id=r.parent_id,
             who=r.who, email_hash=r.email_hash, body=r.body,
             status=r.status, flag=r.flag, actor=r.actor, created_at=r.created_at,
         )

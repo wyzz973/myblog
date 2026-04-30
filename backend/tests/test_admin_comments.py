@@ -62,8 +62,12 @@ async def test_admin_list_all_no_filter(client, admin_token, seed_post):
     )
     assert r.status_code == 200
     items = r.json()
-    statuses = [c["status"] for c in items if c["post_id"] == seed_post]
+    rows_for_seed = [c for c in items if c["post_id"] == seed_post]
+    statuses = [c["status"] for c in rows_for_seed]
     assert sorted(statuses) == ["approved", "pending", "spam"]
+    # Every row must include the joined post title (P9b: replaces raw post_id
+    # with a readable label in the moderation UI).
+    assert all(c.get("post_title") for c in rows_for_seed)
 
 
 async def test_admin_list_filter_by_status(client, admin_token, seed_post):

@@ -40,6 +40,7 @@ PublicCommentItem.model_rebuild()
 class AdminCommentItem(_Strict):
     id: int
     post_id: str
+    post_title: str | None
     parent_id: int | None
     who: str
     email_hash: str | None

@@ -155,7 +155,9 @@ export default function Comments() {
                   <StatusPill status={c.status} />
                 </div>
                 <div style={styles.meta}>
-                  <span style={styles.metaLink}>post: {c.post_id}</span>
+                  <span style={styles.metaLink} title={c.post_id}>
+                    post: {c.post_title || c.post_id}
+                  </span>
                   <span style={styles.dim}>·</span>
                   <span style={styles.dim}>{fmtDate(c.created_at)}</span>
                   <span style={styles.dim}>· #{c.id}</span>
