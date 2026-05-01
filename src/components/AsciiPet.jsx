@@ -130,7 +130,7 @@ function Dots() {
   return <span>{'.'.repeat(n)}</span>;
 }
 
-export default function AsciiPet() {
+export default function AsciiPet({ hint = null }) {
   const [bodyKey, setBodyKey] = useState(() => localStorage.getItem('pet.body') || 'capybara');
   const body = BODY[bodyKey] || BODY.capybara;
   const [state, setState] = useState('idle');
@@ -384,12 +384,16 @@ export default function AsciiPet() {
       onMouseEnter={() => { if (mini) setPeeking(true); }}
       onMouseLeave={() => { if (mini) setPeeking(false); }}
     >
-      {speech && !mini && (
-        <div className="clawd-bubble" style={{ borderColor: color, color }}>
-          <span>{speech.thinking ? <Dots /> : speech.text}</span>
-          <span className="clawd-bubble-arrow" style={{ '--bc': color }} />
-        </div>
-      )}
+      {(() => {
+        const bubbleText = speech?.text || hint?.text;
+        const bubbleThinking = speech?.thinking;
+        return bubbleText && !mini ? (
+          <div className="clawd-bubble" style={{ borderColor: color, color }}>
+            <span>{bubbleThinking ? <Dots /> : bubbleText}</span>
+            <span className="clawd-bubble-arrow" style={{ '--bc': color }} />
+          </div>
+        ) : null;
+      })()}
 
       {cfg.icon && !mini && (
         <div className="clawd-icon" style={{ color }}>{cfg.icon}</div>

@@ -59,7 +59,7 @@ function CodeBlock({ code }) {
   );
 }
 
-export default function Reader({ post: postSummary, onBack, onOpenPost }) {
+export default function Reader({ post: postSummary, onBack, onOpenPost, onSelection }) {
   const scrollRef = useRef(null);
   const [progress, setProgress] = useState(0);
   const [activeHeading, setActiveHeading] = useState(0);
@@ -108,6 +108,27 @@ export default function Reader({ post: postSummary, onBack, onOpenPost }) {
     if (!post?.id) return;
     sendHit({ path: window.location.pathname, post_id: post.id });
   }, [post?.id]);
+
+  useEffect(() => {
+    if (!onSelection) return undefined;
+    let timer = null;
+    const handler = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const sel = (window.getSelection?.()?.toString() || '').trim();
+        if (sel.length >= 5) {
+          onSelection({ text: 'click pet to explain ↑', kind: 'explain' });
+          // auto-clear after 2s
+          setTimeout(() => onSelection(null), 2000);
+        }
+      }, 200);
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => {
+      document.removeEventListener('selectionchange', handler);
+      clearTimeout(timer);
+    };
+  }, [onSelection]);
 
   if (!post) return null;
   const isZh = post.lang === 'zh';

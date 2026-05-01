@@ -26,6 +26,7 @@ export default function App() {
   });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [konamiOn, setKonamiOn] = useState(false);
+  const [petHint, setPetHint] = useState(null);
 
   const setTheme = useCallback((v) => {
     setThemeRaw((prev) => {
@@ -146,7 +147,7 @@ export default function App() {
   }, [paletteOpen, reading, posts, focusIdx, openPost, closePost, setTheme]);
 
   const Page = reading ? (
-    <Reader post={reading} onBack={closePost} onOpenPost={openPost} />
+    <Reader post={reading} onBack={closePost} onOpenPost={openPost} onSelection={setPetHint} />
   ) : (
     <>
       <HomeA
@@ -201,7 +202,7 @@ export default function App() {
         setAccent={setAccent}
       />
       <Konami on={konamiOn} />
-      <AsciiPet />
+      <AsciiPet hint={petHint} />
     </div>
   );
 }
