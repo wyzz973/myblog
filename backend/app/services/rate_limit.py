@@ -87,7 +87,7 @@ async def check_pet(
       hard_ceiling_per_day on a global daily counter so a runaway script
       can't burn the LLM quota.
 
-    Side-effect note: counters are incremented even when a layer breaches.
+    Side-effect note: counters are incremented even when a limit breaches.
     Treating "still within window" as the state (not "consumed only on
     success") prevents oscillation across retries.
     """
