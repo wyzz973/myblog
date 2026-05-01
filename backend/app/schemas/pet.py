@@ -75,6 +75,7 @@ class PetConfig(_Strict):
     per_ip_per_day: int = Field(default=30, ge=1, le=10000)
     global_per_day: int = Field(default=500, ge=10, le=100000)
     max_context_chars: int = Field(default=500, ge=100, le=2000)
+    summary_max_chars: int = Field(default=200, ge=50, le=1000)
     enable_article_context: bool = True
     enabled: bool = True
     species: str = Field(default="cat", max_length=32)

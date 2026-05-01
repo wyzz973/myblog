@@ -25,14 +25,33 @@ class _SafeDict(dict):
         return "{" + key + "}"
 
 
-def _safe_format(template: str, /, **vars: str) -> str:
-    """`str.format`-like substitution that ignores unknown `{name}`s.
-
-    Also avoids interpreting braces inside substituted values: we use
-    Formatter.vformat with a SafeDict so the substitution pass replaces
-    only the explicit placeholders we provide.
+class _SafeFormatter(string.Formatter):
+    """Formatter that:
+    - returns "{key}" literal for unknown keys (via _SafeDict)
+    - disallows attribute/index traversal: {title.foo} or {title[0]} are
+      treated as the field name "title.foo" / "title[0]" — looked up in
+      the SafeDict, not found, returned literal as-is.
+    - never raises on malformed templates (returns the template unchanged
+      if vformat fails for any reason).
     """
-    return string.Formatter().vformat(template, (), _SafeDict(**vars))
+
+    def get_field(self, field_name, args, kwargs):
+        # Disable attribute/index access by treating the entire name as a key.
+        return self.get_value(field_name, args, kwargs), field_name
+
+
+def _safe_format(template: str, /, **values: str) -> str:
+    """str.format-style substitution that ignores unknown {name}s and never
+    raises on admin-typed garbage templates.
+
+    Substituted values are not re-interpreted (literal { and } in values
+    are passed through unchanged). Attribute and index traversal in
+    placeholders is disabled — {title.foo} stays literal.
+    """
+    try:
+        return _SafeFormatter().vformat(template, (), _SafeDict(**values))
+    except (IndexError, ValueError, KeyError):
+        return template
 
 
 def truncate_selection(selection: str | None, max_chars: int) -> str:
@@ -63,7 +82,7 @@ def build_system(
         template,
         title=title or "",
         tag=tag or "",
-        summary=(summary or "")[:200],
+        summary=(summary or "")[:cfg.summary_max_chars],
         selection=truncate_selection(selection, cfg.max_context_chars),
     )
     return f"{base}\n\n{body}"

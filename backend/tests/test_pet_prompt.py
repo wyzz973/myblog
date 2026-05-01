@@ -48,6 +48,7 @@ def test_build_system_unknown_species_falls_back_to_system_prompt():
     out = build_system(cfg, species="nonexistent", mode="greet", title=None,
                        tag=None, summary=None, selection=None)
     assert cfg.system_prompt in out
+    assert "Persona:" not in out  # didn't accidentally render BASE scaffold
 
 
 def test_build_system_summary_react_injects_title_and_summary():
@@ -99,3 +100,40 @@ def test_infer_mode_with_selection_returns_selection_qa():
 def test_infer_mode_selection_without_post_still_returns_selection_qa():
     """Selection without post_id is unusual but should still produce qa."""
     assert infer_mode(post_id=None, selection="x") == "selection_qa"
+
+
+def test_infer_mode_empty_string_selection_treated_as_no_selection():
+    """selection='' (frontend may send empty string) routes by post_id."""
+    assert infer_mode(post_id="hello", selection="") == "summary_react"
+    assert infer_mode(post_id=None, selection="") == "greet"
+
+
+def test_safe_format_blocks_attribute_traversal():
+    """{title.__class__} must NOT leak Python internals."""
+    out = _safe_format("X: {title.__class__}", title="hi")
+    # The whole "{title.__class__}" stays literal because attribute access
+    # is disabled and "title.__class__" is not a known key.
+    assert "{title.__class__}" in out
+    assert "<class" not in out
+
+
+def test_safe_format_blocks_index_access():
+    out = _safe_format("X: {title[0]}", title="hi")
+    assert "{title[0]}" in out
+
+
+def test_safe_format_returns_template_on_malformed():
+    """Lone braces / numeric refs must not raise."""
+    assert _safe_format("hello {", title="x") == "hello {"
+    assert _safe_format("hello }", title="x") == "hello }"
+    assert _safe_format("hello {0}", title="x") == "hello {0}"
+
+
+def test_build_system_uses_summary_max_chars_from_config():
+    cfg = PetConfig()
+    cfg.summary_max_chars = 50
+    long_summary = "a" * 300
+    out = build_system(cfg, species="cat", mode="summary_react",
+                       title="T", tag="t", summary=long_summary, selection=None)
+    assert "a" * 50 in out
+    assert "a" * 51 not in out
