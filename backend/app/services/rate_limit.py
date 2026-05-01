@@ -73,15 +73,36 @@ async def check_pet(
     per_ip_per_min: int,
     per_ip_per_day: int,
     global_per_day: int,
+    unlimited: bool = False,
+    hard_ceiling_per_day: int = 20000,
 ) -> str | None:
-    """Three-layer rate check for pet summon endpoint.
+    """Rate check for pet summon endpoint.
 
     Returns the name of the first breached layer, or None if all pass.
-    All three counters are incremented as a side effect (so we don't double-count
-    on the next request after a breach — we treat "still within window" as the
-    state, not "consumed only after success").
+
+    Layered behavior:
+    - unlimited=False: enforce per_ip_per_min / per_ip_per_day / global_per_day
+      (incremented as side effect — see note below).
+    - unlimited=True: skip the three layers entirely; only enforce
+      hard_ceiling_per_day on a global daily counter so a runaway script
+      can't burn the LLM quota.
+
+    Side-effect note: counters are incremented even when a layer breaches.
+    Treating "still within window" as the state (not "consumed only on
+    success") prevents oscillation across retries.
     """
     today = datetime.now(UTC).strftime("%Y%m%d")
+
+    if unlimited:
+        ceiling_key = f"rl:pet:ceiling:{today}"
+        pipe = redis.pipeline()
+        pipe.incr(ceiling_key)
+        pipe.expire(ceiling_key, 86400, nx=True)
+        count, _ = await pipe.execute()
+        if int(count) > hard_ceiling_per_day:
+            return "hard_ceiling"
+        return None
+
     keys = [
         ("per_ip_per_min", f"rl:pet:ip:{ip}:1m", per_ip_per_min, 60),
         ("per_ip_per_day", f"rl:pet:ip:{ip}:1d", per_ip_per_day, 86400),
@@ -92,7 +113,6 @@ async def check_pet(
         pipe.incr(k)
         pipe.expire(k, ttl, nx=True)
     results = await pipe.execute()
-    # results: [count1, _, count2, _, count3, _]
     counts = [results[0], results[2], results[4]]
     for (label, _, limit, _), count in zip(keys, counts, strict=True):
         if int(count) > limit:
