@@ -4,7 +4,31 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { buildSummonPayload } from './pet/payload.js';
-import { SPECIES, RARITY_ORDER, RARITY_COLOR, byRarity, STATE_EYE } from './pet/species.js';
+import { SPECIES, RARITY_COLOR, STATE_EYE } from './pet/species.js';
+
+// Tier weights used for the random visitor-pet roll. legendary is rare on
+// purpose so e.g. spotting a panda actually feels like a moment.
+const RARITY_WEIGHT = {
+  common:    50,
+  uncommon:  25,
+  rare:      15,
+  epic:      7,
+  legendary: 3,
+};
+
+function rollSpecies() {
+  // 2-step roll: pick a tier weighted by RARITY_WEIGHT, then uniform within tier.
+  const roll = Math.random() * 100;
+  let acc = 0;
+  let chosenTier = 'common';
+  for (const tier of Object.keys(RARITY_WEIGHT)) {
+    acc += RARITY_WEIGHT[tier];
+    if (roll < acc) { chosenTier = tier; break; }
+  }
+  const pool = Object.keys(SPECIES).filter((k) => SPECIES[k].rarity === chosenTier);
+  if (pool.length === 0) return 'cat';
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 const STATES = {
   idle:         { label: 'idle',         bob: 2.8, tint: null,      icon: null,  hint: 'idle' },
@@ -52,14 +76,18 @@ function Dots() {
 }
 
 export default function AsciiPet({ hint = null }) {
-  const [bodyKey, setBodyKey] = useState(() => {
+  // Each visitor gets ONE random pet — persisted in localStorage and
+  // never user-pickable. Clearing site data re-rolls. Legacy keys from
+  // the old "user picks species" era are honored if still valid.
+  const [bodyKey] = useState(() => {
     const saved = localStorage.getItem('pet.body');
-    if (!saved) return 'cat';
-    if (SPECIES[saved]) return saved;
-    if (LEGACY_BODY_MAP[saved] && SPECIES[LEGACY_BODY_MAP[saved]]) {
+    if (saved && SPECIES[saved]) return saved;
+    if (saved && LEGACY_BODY_MAP[saved] && SPECIES[LEGACY_BODY_MAP[saved]]) {
       return LEGACY_BODY_MAP[saved];
     }
-    return 'cat';
+    const rolled = rollSpecies();
+    try { localStorage.setItem('pet.body', rolled); } catch { /* ignore */ }
+    return rolled;
   });
   const body = SPECIES[bodyKey] || SPECIES.cat;
   const [state, setState] = useState('idle');
@@ -237,7 +265,6 @@ export default function AsciiPet({ hint = null }) {
           if (tempStateUntil.current <= Date.now()) setState('idle');
         }, duration);
       },
-      setBody: setBodyKey,
     };
     const onKey = (e) => {
       if (e.metaKey && e.key === 'k') window.__pet.trigger('juggling', 1500);
@@ -384,38 +411,28 @@ export default function AsciiPet({ hint = null }) {
             }}
           >×</button>
 
-          <div className="pet-panel-row" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="pet-panel-row" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div
               className="pet-panel-label"
               style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-4)' }}
-            >species</div>
-            {Object.entries(byRarity()).map(([rarity, list]) => (
-              <div key={rarity} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{
-                  fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase',
-                  color: RARITY_COLOR[rarity],
-                }}>{rarity}</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {list.map(({ key }) => (
-                    <button
-                      key={key}
-                      className={`pet-panel-chip ${key === bodyKey ? 'on' : ''} rarity-${rarity}`}
-                      onClick={() => { setBodyKey(key); localStorage.setItem('pet.body', key); }}
-                      style={{
-                        '--c': SPECIES[key].color,
-                        fontSize: 10, padding: '4px 7px',
-                        border: `1px solid ${rarity === 'legendary' ? '#f5b44c' : 'var(--line)'}`,
-                        borderRadius: 3,
-                        background: key === bodyKey ? `color-mix(in oklab, ${SPECIES[key].color} 14%, var(--bg-3))` : 'var(--bg-3)',
-                        color: key === bodyKey ? SPECIES[key].color : 'var(--fg-3)',
-                        cursor: 'pointer', whiteSpace: 'nowrap',
-                        fontFamily: "'JetBrains Mono', monospace",
-                      }}
-                    >{key}</button>
-                  ))}
-                </div>
-              </div>
-            ))}
+            >your buddy</div>
+            <div style={{
+              display: 'flex', alignItems: 'baseline', gap: 8,
+              padding: '6px 8px', borderRadius: 3,
+              border: `1px solid ${body.rarity === 'legendary' ? '#f5b44c' : 'var(--line)'}`,
+              background: `color-mix(in oklab, ${body.color} 12%, var(--bg-3))`,
+            }}>
+              <span style={{
+                fontSize: 13, color: body.color, fontFamily: "'JetBrains Mono', monospace",
+              }}>{bodyKey}</span>
+              <span style={{
+                fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase',
+                color: RARITY_COLOR[body.rarity],
+              }}>{body.rarity}</span>
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--fg-4)', lineHeight: 1.4 }}>
+              every visitor rolls one buddy at random — clear site data to re-roll.
+            </div>
           </div>
 
           <div className="pet-panel-row" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
