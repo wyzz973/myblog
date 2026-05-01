@@ -53,3 +53,12 @@ def test_pet_mode_literal_rejects_garbage():
     from typing import get_args
     valid = get_args(PetMode)
     assert set(valid) == {"greet", "summary_react", "selection_explain", "selection_qa"}
+
+
+def test_petconfig_partial_personas_dict_fills_per_species_defaults():
+    """If JSONB contains personas with only some species, missing species
+    fall back to DEFAULT_PERSONAS at the field level — not an error.
+    Guards future species roster changes against silent data loss."""
+    c = PetConfig(personas={"cat": "custom cat"})
+    assert c.personas.cat == "custom cat"
+    assert c.personas.dragon  # default filled at field level
