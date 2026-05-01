@@ -4,102 +4,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { buildSummonPayload } from './pet/payload.js';
-
-const BODY = {
-  capybara: {
-    name: 'Capybara', color: '#d4a574', rarity: 'rare',
-    base: [
-`   _________
-  /  {L}   {R}  \\
- |    {M}     |
-  \\_________/
-    U     U`,
-`   _________
-  /  {L}   {R}  \\
- |    {M}     |
-  \\_________/
-    U     U`,
-    ],
-  },
-  cat: {
-    name: 'Cat', color: '#e0a96d', rarity: 'common',
-    base: [
-`   /\\___/\\
-  (  {L} {R}  )
-  (   {M}   )
-   \\_____/
-    U   U`,
-`   /\\___/\\
-  (  {L} {R}  )
-  (   {M}   )
-   \\_____/
-    U   U`,
-    ],
-  },
-  dragon: {
-    name: 'Dragon', color: '#ff7a5c', rarity: 'legendary',
-    base: [
-`   /\\___/\\
-  ( {L}   {R} )
-  (    {M}   )
-  ~\\_______/~
-      ^^^`,
-`   /\\___/\\
-  ( {L}   {R} )
-  (    {M}   )
-  ~\\_______/~
-      ^^^`,
-    ],
-  },
-  octopus: {
-    name: 'Octopus', color: '#b89cf0', rarity: 'epic',
-    base: [
-`   _______
-  /  {L} {R}  \\
-  \\   {M}   /
-   \\|||||/
-  / | | | \\`,
-`   _______
-  /  {L} {R}  \\
-  \\   {M}   /
-   \\|||||/
- /  |  |  |  \\`,
-    ],
-  },
-  robot: {
-    name: 'Robot', color: '#7cc7f0', rarity: 'uncommon',
-    base: [
-` .-------.
- |  {L} {R}  |
- |   {M}   |
- \`-------'
-   ||  ||`,
-` .-------.
- |  {L} {R}  |
- |   {M}   |
- \`-------'
-   ||  ||`,
-    ],
-  },
-};
-
-const BODY_ORDER = ['capybara', 'cat', 'dragon', 'octopus', 'robot'];
+import { SPECIES, RARITY_ORDER, RARITY_COLOR, byRarity, STATE_EYE } from './pet/species.js';
 
 const STATES = {
-  idle:         { label: 'idle',         eyes: ['o','o'], mouth: '__', bob: 2.8, tint: null,      icon: null,  hint: 'idle' },
-  thinking:     { label: 'thinking',     eyes: ['o','o'], mouth: '..', bob: 1.4, tint: null,      icon: '?',   hint: 'thinking…' },
-  typing:       { label: 'typing',       eyes: ['·','·'], mouth: '__', bob: 0.6, tint: null,      icon: '⌨',   hint: 'typing' },
-  building:     { label: 'building',     eyes: ['o','o'], mouth: 'oo', bob: 0.4, tint: '#f5b44c', icon: '🔨',  hint: 'building' },
-  juggling:     { label: 'juggling',     eyes: ['^','^'], mouth: 'w',  bob: 0.3, tint: null,      icon: '●●',  hint: 'juggling agents' },
-  conducting:   { label: 'conducting',   eyes: ['^','^'], mouth: 'w',  bob: 0.3, tint: '#c48cf5', icon: '♫',   hint: 'conducting' },
-  error:        { label: 'error',        eyes: ['x','x'], mouth: 'o',  bob: 0.5, tint: '#ff5c5c', icon: '!',   hint: 'error' },
-  happy:        { label: 'happy',        eyes: ['^','^'], mouth: 'v',  bob: 1.2, tint: '#7dbf8e', icon: '✓',   hint: 'done' },
-  notification: { label: 'notification', eyes: ['>','<'], mouth: 'o',  bob: 0.8, tint: '#f5b44c', icon: '!',   hint: 'notify' },
-  sweeping:     { label: 'sweeping',     eyes: ['-','-'], mouth: '_',  bob: 0.8, tint: null,      icon: '🧹',  hint: 'sweeping' },
-  carrying:     { label: 'carrying',     eyes: ['o','o'], mouth: '_',  bob: 0.8, tint: null,      icon: '📦',  hint: 'carrying' },
-  sleeping:     { label: 'sleeping',     eyes: ['-','-'], mouth: '_',  bob: 0.4, tint: null,      icon: 'Z',   hint: 'sleeping…' },
-  yawning:      { label: 'yawning',      eyes: ['>','<'], mouth: 'O',  bob: 0.8, tint: null,      icon: '~',   hint: 'yawn…' },
-  startled:     { label: 'startled',     eyes: ['O','O'], mouth: 'O',  bob: 0.1, tint: '#f5b44c', icon: '!',   hint: '!' },
+  idle:         { label: 'idle',         bob: 2.8, tint: null,      icon: null,  hint: 'idle' },
+  thinking:     { label: 'thinking',     bob: 1.4, tint: null,      icon: '?',   hint: 'thinking…' },
+  typing:       { label: 'typing',       bob: 0.6, tint: null,      icon: '⌨',   hint: 'typing' },
+  building:     { label: 'building',     bob: 0.4, tint: '#f5b44c', icon: '🔨',  hint: 'building' },
+  juggling:     { label: 'juggling',     bob: 0.3, tint: null,      icon: '●●',  hint: 'juggling agents' },
+  conducting:   { label: 'conducting',   bob: 0.3, tint: '#c48cf5', icon: '♫',   hint: 'conducting' },
+  error:        { label: 'error',        bob: 0.5, tint: '#ff5c5c', icon: '!',   hint: 'error' },
+  happy:        { label: 'happy',        bob: 1.2, tint: '#7dbf8e', icon: '✓',   hint: 'done' },
+  notification: { label: 'notification', bob: 0.8, tint: '#f5b44c', icon: '!',   hint: 'notify' },
+  sweeping:     { label: 'sweeping',     bob: 0.8, tint: null,      icon: '🧹',  hint: 'sweeping' },
+  carrying:     { label: 'carrying',     bob: 0.8, tint: null,      icon: '📦',  hint: 'carrying' },
+  sleeping:     { label: 'sleeping',     bob: 0.4, tint: null,      icon: 'Z',   hint: 'sleeping…' },
+  yawning:      { label: 'yawning',      bob: 0.8, tint: null,      icon: '~',   hint: 'yawn…' },
+  startled:     { label: 'startled',     bob: 0.1, tint: '#f5b44c', icon: '!',   hint: '!' },
 };
 
 const TEST_STATES = [
@@ -107,18 +28,18 @@ const TEST_STATES = [
   'error','happy','notification','sweeping','carrying','sleeping',
 ];
 
-const PERSONA = {
-  capybara: 'a zen capybara lounging in hot logs',
-  cat: 'a sly cat that lives on HN',
-  dragon: 'an ancient dragon hoarding repos',
-  octopus: 'an 8-threaded octopus in async/await',
-  robot: 'a tiny robot that tails logs',
-};
-
 const QUIPS = ['meow.', 'purr…', 'have you committed?', 'seg loss ok ✓', '*yawn*'];
 
-function renderSprite(body, L, R, M) {
-  return body.replaceAll('{L}', L).replaceAll('{R}', R).replaceAll('{M}', M);
+const LEGACY_BODY_MAP = {
+  capybara: 'capybara',
+  cat: 'cat',
+  dragon: 'dragon',
+  octopus: 'octopus',
+  robot: 'robot',
+};
+
+function renderSprite(frame, eye) {
+  return frame.map((line) => line.replaceAll('{E}', eye)).join('\n');
 }
 
 function Dots() {
@@ -131,8 +52,16 @@ function Dots() {
 }
 
 export default function AsciiPet({ hint = null }) {
-  const [bodyKey, setBodyKey] = useState(() => localStorage.getItem('pet.body') || 'capybara');
-  const body = BODY[bodyKey] || BODY.capybara;
+  const [bodyKey, setBodyKey] = useState(() => {
+    const saved = localStorage.getItem('pet.body');
+    if (!saved) return 'cat';
+    if (SPECIES[saved]) return saved;
+    if (LEGACY_BODY_MAP[saved] && SPECIES[LEGACY_BODY_MAP[saved]]) {
+      return LEGACY_BODY_MAP[saved];
+    }
+    return 'cat';
+  });
+  const body = SPECIES[bodyKey] || SPECIES.cat;
   const [state, setState] = useState('idle');
   const [frame, setFrame] = useState(0);
   const [speech, setSpeech] = useState(null);
@@ -342,22 +271,20 @@ export default function AsciiPet({ hint = null }) {
           borderRadius: 20, cursor: 'pointer',
         }}
       >
-        bring {body.name.toLowerCase()} back
+        bring {bodyKey} back
       </button>
     );
   }
 
   const cfg = STATES[state] || STATES.idle;
-  let L = cfg.eyes[0];
-  let R = cfg.eyes[1];
+  let eye = STATE_EYE[state] || '·';
   if (state === 'idle') {
-    if (gaze.x < -0.3) { L = '◂'; R = '◂'; }
-    else if (gaze.x > 0.3) { L = '▸'; R = '▸'; }
-    else if (gaze.y < -0.3) { L = '°'; R = '°'; }
-    else if (gaze.y > 0.3) { L = '.'; R = '.'; }
+    if (gaze.x < -0.3) eye = '◂';
+    else if (gaze.x > 0.3) eye = '▸';
+    else if (gaze.y < -0.3) eye = '°';
+    else if (gaze.y > 0.3) eye = '.';
   }
-  const M = cfg.mouth;
-  const sprite = renderSprite(body.base[frame], L, R, M);
+  const sprite = renderSprite(body.frames[frame % body.frames.length], eye);
   const color = cfg.tint || body.color;
 
   const miniStyle = mini
@@ -457,29 +384,38 @@ export default function AsciiPet({ hint = null }) {
             }}
           >×</button>
 
-          <div className="pet-panel-row" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div className="pet-panel-row" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div
               className="pet-panel-label"
               style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-4)' }}
             >species</div>
-            <div className="pet-panel-grid" style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {BODY_ORDER.map((k) => (
-                <button
-                  key={k}
-                  className={`pet-panel-chip ${k === bodyKey ? 'on' : ''}`}
-                  onClick={() => { setBodyKey(k); localStorage.setItem('pet.body', k); }}
-                  style={{
-                    '--c': BODY[k].color,
-                    fontSize: 10, padding: '4px 7px', border: '1px solid var(--line)',
-                    borderRadius: 3,
-                    background: k === bodyKey ? `color-mix(in oklab, ${BODY[k].color} 14%, var(--bg-3))` : 'var(--bg-3)',
-                    color: k === bodyKey ? BODY[k].color : 'var(--fg-3)',
-                    cursor: 'pointer', whiteSpace: 'nowrap',
-                    fontFamily: "'JetBrains Mono', monospace",
-                  }}
-                >{BODY[k].name.toLowerCase()}</button>
-              ))}
-            </div>
+            {Object.entries(byRarity()).map(([rarity, list]) => (
+              <div key={rarity} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{
+                  fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase',
+                  color: RARITY_COLOR[rarity],
+                }}>{rarity}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {list.map(({ key }) => (
+                    <button
+                      key={key}
+                      className={`pet-panel-chip ${key === bodyKey ? 'on' : ''} rarity-${rarity}`}
+                      onClick={() => { setBodyKey(key); localStorage.setItem('pet.body', key); }}
+                      style={{
+                        '--c': SPECIES[key].color,
+                        fontSize: 10, padding: '4px 7px',
+                        border: `1px solid ${rarity === 'legendary' ? '#f5b44c' : 'var(--line)'}`,
+                        borderRadius: 3,
+                        background: key === bodyKey ? `color-mix(in oklab, ${SPECIES[key].color} 14%, var(--bg-3))` : 'var(--bg-3)',
+                        color: key === bodyKey ? SPECIES[key].color : 'var(--fg-3)',
+                        cursor: 'pointer', whiteSpace: 'nowrap',
+                        fontFamily: "'JetBrains Mono', monospace",
+                      }}
+                    >{key}</button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="pet-panel-row" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
