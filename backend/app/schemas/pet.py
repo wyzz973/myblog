@@ -55,7 +55,8 @@ class PetConfig(_Strict):
 
 
 class PublicPetConfig(_Strict):
-    species: str
+    species: str  # admin's preview/default species (legacy)
+    assigned_species: str  # deterministic per-visitor — bound to (ip, user_agent)
     hat: str
     tint: str
     enabled: bool
