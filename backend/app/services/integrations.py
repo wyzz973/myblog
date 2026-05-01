@@ -10,11 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Integration
 from app.services import secret_box
 
+ProviderName = Literal["github", "anthropic", "zhipu", "qwen", "doubao", "deepseek"]
+
 
 async def upsert(
     s: AsyncSession,
     *,
-    name: Literal["github", "anthropic"],
+    name: ProviderName,
     username: str | None = None,
     secret: str,
     extra: dict[str, Any] | None = None,
@@ -42,13 +44,13 @@ async def upsert(
     return row
 
 
-async def get(s: AsyncSession, *, name: str) -> Integration | None:
+async def get(s: AsyncSession, *, name: ProviderName) -> Integration | None:
     return (
         await s.execute(select(Integration).where(Integration.name == name))
     ).scalar_one_or_none()
 
 
-async def get_secret(s: AsyncSession, *, name: str) -> str | None:
+async def get_secret(s: AsyncSession, *, name: ProviderName) -> str | None:
     row = await get(s, name=name)
     if row is None:
         return None
@@ -58,7 +60,7 @@ async def get_secret(s: AsyncSession, *, name: str) -> str | None:
 async def set_status(
     s: AsyncSession,
     *,
-    name: str,
+    name: ProviderName,
     status: Literal["ok", "failed"],
     error: str | None,
 ) -> None:

@@ -105,6 +105,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   font-weight: 700; font-size: 12px;
   border-radius: 4px;
   box-shadow: 0 0 24px var(--accent-glow);
+  overflow: hidden;
 }
 .topbar nav { display: flex; gap: 18px; }
 .topbar nav a { color: var(--fg-3); }
@@ -565,6 +566,44 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   grid-auto-flow: column;
   grid-template-rows: repeat(7, 1fr);
   gap: 3px;
+  position: relative;
+}
+.contrib-tip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 8px));
+  background: var(--bg-3);
+  border: 1px solid color-mix(in oklab, var(--accent) 25%, var(--line));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--fg);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 30;
+  animation: contrib-tip-in 0.12s ease-out;
+}
+.contrib-tip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: var(--bg-3);
+  border-right: 1px solid color-mix(in oklab, var(--accent) 25%, var(--line));
+  border-bottom: 1px solid color-mix(in oklab, var(--accent) 25%, var(--line));
+}
+.contrib-tip-count { color: var(--accent); font-weight: 500; }
+.contrib-tip-date { color: var(--fg-3); font-size: 10px; margin-top: 2px; }
+@keyframes contrib-tip-in {
+  from { opacity: 0; transform: translate(-50%, calc(-100% - 4px)); }
+  to { opacity: 1; transform: translate(-50%, calc(-100% - 8px)); }
 }
 .contrib-cell {
   width: 11px; height: 11px;
@@ -601,6 +640,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: border-color 0.12s, transform 0.12s;
   cursor: pointer;
   display: flex; flex-direction: column; gap: 8px;
+  text-decoration: none;
+  color: inherit;
 }
 .proj-card:hover {
   border-color: var(--accent);
@@ -634,6 +675,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   font-size: 12px;
   display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px;
 }
+.footer-links button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+.footer-links button:hover { color: var(--accent); }
 
 /* ===== Variant B: Editorial-Terminal ===== */
 .layout-B .hero {
@@ -1004,6 +1055,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   background: var(--bg-2);
   text-decoration: none;
   transition: all 0.15s;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .contact-item:hover { border-color: var(--accent); background: var(--bg-3); transform: translateY(-2px); }
 .contact-k {
@@ -1022,9 +1077,6 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* scroll offset for section anchors */
 [id="writing"], [id="projects"], [id="now"], [id="contact"] { scroll-margin-top: 80px; }
 
-
-/* hide pet when reader is open */
-body:has(.reader-shell) .clawd-pet { display: none !important; }
 
 /* ===== Rich Reader ===== */
 .reader-shell {
@@ -1206,6 +1258,84 @@ body:has(.reader-shell) .clawd-pet { display: none !important; }
   color: var(--accent);
 }
 
+.reader-body h3 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  margin: 32px 0 14px;
+  font-weight: 500;
+}
+.reader-body.zh h3 { font-family: 'Noto Sans SC', monospace; }
+.reader-body h4 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--fg-2);
+  margin: 24px 0 12px;
+  font-weight: 500;
+}
+.reader-body.zh h4 { font-family: 'Noto Sans SC', monospace; }
+
+.reader-body a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed color-mix(in oklab, var(--accent) 50%, transparent);
+}
+.reader-body a:hover { border-bottom-style: solid; }
+
+.reader-list {
+  margin: 0 0 22px;
+  padding-left: 24px;
+}
+.reader-list li { margin-bottom: 8px; }
+.reader-list li::marker { color: var(--fg-3); }
+
+.reader-quote {
+  margin: 0 0 22px;
+  padding: 12px 18px;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in oklab, var(--accent) 5%, transparent);
+  color: var(--fg-2);
+  font-style: italic;
+  border-radius: 0 4px 4px 0;
+}
+
+.reader-hr {
+  border: 0;
+  height: 1px;
+  background: var(--line);
+  margin: 36px 0;
+}
+
+.reader-table-wrap {
+  margin: 0 0 22px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.reader-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+}
+.reader-body.zh .reader-table { font-family: 'Noto Sans SC', monospace; }
+.reader-table th {
+  background: var(--bg-2);
+  color: var(--fg-2);
+  font-weight: 500;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.reader-table td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg);
+}
+.reader-table tr:last-child td { border-bottom: 0; }
+.reader-table tr:hover td { background: color-mix(in oklab, var(--accent) 4%, transparent); }
+
 /* TLDR */
 .reader .tldr, .reader-body ~ .tldr {
   /* inherit from existing */
@@ -1365,12 +1495,30 @@ body:has(.reader-shell) .clawd-pet { display: none !important; }
   font-weight: 600;
   font-size: 20px;
   letter-spacing: -0.02em;
+  overflow: hidden;
+}
+.gh-avatar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
 }
 .author-name { font-size: 13px; color: var(--fg); font-weight: 500; }
 .author-bio { font-size: 11px; color: var(--fg-4); margin-top: 2px; }
 .author-links { font-size: 11px; color: var(--fg-4); display: flex; gap: 6px; align-items: center; }
 .author-links a { color: var(--fg-3); text-decoration: none; transition: color 0.15s; }
 .author-links a:hover { color: var(--accent); }
+.author-link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.author-link-btn:hover { color: var(--accent); }
 
 /* Related */
 .reader-related { margin: 48px 0; }

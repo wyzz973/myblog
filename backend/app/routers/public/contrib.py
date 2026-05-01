@@ -9,32 +9,20 @@ from app.models import ContribDay
 
 router = APIRouter()
 
-_MONTHS = ["May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr"]
+_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
-def _seed_grid() -> list[list[int]]:
-    """Deterministic LCG fallback that mirrors the original frontend data.js generator."""
-    s = 42
-    grid: list[list[int]] = []
-    for _w in range(52):
-        col: list[int] = []
-        for d in range(7):
-            s = (s * 9301 + 49297) % 233280
-            r = s / 233280
-            weekday = 1.2 if 0 < d < 6 else 0.6
-            v = r * weekday
-            level = 0
-            if v > 0.35:
-                level = 1
-            if v > 0.6:
-                level = 2
-            if v > 0.8:
-                level = 3
-            if v > 0.93:
-                level = 4
-            col.append(level)
-        grid.append(col)
-    return grid
+def _months_for_window(today: date, weeks: int) -> list[str]:
+    """Walk the displayed weeks and emit one month label per distinct month."""
+    seen = []
+    for w in range(weeks):
+        # date of the Sunday at the start of week w (display order: oldest → newest)
+        anchor = today - timedelta(days=(weeks - 1 - w) * 7 + 6)
+        m = _MONTH_NAMES[anchor.month - 1]
+        if not seen or seen[-1] != m:
+            seen.append(m)
+    return seen
 
 
 @router.get("/contrib")
@@ -43,26 +31,32 @@ async def get_contrib(
     s: AsyncSession = Depends(get_session),
 ) -> dict:
     rows = (await s.execute(select(ContribDay))).scalars().all()
-    if not rows:
-        grid = _seed_grid()
-        commits = 1384
-        return {
-            "weeks": weeks, "grid": grid, "months": _MONTHS,
-            "commits": commits, "source": "seed",
-        }
-
     by_day = {r.day: r for r in rows}
     today = date.today()
     grid: list[list[int]] = [[0] * 7 for _ in range(weeks)]
+    counts: list[list[int]] = [[0] * 7 for _ in range(weeks)]
     commits = 0
+    start_day: date | None = None
+    end_day: date | None = None
     for w in range(weeks):
         for d in range(7):
             day = today - timedelta(days=(weeks - 1 - w) * 7 + (6 - d))
+            if start_day is None or day < start_day:
+                start_day = day
+            if end_day is None or day > end_day:
+                end_day = day
             r = by_day.get(day)
             if r is not None:
                 grid[w][d] = r.level
+                counts[w][d] = r.count
                 commits += r.count
     return {
-        "weeks": weeks, "grid": grid, "months": _MONTHS,
-        "commits": commits, "source": "github",
+        "weeks": weeks,
+        "grid": grid,
+        "counts": counts,
+        "months": _months_for_window(today, weeks),
+        "commits": commits,
+        "start": start_day.isoformat() if start_day else None,
+        "end": end_day.isoformat() if end_day else None,
+        "source": "github" if rows else "empty",
     }

@@ -1,7 +1,12 @@
 import { useSite } from '../api/hooks.js';
+import Avatar from './Avatar.jsx';
 
-function Logo() {
-  return <div className="logo">w</div>;
+function Logo({ github }) {
+  return (
+    <div className="logo" aria-label="myblog">
+      <Avatar github={github} pixelSize={16} />
+    </div>
+  );
 }
 
 function scrollToId(id) {
@@ -22,8 +27,8 @@ export default function TopBar({ theme, setTheme, onOpenPalette, onNav }) {
   return (
     <header className="topbar">
       <a className="brand" href="#" onClick={(e) => go(e, 'top')}>
-        <Logo />
-        <span>wangyang<span className="accent">.dev</span></span>
+        <Logo github={site?.github} />
+        <span>my<span className="accent">blog</span></span>
       </a>
       <nav>
         <a href="#top" onClick={(e) => go(e, 'top')}>~/</a>

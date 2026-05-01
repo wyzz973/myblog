@@ -13,6 +13,8 @@ Keys are colon-separated and namespaced by caller (e.g. 'rl:login:1.2.3.4').
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from redis.asyncio import Redis
 
 from app.errors import RateLimited
@@ -62,3 +64,37 @@ async def lockout_active(redis: Redis, subject: str) -> bool:
 async def lockout_retry_after(redis: Redis, subject: str) -> int:
     ttl = await redis.ttl(f"{LOCK_PREFIX}{subject}")
     return max(int(ttl), 1) if ttl and ttl > 0 else 60
+
+
+async def check_pet(
+    redis: Redis,
+    *,
+    ip: str,
+    per_ip_per_min: int,
+    per_ip_per_day: int,
+    global_per_day: int,
+) -> str | None:
+    """Three-layer rate check for pet summon endpoint.
+
+    Returns the name of the first breached layer, or None if all pass.
+    All three counters are incremented as a side effect (so we don't double-count
+    on the next request after a breach — we treat "still within window" as the
+    state, not "consumed only after success").
+    """
+    today = datetime.now(UTC).strftime("%Y%m%d")
+    keys = [
+        ("per_ip_per_min", f"rl:pet:ip:{ip}:1m", per_ip_per_min, 60),
+        ("per_ip_per_day", f"rl:pet:ip:{ip}:1d", per_ip_per_day, 86400),
+        ("global_per_day", f"rl:pet:global:{today}", global_per_day, 86400),
+    ]
+    pipe = redis.pipeline()
+    for _, k, _, ttl in keys:
+        pipe.incr(k)
+        pipe.expire(k, ttl, nx=True)
+    results = await pipe.execute()
+    # results: [count1, _, count2, _, count3, _]
+    counts = [results[0], results[2], results[4]]
+    for (label, _, limit, _), count in zip(keys, counts, strict=True):
+        if int(count) > limit:
+            return label
+    return None

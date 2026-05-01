@@ -5,7 +5,7 @@ from sqlalchemy import update
 
 from app.db import engine
 from app.models import SiteMeta
-from app.services import pet_llm
+from app.services.pet_adapters import anthropic as anthropic_adapter
 
 
 @pytest.fixture(autouse=True)
@@ -29,42 +29,16 @@ async def test_ping_with_valid_key():
     fake = AsyncMock()
     fake.messages.create = AsyncMock(return_value=AsyncMock())
     with patch("anthropic.AsyncAnthropic", return_value=fake):
-        ok = await pet_llm.ping("sk-test", "claude-haiku-4-5-20251001")
+        ok = await anthropic_adapter.ping("sk-test", "claude-haiku-4-5-20251001")
         assert ok is True
 
 
 async def test_ping_with_bad_key():
     with patch("anthropic.AsyncAnthropic", side_effect=Exception("auth")):
-        ok = await pet_llm.ping("sk-bad", "claude-haiku-4-5-20251001")
+        ok = await anthropic_adapter.ping("sk-bad", "claude-haiku-4-5-20251001")
         assert ok is False
 
 
-async def test_summon_returns_llm_quip_on_success():
-    fake_msg = AsyncMock()
-    fake_msg.content = [AsyncMock(text="compiling thoughts...")]
-    fake = AsyncMock()
-    fake.messages.create = AsyncMock(return_value=fake_msg)
-    with patch("anthropic.AsyncAnthropic", return_value=fake):
-        quip, source = await pet_llm.summon(
-            api_key="sk-test",
-            system_prompt="be brief",
-            model="claude-haiku-4-5-20251001",
-            fallback_lines=["fb1", "fb2"],
-        )
-        assert quip == "compiling thoughts..."
-        assert source == "llm"
-
-
-async def test_summon_returns_fallback_on_error():
-    with patch("anthropic.AsyncAnthropic", side_effect=Exception("api down")):
-        quip, source = await pet_llm.summon(
-            api_key="sk-test",
-            system_prompt="x",
-            model="claude-haiku-4-5-20251001",
-            fallback_lines=["only fb"],
-        )
-        assert quip == "only fb"
-        assert source == "fallback"
 
 
 async def test_public_pet_config_returns_safe_subset(client):
@@ -78,21 +52,77 @@ async def test_public_pet_config_returns_safe_subset(client):
 
 
 async def test_public_pet_summon_returns_quip(client):
-    """With no anthropic integration, summon returns a fallback line."""
-    r = await client.post("/api/pet/summon")
+    """With no integrations configured, summon returns a fallback line."""
+    r = await client.post("/api/pet/summon", json={})
     assert r.status_code == 200
     body = r.json()
     assert "quip" in body
-    assert body["source"] in ("llm", "fallback")
+    assert body["source"] in ("llm", "fallback", "zhipu", "qwen", "doubao", "anthropic")
 
 
 async def test_public_pet_summon_rate_limit(client, redis):
     for _ in range(6):
-        r = await client.post("/api/pet/summon")
+        r = await client.post("/api/pet/summon", json={})
         assert r.status_code == 200
-    r = await client.post("/api/pet/summon")
-    assert r.status_code == 429
-    # Retry-After header is required for clients to back off
-    assert "retry-after" in {k.lower() for k in r.headers}
-    retry_after = int(r.headers["retry-after"])
-    assert 0 < retry_after <= 60
+    r = await client.post("/api/pet/summon", json={})
+    assert r.status_code == 200
+    j = r.json()
+    assert j["source"] == "rate_limited"
+    assert j["quip"]
+
+
+async def test_summon_greet_no_post(client):
+    r = await client.post("/api/pet/summon", json={})
+    assert r.status_code == 200
+    j = r.json()
+    assert "quip" in j and "source" in j
+
+
+async def test_summon_comment_passes_post_title_to_prompt(client, fake_post_id, monkeypatch):
+    captured = {}
+
+    async def fake_summon(**kw):
+        captured.update(kw)
+        return ("hi", "zhipu")
+
+    from app.services import pet_gateway
+    monkeypatch.setattr(pet_gateway, "summon", fake_summon)
+
+    r = await client.post("/api/pet/summon", json={"post_id": fake_post_id})
+    assert r.status_code == 200
+    # The user prompt should mention the article title
+    assert "Title:" in captured["user"]
+
+
+async def test_summon_explain_truncates_selection(client, fake_post_id, monkeypatch):
+    captured = {}
+
+    async def fake_summon(**kw):
+        captured.update(kw)
+        return ("explain ok", "zhipu")
+
+    from app.services import pet_gateway
+    monkeypatch.setattr(pet_gateway, "summon", fake_summon)
+
+    long_sel = "x" * 2000
+    r = await client.post(
+        "/api/pet/summon",
+        json={"post_id": fake_post_id, "selection": long_sel},
+    )
+    assert r.status_code == 200
+    # Default max_context_chars is 500
+    assert captured["user"].count("x") <= 500
+
+
+async def test_summon_returns_tired_line_when_rate_limited(client, monkeypatch):
+    async def fake_check_pet(*a, **kw):
+        return "per_ip_per_min"
+
+    from app.services import rate_limit
+    monkeypatch.setattr(rate_limit, "check_pet", fake_check_pet)
+
+    r = await client.post("/api/pet/summon", json={})
+    assert r.status_code == 200
+    j = r.json()
+    assert j["source"] == "rate_limited"
+    assert j["quip"]  # non-empty

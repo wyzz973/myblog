@@ -1,10 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSite, useProjects, useContrib } from '../api/hooks.js';
+import { copyToClipboard } from './CopyText.jsx';
 
 function HeroA() {
+  const { data: site } = useSite();
+  const handle = site?.handle || 'me';
+  const name = site?.name || '';
+  const nameEn = site?.name_en || '';
+  const chips = site?.stack_chips || [];
+  const checkmarks = chips.slice(0, 3).map((c) => c.toLowerCase());
+  const full = (site?.typing_line || '').trimEnd();
+
   const [typed, setTyped] = useState('');
-  const full = "// building backends that don't flinch. \n// training models that ship.";
   useEffect(() => {
+    if (!full) return;
+    setTyped('');
     let i = 0;
     const id = setInterval(() => {
       i += 1;
@@ -12,47 +22,77 @@ function HeroA() {
       if (i >= full.length) clearInterval(id);
     }, 18);
     return () => clearInterval(id);
-  }, []);
+  }, [full]);
+
   return (
     <section className="hero">
       <div className="wrap hero-inner">
         <div className="hero-text">
           <div className="prompt">
-            <span className="tag">~/wangyang</span>
+            <span className="tag">~/{handle}</span>
             <span className="muted">on</span>
             <span className="accent">main</span>
-            <span className="muted">·</span>
-            <span>last deploy 2h ago</span>
-            <span className="muted">·</span>
-            <span>bun ✓ postgres ✓ triton ✓</span>
+            {checkmarks.length > 0 && (
+              <>
+                <span className="muted">·</span>
+                <span>{checkmarks.map((c) => `${c} ✓`).join(' ')}</span>
+              </>
+            )}
           </div>
           <h1>
             <span className="muted">$</span> whoami<br />
-            <span className="glow">汪洋</span> <span className="muted">—</span> Wang Yang<br />
+            {name && (
+              <>
+                <span className="glow">{name}</span>
+                {nameEn && nameEn !== name && (
+                  <>{' '}<span className="muted">—</span> {nameEn}</>
+                )}
+                <br />
+              </>
+            )}
             <span style={{ color: 'var(--fg-2)' }}>Backend · AI</span>{' '}
-            <span className="strike">Fullstack</span>{' '}
-            <span className="glow">Everything</span>
+            <span className="strike">Fullstack</span>
             <span className="cursor" />
           </h1>
-          <div
-            className="sub serif"
-            style={{ whiteSpace: 'pre-wrap', fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}
-          >
-            {typed}
-          </div>
-          <div className="meta-row">
-            <span><b>Java</b> · <b>Python</b> · <b>PyTorch</b> · <b>Agents</b> · <b>Segmentation</b></span>
-          </div>
+          {full && (
+            <div
+              className="sub serif"
+              style={{ whiteSpace: 'pre-wrap', fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}
+            >
+              {typed}
+            </div>
+          )}
+          {chips.length > 0 && (
+            <div className="meta-row">
+              <span>{chips.map((c, i) => <span key={c}>{i > 0 && ' · '}<b>{c}</b></span>)}</span>
+            </div>
+          )}
         </div>
       </div>
     </section>
   );
 }
 
-function ContribGraph({ grid }) {
-  const months = ['May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr'];
+const WEEKDAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function ContribGraph({ grid, counts, months: monthsProp }) {
+  const months = monthsProp && monthsProp.length > 0
+    ? monthsProp
+    : ['May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr'];
   const gridRef = useRef(null);
   const rafRef = useRef(0);
+  const [tip, setTip] = useState(null); // { x, y, date, weekday, count } | null
+
+  const weeksTotal = grid.length;
+  // For each cell at (wi, di) the date is today - ((weeks-1-wi)*7 + (6-di)) days.
+  const cellDate = (wi, di) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diff = (weeksTotal - 1 - wi) * 7 + (6 - di);
+    const d = new Date(today);
+    d.setDate(d.getDate() - diff);
+    return d.toISOString().slice(0, 10);
+  };
 
   const measure = (el) => {
     const gr = el.getBoundingClientRect();
@@ -111,6 +151,22 @@ function ContribGraph({ grid }) {
       c.style.zIndex = '';
       c._lit = false;
     }
+    setTip(null);
+  };
+
+  const onCellEnter = (e, wi, di) => {
+    const date = cellDate(wi, di);
+    const count = counts?.[wi]?.[di] ?? 0;
+    const r = e.currentTarget.getBoundingClientRect();
+    const grid = gridRef.current?.getBoundingClientRect();
+    if (!grid) return;
+    setTip({
+      x: r.left - grid.left + r.width / 2,
+      y: r.top - grid.top,
+      date,
+      weekday: WEEKDAY_NAMES[di],
+      count,
+    });
   };
 
   useEffect(() => {
@@ -137,9 +193,23 @@ function ContribGraph({ grid }) {
                 key={`${wi}-${di}`}
                 className="contrib-cell"
                 data-l={lvl}
-                title={`Week ${wi + 1}, ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][di]}`}
+                onMouseEnter={(e) => onCellEnter(e, wi, di)}
               />
             )),
+          )}
+          {tip && (
+            <div
+              className="contrib-tip"
+              style={{ left: tip.x, top: tip.y }}
+              role="tooltip"
+            >
+              <div className="contrib-tip-count">
+                {tip.count === 0
+                  ? 'no commits'
+                  : `${tip.count} commit${tip.count === 1 ? '' : 's'}`}
+              </div>
+              <div className="contrib-tip-date">{tip.weekday} · {tip.date}</div>
+            </div>
           )}
         </div>
       </div>
@@ -182,6 +252,8 @@ export default function HomeA({ posts, tags, activeTag, setTag, focusIdx, onOpen
   const SITE = site || { commits52w: 0, email: '', github: '', name: '' };
   const PROJECTS = projects || [];
   const CONTRIB = contribResp?.grid || [];
+  const CONTRIB_COUNTS = contribResp?.counts || [];
+  const CONTRIB_MONTHS = contribResp?.months || [];
   const TAGS = tags || [];
 
   if (loading && posts.length === 0) {
@@ -199,10 +271,10 @@ export default function HomeA({ posts, tags, activeTag, setTag, focusIdx, onOpen
       <HeroA />
       <div className="wrap">
         <div className="section-head" id="now">
-          <span className="label"><span className="n">02 /</span> contributions · 52w</span>
+          <span className="label"><span className="n">02 /</span> contributions · 52 weeks</span>
           <span className="count">{(SITE.commits52w || 0).toLocaleString()} commits</span>
         </div>
-        <ContribGraph grid={CONTRIB} />
+        <ContribGraph grid={CONTRIB} counts={CONTRIB_COUNTS} months={CONTRIB_MONTHS} />
 
         <div className="section-head" id="writing">
           <span className="label"><span className="n">03 /</span> ./posts</span>
@@ -232,7 +304,13 @@ export default function HomeA({ posts, tags, activeTag, setTag, focusIdx, onOpen
         </div>
         <div className="proj-grid">
           {PROJECTS.map((p) => (
-            <div className="proj-card" key={p.name}>
+            <a
+              className="proj-card"
+              key={p.name}
+              href={SITE.github ? `https://github.com/${SITE.github}/${p.name}` : '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <div className="name">{p.name}</div>
               <div className="desc">{p.desc}</div>
               <div className="meta">
@@ -240,7 +318,7 @@ export default function HomeA({ posts, tags, activeTag, setTag, focusIdx, onOpen
                 <span className="stars">★ {p.stars}</span>
                 <span className="right">{p.status}</span>
               </div>
-            </div>
+            </a>
           ))}
         </div>
 
@@ -249,22 +327,61 @@ export default function HomeA({ posts, tags, activeTag, setTag, focusIdx, onOpen
           <span className="count">reach out</span>
         </div>
         <div className="contact-row">
-          <a href={`mailto:${SITE.email}`} className="contact-item">
+          <button
+            type="button"
+            className="contact-item"
+            onClick={async (e) => {
+              const btn = e.currentTarget;
+              await copyToClipboard(SITE.email);
+              const v = btn.querySelector('.contact-v');
+              if (v) {
+                const orig = v.textContent;
+                v.textContent = '已复制 ✓';
+                setTimeout(() => { v.textContent = orig; }, 1400);
+              }
+            }}
+            title="点击复制邮箱"
+          >
             <span className="contact-k">email</span>
             <span className="contact-v">{SITE.email}</span>
-          </a>
-          <a href={`https://github.com/${SITE.github}`} className="contact-item">
+          </button>
+          <a
+            href={`https://github.com/${SITE.github}`}
+            className="contact-item"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             <span className="contact-k">github</span>
             <span className="contact-v">@{SITE.github}</span>
           </a>
-          <a href="https://xiaohongshu.com" className="contact-item" target="_blank" rel="noopener noreferrer">
+          <a
+            href="https://xhslink.com/m/4la2YRNQF1u"
+            className="contact-item"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="我在小红书收获了 1139 次赞与收藏"
+          >
             <span className="contact-k">小红书</span>
-            <span className="contact-v">@汪洋</span>
+            <span className="contact-v">主页 ↗</span>
           </a>
-          <a href="https://douyin.com" className="contact-item" target="_blank" rel="noopener noreferrer">
+          <button
+            type="button"
+            className="contact-item"
+            onClick={async (e) => {
+              const btn = e.currentTarget;
+              await copyToClipboard('604691290');
+              const v = btn.querySelector('.contact-v');
+              if (v) {
+                const orig = v.textContent;
+                v.textContent = '已复制 ✓';
+                setTimeout(() => { v.textContent = orig; }, 1400);
+              }
+            }}
+            title="点击复制抖音号"
+          >
             <span className="contact-k">抖音</span>
-            <span className="contact-v">@wangyang</span>
-          </a>
+            <span className="contact-v">604691290</span>
+          </button>
         </div>
       </div>
     </>

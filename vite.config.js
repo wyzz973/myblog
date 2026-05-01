@@ -13,4 +13,7 @@ export default defineConfig({
       '/media': { target: API_TARGET, changeOrigin: true },
     },
   },
+  test: {
+    environment: 'jsdom',
+  },
 });

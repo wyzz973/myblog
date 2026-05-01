@@ -11,7 +11,10 @@ from app.models.base import Base
 class Integration(Base):
     __tablename__ = "integrations"
     __table_args__ = (
-        CheckConstraint("name IN ('github','anthropic')", name="ck_integrations_name"),
+        CheckConstraint(
+            "name IN ('github','anthropic','zhipu','qwen','doubao','deepseek')",
+            name="ck_integrations_name",
+        ),
     )
 
     name: Mapped[str] = mapped_column(String(16), primary_key=True)

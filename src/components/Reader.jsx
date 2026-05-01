@@ -1,6 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSite, usePosts } from '../api/hooks.js';
+import { useSite, usePosts, usePost } from '../api/hooks.js';
 import { sendHit } from '../utils/beacon.js';
+import CopyText from './CopyText.jsx';
+import Avatar from './Avatar.jsx';
+
+function renderInline(items) {
+  if (!items) return null;
+  return items.map((it, i) => {
+    const k = it.kind;
+    if (k === 'text') return <span key={i}>{it.s}</span>;
+    if (k === 'code') return <code key={i} className="inline-code">{it.s}</code>;
+    if (k === 'b') return <strong key={i}>{renderInline(it.children)}</strong>;
+    if (k === 'i') return <em key={i}>{renderInline(it.children)}</em>;
+    if (k === 'a') return (
+      <a key={i} href={it.href} target="_blank" rel="noopener noreferrer">
+        {renderInline(it.children)}
+      </a>
+    );
+    return null;
+  });
+}
 
 function CodeBlock({ code }) {
   const [copied, setCopied] = useState(false);
@@ -40,16 +59,19 @@ function CodeBlock({ code }) {
   );
 }
 
-export default function Reader({ post, onBack, onOpenPost }) {
+export default function Reader({ post: postSummary, onBack, onOpenPost, onSelection }) {
   const scrollRef = useRef(null);
   const [progress, setProgress] = useState(0);
   const [activeHeading, setActiveHeading] = useState(0);
   const [liked, setLiked] = useState(false);
   const [likes, setLikes] = useState(0);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const { data: site } = useSite();
   const { data: postsResp } = usePosts({ limit: 100 });
-  const SITE = site || { name: 'Wang Yang', tagline: '' };
+  const { data: detail } = usePost(postSummary?.id);
+  const post = detail || postSummary;
+  const SITE = site || { name: '', tagline: '', github: '', email: '' };
   const POSTS = postsResp?.items || [];
 
   useEffect(() => {
@@ -87,9 +109,30 @@ export default function Reader({ post, onBack, onOpenPost }) {
     sendHit({ path: window.location.pathname, post_id: post.id });
   }, [post?.id]);
 
+  useEffect(() => {
+    if (!onSelection) return undefined;
+    let timer = null;
+    const handler = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const sel = (window.getSelection?.()?.toString() || '').trim();
+        if (sel.length >= 5) {
+          onSelection({ text: 'click pet to explain ↑', kind: 'explain' });
+          // auto-clear after 2s
+          setTimeout(() => onSelection(null), 2000);
+        }
+      }, 200);
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => {
+      document.removeEventListener('selectionchange', handler);
+      clearTimeout(timer);
+    };
+  }, [onSelection]);
+
   if (!post) return null;
   const isZh = post.lang === 'zh';
-  const wordCount = (post.body || []).reduce((s, b) => s + (b.c || '').length, 0);
+  const wordCount = post.word_count ?? (post.body || []).reduce((s, b) => s + (b.c || '').length, 0);
   const headings = (post.body || []).reduce((arr, b, i) => {
     if (b.t === 'h2') arr.push({ idx: i, text: b.c });
     return arr;
@@ -186,21 +229,55 @@ export default function Reader({ post, onBack, onOpenPost }) {
                   const id = `h-${hIdx++}`;
                   return (
                     <h2 key={i} id={id} data-h>
-                      <span className="h-anchor">§</span>{b.c}
+                      <span className="h-anchor">§</span>
+                      {b.inline ? renderInline(b.inline) : b.c}
                     </h2>
                   );
                 }
+                if (b.t === 'h3') return <h3 key={i}>{b.inline ? renderInline(b.inline) : b.c}</h3>;
+                if (b.t === 'h4') return <h4 key={i}>{b.inline ? renderInline(b.inline) : b.c}</h4>;
                 if (b.t === 'code') return <CodeBlock key={i} code={b.c} />;
-                const parts = (b.c || '').split(/(`[^`]+`)/);
-                return (
-                  <p key={i}>
-                    {parts.map((pt, j) =>
-                      pt.startsWith('`') && pt.endsWith('`')
-                        ? <code key={j} className="inline-code">{pt.slice(1, -1)}</code>
-                        : pt,
-                    )}
-                  </p>
+                if (b.t === 'hr') return <hr key={i} className="reader-hr" />;
+                if (b.t === 'quote') return (
+                  <blockquote key={i} className="reader-quote">
+                    {b.inline ? renderInline(b.inline) : b.c}
+                  </blockquote>
                 );
+                if (b.t === 'ul' || b.t === 'ol') {
+                  const Tag = b.t;
+                  return (
+                    <Tag key={i} className="reader-list">
+                      {(b.items || []).map((it, j) => (
+                        <li key={j}>{it.inline ? renderInline(it.inline) : it.c}</li>
+                      ))}
+                    </Tag>
+                  );
+                }
+                if (b.t === 'table') return (
+                  <div key={i} className="reader-table-wrap">
+                    <table className="reader-table">
+                      {b.header && b.header.length > 0 && (
+                        <thead>
+                          <tr>
+                            {b.header.map((h, j) => (
+                              <th key={j} style={{ textAlign: (b.align && b.align[j]) || 'left' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                      )}
+                      <tbody>
+                        {(b.rows || []).map((row, ri) => (
+                          <tr key={ri}>
+                            {row.map((cell, ci) => (
+                              <td key={ci} style={{ textAlign: (b.align && b.align[ci]) || 'left' }}>{cell}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+                return <p key={i}>{b.inline ? renderInline(b.inline) : b.c}</p>;
               });
             })() : (
               <div className="reader-stub">
@@ -221,31 +298,74 @@ export default function Reader({ post, onBack, onOpenPost }) {
             <div className="share-row">
               <button
                 className="share-btn"
-                onClick={() => navigator.clipboard?.writeText(window.location.href)}
+                onClick={async () => {
+                  const url = window.location.href;
+                  try {
+                    if (navigator.clipboard?.writeText) {
+                      await navigator.clipboard.writeText(url);
+                    } else {
+                      const ta = document.createElement('textarea');
+                      ta.value = url;
+                      ta.style.position = 'fixed';
+                      ta.style.opacity = '0';
+                      document.body.appendChild(ta);
+                      ta.select();
+                      document.execCommand('copy');
+                      document.body.removeChild(ta);
+                    }
+                    setLinkCopied(true);
+                    setTimeout(() => setLinkCopied(false), 1400);
+                  } catch { /* user blocked clipboard */ }
+                }}
               >
-                <span>⎘</span> copy link
+                <span>{linkCopied ? '✓' : '⎘'}</span>
+                {linkCopied ? ' copied' : ' copy link'}
               </button>
-              <a
+              <button
                 className="share-btn"
-                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(post.title)}`}
-                target="_blank"
-                rel="noopener noreferrer"
+                onClick={async () => {
+                  const data = { title: post.title, url: window.location.href };
+                  try {
+                    if (navigator.share) {
+                      await navigator.share(data);
+                    } else {
+                      await navigator.clipboard?.writeText(window.location.href);
+                    }
+                  } catch { /* user canceled */ }
+                }}
               >
-                <span>↗</span> tweet
-              </a>
+                <span>↗</span> share
+              </button>
             </div>
           </div>
 
           <div className="reader-author">
-            <div className="author-ava">W</div>
+            <div className="author-ava" aria-hidden="true">
+              <Avatar github={SITE.github} pixelSize={36} />
+            </div>
             <div className="author-meta">
               <div className="author-name">{SITE.name}</div>
               <div className="author-bio">{SITE.tagline}</div>
             </div>
             <div className="author-links">
-              <a href="#">github</a><span className="dot-sep">·</span>
-              <a href="#">twitter</a><span className="dot-sep">·</span>
-              <a href="#">rss</a>
+              {SITE.github && (
+                <a
+                  href={`https://github.com/${SITE.github}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >github</a>
+              )}
+              {SITE.email && (
+                <>
+                  {SITE.github && <span className="dot-sep">·</span>}
+                  <CopyText
+                    label="email"
+                    value={SITE.email}
+                    copiedLabel="✓ copied"
+                    className="author-link-btn"
+                  />
+                </>
+              )}
             </div>
           </div>
 
