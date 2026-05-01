@@ -3,6 +3,7 @@
 // sprites are original.
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { buildSummonPayload } from './pet/payload.js';
 
 const BODY = {
   capybara: {
@@ -276,13 +277,15 @@ export default function AsciiPet() {
     tempStateUntil.current = Date.now() + 8000;
     let text = null;
     try {
-      if (window.claude?.complete) {
-        const persona = PERSONA[bodyKey] || 'a cheerful desktop pet';
-        const reply = await window.claude.complete(
-          `You are a tiny ASCII desktop pet — ${persona}, living on a developer's blog. ` +
-          'User poked you. Reply ONE short playful line (max 10 words), mix English/Chinese naturally, no quotes/emoji.',
-        );
-        text = (reply || '').trim().replace(/^["'`]|["'`]$/g, '').slice(0, 80);
+      const payload = buildSummonPayload(500);
+      const r = await fetch('/api/pet/summon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (r.ok) {
+        const j = await r.json();
+        text = (j.quip || '').trim().slice(0, 80);
       }
     } catch (_) { /* fall through to canned reply */ }
     if (!text) text = QUIPS[Math.floor(Math.random() * QUIPS.length)];
