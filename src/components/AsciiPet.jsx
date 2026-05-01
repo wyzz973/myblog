@@ -6,30 +6,6 @@ import { createPortal } from 'react-dom';
 import { buildSummonPayload } from './pet/payload.js';
 import { SPECIES, RARITY_COLOR, STATE_EYE } from './pet/species.js';
 
-// Tier weights used for the random visitor-pet roll. legendary is rare on
-// purpose so e.g. spotting a panda actually feels like a moment.
-const RARITY_WEIGHT = {
-  common:    50,
-  uncommon:  25,
-  rare:      15,
-  epic:      7,
-  legendary: 3,
-};
-
-function rollSpecies() {
-  // 2-step roll: pick a tier weighted by RARITY_WEIGHT, then uniform within tier.
-  const roll = Math.random() * 100;
-  let acc = 0;
-  let chosenTier = 'common';
-  for (const tier of Object.keys(RARITY_WEIGHT)) {
-    acc += RARITY_WEIGHT[tier];
-    if (roll < acc) { chosenTier = tier; break; }
-  }
-  const pool = Object.keys(SPECIES).filter((k) => SPECIES[k].rarity === chosenTier);
-  if (pool.length === 0) return 'cat';
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
 const STATES = {
   idle:         { label: 'idle',         bob: 2.8, tint: null,      icon: null,  hint: 'idle' },
   thinking:     { label: 'thinking',     bob: 1.4, tint: null,      icon: '?',   hint: 'thinking…' },
@@ -76,19 +52,33 @@ function Dots() {
 }
 
 export default function AsciiPet({ hint = null }) {
-  // Each visitor gets ONE random pet — persisted in localStorage and
-  // never user-pickable. Clearing site data re-rolls. Legacy keys from
-  // the old "user picks species" era are honored if still valid.
-  const [bodyKey] = useState(() => {
+  // Server picks the species deterministically from (ip, user-agent) so
+  // visitors can't reroll by clearing localStorage. localStorage is only
+  // a fast-paint cache; on mount we fetch /api/pet/config and trust the
+  // server's `assigned_species` as the source of truth.
+  const [bodyKey, setBodyKey] = useState(() => {
     const saved = localStorage.getItem('pet.body');
     if (saved && SPECIES[saved]) return saved;
     if (saved && LEGACY_BODY_MAP[saved] && SPECIES[LEGACY_BODY_MAP[saved]]) {
       return LEGACY_BODY_MAP[saved];
     }
-    const rolled = rollSpecies();
-    try { localStorage.setItem('pet.body', rolled); } catch { /* ignore */ }
-    return rolled;
+    return 'cat';  // placeholder; replaced on first /api/pet/config response
   });
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/pet/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!alive || !j?.assigned_species) return;
+        if (!SPECIES[j.assigned_species]) return;
+        if (j.assigned_species === bodyKey) return;
+        setBodyKey(j.assigned_species);
+        try { localStorage.setItem('pet.body', j.assigned_species); } catch { /* ignore */ }
+      })
+      .catch(() => { /* offline / blocked — keep cached buddy */ });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const body = SPECIES[bodyKey] || SPECIES.cat;
   const [state, setState] = useState('idle');
   const [frame, setFrame] = useState(0);
@@ -431,7 +421,8 @@ export default function AsciiPet({ hint = null }) {
               }}>{body.rarity}</span>
             </div>
             <div style={{ fontSize: 10, color: 'var(--fg-4)', lineHeight: 1.4 }}>
-              every visitor rolls one buddy at random — clear site data to re-roll.
+              your buddy is bound to your IP + browser — same combo always
+              gets the same pet, no matter how many times you clear cache.
             </div>
           </div>
 

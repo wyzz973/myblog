@@ -14,7 +14,7 @@ from app.models import Post, SiteMeta
 from app.redis import get_redis
 from app.schemas.pet import PetConfig, PublicPetConfig
 from app.services import integrations as integrations_svc
-from app.services import pet_gateway, rate_limit, secret_box
+from app.services import pet_assignment, pet_gateway, rate_limit, secret_box
 from app.services.client_ip import client_ip_from, client_ip_key_part
 from app.services.event_log import write_event
 from app.services.hashing import ip_hash
@@ -34,10 +34,19 @@ async def _load_pet_config(s: AsyncSession) -> PetConfig:
 
 
 @router.get("/pet/config", response_model=PublicPetConfig)
-async def public_pet_config(s: AsyncSession = Depends(get_session)) -> PublicPetConfig:
+async def public_pet_config(
+    request: Request,
+    s: AsyncSession = Depends(get_session),
+) -> PublicPetConfig:
     cfg = await _load_pet_config(s)
+    assigned = pet_assignment.assign_species(
+        ip=client_ip_from(request),
+        user_agent=request.headers.get("user-agent"),
+    )
     return PublicPetConfig(
-        species=cfg.species, hat=cfg.hat, tint=cfg.tint,
+        species=cfg.species,
+        assigned_species=assigned,
+        hat=cfg.hat, tint=cfg.tint,
         enabled=cfg.enabled, visitor_can_change=cfg.visitor_can_change,
     )
 
