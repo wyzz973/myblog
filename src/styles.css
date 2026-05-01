@@ -1767,3 +1767,69 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: all 0.15s;
 }
 .contact-reset:hover { color: var(--fg); border-color: var(--line-2); }
+
+/* ==== legendary celebration overlay ==================================== */
+/* Fires once per visitor per legendary species (gated by localStorage). */
+.legendary-celebrate {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  --c: #f5b44c;
+}
+.legendary-text {
+  color: var(--c);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  text-shadow: 0 0 16px color-mix(in oklab, var(--c) 60%, transparent);
+  animation: legendaryText 1s ease-out forwards;
+}
+.legendary-sub {
+  color: var(--c);
+  font-size: 13px;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  opacity: 0;
+  animation: legendarySub 1s ease-out 0.15s forwards;
+}
+.legendary-spark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  color: var(--c);
+  font-size: 22px;
+  text-shadow: 0 0 12px color-mix(in oklab, var(--c) 70%, transparent);
+  opacity: 0;
+}
+.legendary-spark.s1 { animation: legendarySpark 1s ease-out forwards;       --dx: -180px; --dy: -120px; }
+.legendary-spark.s2 { animation: legendarySpark 1s ease-out 0.05s forwards; --dx:  180px; --dy: -130px; }
+.legendary-spark.s3 { animation: legendarySpark 1s ease-out 0.10s forwards; --dx: -200px; --dy:  100px; }
+.legendary-spark.s4 { animation: legendarySpark 1s ease-out 0.15s forwards; --dx:  200px; --dy:  110px; }
+.legendary-spark.s5 { animation: legendarySpark 1s ease-out 0.20s forwards; --dx:    0px; --dy: -180px; }
+.legendary-spark.s6 { animation: legendarySpark 1s ease-out 0.25s forwards; --dx:    0px; --dy:  170px; }
+
+@keyframes legendaryText {
+  0%   { transform: scale(0.5); opacity: 0; }
+  20%  { transform: scale(1.15); opacity: 1; }
+  60%  { transform: scale(1);    opacity: 1; }
+  100% { transform: scale(1);    opacity: 0; }
+}
+@keyframes legendarySub {
+  0%   { opacity: 0; transform: translateY(8px); }
+  30%  { opacity: 1; transform: translateY(0); }
+  85%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes legendarySpark {
+  0%   { transform: translate(-50%, -50%) scale(0.4) rotate(0deg);   opacity: 0; }
+  25%  { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.2) rotate(360deg); opacity: 0; }
+}
