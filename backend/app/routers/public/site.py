@@ -41,7 +41,7 @@ async def get_site(s: AsyncSession = Depends(get_session)) -> SitePayload:
     )).scalar_one()
     commits52w = (await s.execute(
         select(func.coalesce(func.sum(ContribDay.count), 0))
-    )).scalar_one() or 1384  # seed fallback when contrib_days is empty
+    )).scalar_one()
 
     return SitePayload(
         handle=sm.handle, name=sm.name, name_en=sm.name_en, role=sm.role,

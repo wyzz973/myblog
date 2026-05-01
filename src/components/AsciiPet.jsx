@@ -279,7 +279,7 @@ export default function AsciiPet() {
       if (window.claude?.complete) {
         const persona = PERSONA[bodyKey] || 'a cheerful desktop pet';
         const reply = await window.claude.complete(
-          `You are a tiny ASCII desktop pet — ${persona}, living on 汪洋's blog (Chinese backend/AI engineer). ` +
+          `You are a tiny ASCII desktop pet — ${persona}, living on a developer's blog. ` +
           'User poked you. Reply ONE short playful line (max 10 words), mix English/Chinese naturally, no quotes/emoji.',
         );
         text = (reply || '').trim().replace(/^["'`]|["'`]$/g, '').slice(0, 80);

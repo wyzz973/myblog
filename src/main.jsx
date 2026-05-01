@@ -6,6 +6,21 @@ import AdminApp from './admin/index.jsx';
 import './styles.css';
 import { sendHit } from './utils/beacon.js';
 
+// Prime the favicon from a cached GitHub handle BEFORE React mounts. This
+// avoids the brief flash of the inline pixel-art icon on every page load
+// (the cached handle stays valid until the site config changes; App.jsx
+// refreshes both the cache and the favicon once /api/site responds).
+(() => {
+  try {
+    const cached = localStorage.getItem('myblog.site.github');
+    if (!cached) return;
+    const link = document.querySelector("link[rel='icon']");
+    if (!link) return;
+    link.type = 'image/png';
+    link.href = `https://github.com/${encodeURIComponent(cached)}.png?size=64`;
+  } catch { /* localStorage blocked — keep inline pixel favicon */ }
+})();
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>

@@ -37,4 +37,5 @@ export const useProjects = () => useResource(() => api.projects());
 export const useContrib = (w = 52) => useResource(() => api.contrib(w), [w]);
 export const usePosts = (params) =>
   useResource(() => api.posts.list(params), [JSON.stringify(params)]);
-export const usePost = (id) => useResource(() => api.posts.detail(id), [id]);
+export const usePost = (id) =>
+  useResource(() => (id ? api.posts.detail(id) : Promise.resolve(null)), [id]);
