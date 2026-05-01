@@ -42,4 +42,5 @@ async def test_contrib_returns_grid(client):
     assert body["weeks"] == 52
     assert len(body["grid"]) == 52
     assert all(len(col) == 7 for col in body["grid"])
-    assert body["source"] in ("seed", "github")
+    # Phase-9d removed the LCG seed-fallback; empty DB now reports "empty".
+    assert body["source"] in ("github", "empty")

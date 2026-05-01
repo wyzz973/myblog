@@ -1,12 +1,58 @@
 """Shared pytest fixtures for the backend test suite."""
 from collections.abc import AsyncIterator
+from urllib.parse import urlparse
 
 import fakeredis.aioredis
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.config import get_settings
 from app.logging_config import configure_logging
 from app.main import create_app
+
+
+def _refuse_non_test_db() -> None:
+    """Abort the entire test session if DATABASE_URL points at a DB whose
+    name doesn't carry a ``test`` marker.
+
+    Several test cases (``test_admin_danger.*``, ``test_site_wiper``, …)
+    deliberately wipe site data: posts, projects, integrations, contrib_day,
+    site_meta, etc. If those fire against the dev or prod DB the developer
+    silently loses everything they've configured. So we hard-stop unless the
+    DB name explicitly looks like a test DB.
+
+    Override (only for true throwaway environments — CI containers, fresh
+    PostgreSQL spun up just for this run): export ``MYBLOG_ALLOW_NON_TEST_DB=1``.
+    """
+    import os
+
+    if os.environ.get("MYBLOG_ALLOW_NON_TEST_DB") == "1":
+        return
+
+    raw = get_settings().database_url
+    # SQLAlchemy URLs use postgresql+asyncpg://... — strip the +driver part so
+    # urlparse can read the path (= db name) cleanly.
+    bare = raw.replace("postgresql+asyncpg://", "postgresql://")
+    db_name = (urlparse(bare).path or "").lstrip("/")
+    if "test" not in db_name.lower():
+        pytest.exit(
+            "\n  ✗ refuse to run tests against non-test DB.\n"
+            f"    DATABASE_URL → db name: {db_name!r}\n"
+            "    Tests wipe site data; running them on a dev/prod DB destroys\n"
+            "    your posts, projects, integrations, contrib_day, etc.\n"
+            "\n"
+            "    Fix: point DATABASE_URL at a separate DB whose name contains\n"
+            "    'test' (e.g. myblog_test). To bootstrap one:\n"
+            "        bash scripts/bootstrap-test-db.sh\n"
+            "    Then re-run pytest with that .env.test loaded.\n"
+            "\n"
+            "    Override (CI / fresh container only): MYBLOG_ALLOW_NON_TEST_DB=1\n",
+            returncode=2,
+        )
+
+
+# Run BEFORE any session fixture or test collects state.
+_refuse_non_test_db()
 
 
 @pytest.fixture(scope="session", autouse=True)
