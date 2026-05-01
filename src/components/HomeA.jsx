@@ -84,14 +84,23 @@ function ContribGraph({ grid, counts, months: monthsProp }) {
   const [tip, setTip] = useState(null); // { x, y, date, weekday, count } | null
 
   const weeksTotal = grid.length;
-  // For each cell at (wi, di) the date is today - ((weeks-1-wi)*7 + (6-di)) days.
+  // Columns are weekday-aligned: the rightmost column is the Sun→Sat
+  // week containing today. di=0 Sun .. di=6 Sat.
   const cellDate = (wi, di) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const diff = (weeksTotal - 1 - wi) * 7 + (6 - di);
-    const d = new Date(today);
-    d.setDate(d.getDate() - diff);
-    return d.toISOString().slice(0, 10);
+    const lastSat = new Date(today);
+    lastSat.setDate(lastSat.getDate() + (6 - today.getDay()));
+    const colSun = new Date(lastSat);
+    colSun.setDate(colSun.getDate() - (weeksTotal - 1 - wi) * 7 - 6);
+    const d = new Date(colSun);
+    d.setDate(d.getDate() + di);
+    // Local YYYY-MM-DD: toISOString() reinterprets in UTC and shifts the
+    // date by a day in non-UTC timezones (CN: -1d), corrupting tooltips.
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
   };
 
   const measure = (el) => {
@@ -179,23 +188,44 @@ function ContribGraph({ grid, counts, months: monthsProp }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--fg-4)', marginBottom: 4, paddingLeft: 22 }}>
-        {months.map((m) => <span key={m}>{m}</span>)}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginBottom: 4,
+          fontSize: 10,
+          color: 'var(--fg-4)',
+        }}
+      >
+        {months.map((m, i) => <span key={`${m}-${i}`}>{m}</span>)}
       </div>
       <div className="contrib">
-        <div className="days">
-          <span>Mon</span><span /><span>Wed</span><span /><span>Fri</span><span /><span />
-        </div>
-        <div className="contrib-grid" ref={gridRef} onMouseMove={onMove} onMouseLeave={onLeave}>
+        <div
+          className="contrib-grid"
+          ref={gridRef}
+          onMouseMove={onMove}
+          onMouseLeave={onLeave}
+          role="grid"
+          aria-label="GitHub contributions, last 52 weeks"
+        >
           {grid.map((col, wi) =>
-            col.map((lvl, di) => (
-              <div
-                key={`${wi}-${di}`}
-                className="contrib-cell"
-                data-l={lvl}
-                onMouseEnter={(e) => onCellEnter(e, wi, di)}
-              />
-            )),
+            col.map((lvl, di) => {
+              const date = cellDate(wi, di);
+              const count = counts?.[wi]?.[di] ?? 0;
+              const label = `${WEEKDAY_NAMES[di]} ${date}: ${
+                count === 0 ? 'no commits' : `${count} commit${count === 1 ? '' : 's'}`
+              }`;
+              return (
+                <div
+                  key={`${wi}-${di}`}
+                  className="contrib-cell"
+                  data-l={lvl}
+                  role="gridcell"
+                  aria-label={label}
+                  onMouseEnter={(e) => onCellEnter(e, wi, di)}
+                />
+              );
+            }),
           )}
           {tip && (
             <div
