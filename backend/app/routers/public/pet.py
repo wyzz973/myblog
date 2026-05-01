@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import random
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 from sqlalchemy import select
@@ -36,13 +36,28 @@ async def _load_pet_config(s: AsyncSession) -> PetConfig:
 @router.get("/pet/config", response_model=PublicPetConfig)
 async def public_pet_config(
     request: Request,
+    response: Response,
     s: AsyncSession = Depends(get_session),
 ) -> PublicPetConfig:
     cfg = await _load_pet_config(s)
-    assigned = pet_assignment.assign_species(
-        ip=client_ip_from(request),
-        user_agent=request.headers.get("user-agent"),
+    # 1. Honor a previously-set signed cookie so a buddy survives IP drift.
+    assigned = pet_assignment.verify_cookie(
+        request.cookies.get(pet_assignment.COOKIE_NAME)
     )
+    # 2. Otherwise compute from (IP, user-agent) and lock it in via cookie.
+    if assigned is None:
+        assigned = pet_assignment.assign_species(
+            ip=client_ip_from(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+        response.set_cookie(
+            key=pet_assignment.COOKIE_NAME,
+            value=pet_assignment.sign_cookie(assigned),
+            max_age=pet_assignment.COOKIE_MAX_AGE,
+            path="/",
+            samesite="lax",
+            httponly=False,  # not sensitive; visitor can read for fun
+        )
     return PublicPetConfig(
         species=cfg.species,
         assigned_species=assigned,

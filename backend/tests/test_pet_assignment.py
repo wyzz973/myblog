@@ -41,6 +41,41 @@ def test_empty_user_agent_is_fine():
     assert s1 == s2  # both normalize to ""
 
 
+def test_cookie_round_trip():
+    signed = pet_assignment.sign_cookie("panda")
+    assert pet_assignment.verify_cookie(signed) == "panda"
+
+
+def test_cookie_rejects_tampered_hmac():
+    signed = pet_assignment.sign_cookie("panda")
+    # flip a char in the hmac portion
+    bad = signed[:-1] + ("0" if signed[-1] != "0" else "1")
+    assert pet_assignment.verify_cookie(bad) is None
+
+
+def test_cookie_rejects_unknown_species():
+    # An attacker who knows the salt could in theory sign their own value,
+    # but verify_cookie still rejects species not in the catalog.
+    assert pet_assignment.verify_cookie("godzilla|deadbeefdeadbeef") is None
+
+
+def test_cookie_rejects_malformed():
+    assert pet_assignment.verify_cookie(None) is None
+    assert pet_assignment.verify_cookie("") is None
+    assert pet_assignment.verify_cookie("panda") is None  # no |
+    assert pet_assignment.verify_cookie("|abc") is None
+    assert pet_assignment.verify_cookie("panda|") is None
+
+
+def test_cookie_substitution_attack_fails():
+    """Attacker takes a legitimate panda cookie and swaps panda → dragon —
+    the HMAC was over 'panda', so the value no longer verifies."""
+    signed_panda = pet_assignment.sign_cookie("panda")
+    _, _, panda_tag = signed_panda.partition("|")
+    forged = f"dragon|{panda_tag}"
+    assert pet_assignment.verify_cookie(forged) is None
+
+
 @pytest.mark.parametrize("trials", [5000])
 def test_tier_distribution_roughly_matches_weights(trials):
     """Over many random fingerprints, tier frequency tracks RARITY_WEIGHT."""

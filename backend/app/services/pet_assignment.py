@@ -41,6 +41,38 @@ SPECIES_BY_RARITY: dict[str, list[str]] = {
 
 DEFAULT_SPECIES = "cat"
 
+# Cookie-persisted assignment so a buddy survives IP drift (mobile data ↔
+# wifi, VPN toggles). Cookie value is `<species>|<hmac8>` where hmac8 is
+# the first 16 hex chars of HMAC-SHA256(salt, species). Tampered values
+# fail verification → fall back to (ip, ua) reroll.
+COOKIE_NAME = "pet_id"
+COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
+
+
+def _all_species() -> set[str]:
+    return {s for pool in SPECIES_BY_RARITY.values() for s in pool}
+
+
+def sign_cookie(species: str) -> str:
+    """Return `<species>|<hmac>` ready to be set as the pet_id cookie value."""
+    salt = get_settings().like_salt.encode()
+    tag = hmac.new(salt, species.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{species}|{tag}"
+
+
+def verify_cookie(value: str | None) -> str | None:
+    """Return the species name iff the cookie value is well-formed,
+    HMAC-valid, and points to a species in the catalog. Else None."""
+    if not value or "|" not in value:
+        return None
+    species, _, tag = value.partition("|")
+    if species not in _all_species():
+        return None
+    expected = sign_cookie(species).split("|", 1)[1]
+    if not hmac.compare_digest(tag, expected):
+        return None
+    return species
+
 
 def _stable_hash(ip: str, user_agent: str) -> int:
     """64-bit unsigned int derived from (ip, user_agent) via HMAC-SHA256."""

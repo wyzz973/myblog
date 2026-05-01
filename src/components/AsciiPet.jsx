@@ -64,16 +64,30 @@ export default function AsciiPet({ hint = null }) {
     }
     return 'cat';  // placeholder; replaced on first /api/pet/config response
   });
+  const [celebrate, setCelebrate] = useState(null);  // species key when celebrating
   useEffect(() => {
     let alive = true;
     fetch('/api/pet/config')
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (!alive || !j?.assigned_species) return;
-        if (!SPECIES[j.assigned_species]) return;
-        if (j.assigned_species === bodyKey) return;
-        setBodyKey(j.assigned_species);
-        try { localStorage.setItem('pet.body', j.assigned_species); } catch { /* ignore */ }
+        const k = j.assigned_species;
+        if (!SPECIES[k]) return;
+        if (k !== bodyKey) {
+          setBodyKey(k);
+          try { localStorage.setItem('pet.body', k); } catch { /* ignore */ }
+        }
+        // First time this visitor sees this specific legendary buddy → celebrate.
+        if (SPECIES[k].rarity === 'legendary') {
+          const seenKey = `pet.celebrated.${k}`;
+          let seen = false;
+          try { seen = localStorage.getItem(seenKey) === '1'; } catch { /* ignore */ }
+          if (!seen) {
+            setCelebrate(k);
+            try { localStorage.setItem(seenKey, '1'); } catch { /* ignore */ }
+            setTimeout(() => alive && setCelebrate(null), 1100);
+          }
+        }
       })
       .catch(() => { /* offline / blocked — keep cached buddy */ });
     return () => { alive = false; };
@@ -328,6 +342,20 @@ export default function AsciiPet({ hint = null }) {
       onMouseEnter={() => { if (mini) setPeeking(true); }}
       onMouseLeave={() => { if (mini) setPeeking(false); }}
     >
+      {celebrate && createPortal(
+        <div className="legendary-celebrate" style={{ '--c': SPECIES[celebrate]?.color || color }}>
+          <span className="legendary-text">✦ legendary ✦</span>
+          <span className="legendary-sub">{celebrate}</span>
+          <span className="legendary-spark s1">✦</span>
+          <span className="legendary-spark s2">✧</span>
+          <span className="legendary-spark s3">✦</span>
+          <span className="legendary-spark s4">✧</span>
+          <span className="legendary-spark s5">✦</span>
+          <span className="legendary-spark s6">✧</span>
+        </div>,
+        document.body,
+      )}
+
       {(() => {
         const bubbleText = speech?.text || hint?.text;
         const bubbleThinking = speech?.thinking;
