@@ -3,7 +3,7 @@ import { SPECIES, RARITY_ORDER, byRarity } from '../species.js';
 
 describe('SPECIES', () => {
   it('has at least 18 entries (18 from buddy-editor + 4 legendary in Task 14)', () => {
-    expect(Object.keys(SPECIES).length).toBeGreaterThanOrEqual(18);
+    expect(Object.keys(SPECIES).length).toBe(23);
   });
 
   it('each entry has color, rarity, frames (3 frames, 5 lines each, all 12 chars wide)', () => {
