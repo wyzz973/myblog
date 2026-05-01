@@ -22,7 +22,7 @@ async def chat(
     user: str,
     max_tokens: int = 80,
     temperature: float = 0.9,
-    timeout_s: float = 5.0,
+    timeout: float = 5.0,  # noqa: ASYNC109 — httpx client timeout, not asyncio
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> str:
     """Call POST {base_url}/chat/completions and return the first choice's text.
@@ -40,7 +40,7 @@ async def chat(
         "max_tokens": max_tokens,
         "temperature": temperature,
     }
-    async with httpx.AsyncClient(timeout=timeout_s, transport=transport) as client:
+    async with httpx.AsyncClient(timeout=timeout, transport=transport) as client:
         try:
             r = await client.post(url, headers=headers, json=body)
         except httpx.HTTPError as e:
