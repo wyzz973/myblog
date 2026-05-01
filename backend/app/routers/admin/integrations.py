@@ -12,8 +12,8 @@ from app.schemas.integration import (
 )
 from app.services import github as github_svc
 from app.services import integrations as svc
-from app.services import pet_llm as pet_svc
 from app.services.event_log import write_event
+from app.services.pet_adapters import anthropic as anthropic_adapter
 
 router = APIRouter()
 
@@ -136,7 +136,7 @@ async def put_anthropic(
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> AnthropicIntegrationGet:
-    ok = await pet_svc.ping(req.api_key, req.model or "claude-haiku-4-5-20251001")
+    ok = await anthropic_adapter.ping(req.api_key, req.model or "claude-haiku-4-5-20251001")
     if not ok:
         raise HTTPException(422, "anthropic api key invalid")
     extras = {"model": req.model} if req.model else {}

@@ -10,10 +10,11 @@ from app.models import SiteMeta
 from app.redis import get_redis
 from app.schemas.pet import PetConfig, PublicPetConfig
 from app.services import integrations as integrations_svc
-from app.services import pet_llm, rate_limit
+from app.services import rate_limit
 from app.services.client_ip import client_ip_from, client_ip_key_part
 from app.services.event_log import write_event
 from app.services.hashing import ip_hash
+from app.services.pet_adapters import anthropic as anthropic_adapter
 
 router = APIRouter()
 
@@ -50,12 +51,17 @@ async def public_pet_summon(
         source = "fallback"
         quip = random.choice(cfg.fallback_lines)
     else:
-        quip, source = await pet_llm.summon(
-            api_key=api_key,
-            system_prompt=cfg.system_prompt,
-            model="claude-haiku-4-5-20251001",  # TODO: rewritten in Task 8 (multi-provider gateway)
-            fallback_lines=cfg.fallback_lines,
-        )
+        # TODO(Task 6): replace with pet_gateway.summon(...) — multi-provider chain.
+        try:
+            text = await anthropic_adapter.chat(
+                api_key=api_key,
+                model="claude-haiku-4-5-20251001",
+                system=cfg.system_prompt,
+                user="summon",
+            )
+            quip, source = text, "llm"
+        except Exception:
+            quip, source = random.choice(cfg.fallback_lines), "fallback"
     await write_event(
         s, type="pet.summoned",
         actor=ip_hash(client_ip_from(request))[:12],

@@ -75,7 +75,7 @@ async def test_github_put_valid_stores_encrypted_then_syncs(client, admin_token,
 async def test_anthropic_put_valid(client, admin_token, cleanup_integrations):
     fake_anthropic = AsyncMock()
     fake_anthropic.messages.create.return_value = AsyncMock()
-    with patch("app.services.pet_llm.ping", new=AsyncMock(return_value=True)):
+    with patch("app.services.pet_adapters.anthropic.ping", new=AsyncMock(return_value=True)):
         r = await client.put(
             "/api/admin/integrations/anthropic",
             json={"api_key": "sk-ant-xxx", "model": "claude-haiku-4-5-20251001"},
