@@ -101,3 +101,26 @@ async def test_doubao_uses_extra_model(secrets):
         )
         assert captured["model"] == "ep-xxx"
         assert "ark.cn-beijing.volces.com" in captured["base_url"]
+
+
+async def test_deepseek_forwards_extra_body(secrets):
+    secrets_with_ds = {**secrets, "deepseek": {"key": "dsk", "model": None}}
+    captured = {}
+
+    async def mock_chat(*, api_key, base_url, model, system, user, extra_body=None, **kw):
+        captured["base_url"] = base_url
+        captured["model"] = model
+        captured["extra_body"] = extra_body
+        return "ok"
+
+    with patch("app.services.pet_adapters.openai_compat.chat", new=mock_chat):
+        text, source = await pet_gateway.summon(
+            providers=["deepseek"],
+            secrets=secrets_with_ds,
+            system="s", user="u",
+            fallback_lines=["fb"],
+        )
+        assert source == "deepseek"
+        assert captured["model"] == "deepseek-v4-flash"
+        assert "api.deepseek.com" in captured["base_url"]
+        assert captured["extra_body"] == {"thinking": {"type": "disabled"}}

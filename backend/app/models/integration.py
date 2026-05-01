@@ -12,7 +12,7 @@ class Integration(Base):
     __tablename__ = "integrations"
     __table_args__ = (
         CheckConstraint(
-            "name IN ('github','anthropic','zhipu','qwen','doubao')",
+            "name IN ('github','anthropic','zhipu','qwen','doubao','deepseek')",
             name="ck_integrations_name",
         ),
     )

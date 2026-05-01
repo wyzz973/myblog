@@ -76,3 +76,20 @@ async def test_chat_raises_on_empty_content():
             api_key="k", base_url="https://x/v1", model="m", system="s", user="u",
             transport=httpx.MockTransport(h),
         )
+
+
+async def test_chat_merges_extra_body():
+    captured = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured["json"] = request.read().decode()
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    await adapter.chat(
+        api_key="k", base_url="https://x/v1", model="m",
+        system="s", user="u",
+        extra_body={"thinking": {"type": "disabled"}},
+        transport=httpx.MockTransport(handler),
+    )
+    assert "thinking" in captured["json"]
+    assert "disabled" in captured["json"]

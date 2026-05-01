@@ -22,11 +22,14 @@ async def chat(
     user: str,
     max_tokens: int = 80,
     temperature: float = 0.9,
+    extra_body: dict[str, Any] | None = None,
     timeout: float = 5.0,  # noqa: ASYNC109 — httpx client timeout, not asyncio
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> str:
     """Call POST {base_url}/chat/completions and return the first choice's text.
 
+    `extra_body` keys are merged into the request body after the standard fields,
+    allowing callers to inject provider-specific parameters (e.g. thinking mode).
     `transport` parameter is for tests (httpx.MockTransport).
     """
     url = f"{base_url.rstrip('/')}/chat/completions"
@@ -40,6 +43,8 @@ async def chat(
         "max_tokens": max_tokens,
         "temperature": temperature,
     }
+    if extra_body:
+        body.update(extra_body)
     async with httpx.AsyncClient(timeout=timeout, transport=transport) as client:
         try:
             r = await client.post(url, headers=headers, json=body)

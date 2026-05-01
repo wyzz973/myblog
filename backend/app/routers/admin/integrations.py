@@ -7,6 +7,8 @@ from app.models import Account
 from app.schemas.integration import (
     AnthropicIntegrationGet,
     AnthropicIntegrationPut,
+    DeepseekIntegrationGet,
+    DeepseekIntegrationPut,
     DoubaoIntegrationGet,
     DoubaoIntegrationPut,
     GithubIntegrationGet,
@@ -173,6 +175,7 @@ async def _smoke(name: str, token: str, model: str) -> tuple[bool, str | None]:
             model=model,
             system="ping", user="ping",
             max_tokens=4, timeout=5.0,
+            extra_body=cfg.get("extra_body"),
         )
         return True, None
     except Exception as e:  # noqa: BLE001
@@ -288,3 +291,40 @@ async def put_doubao(
     await write_event(s, type="integration.doubao.tested", actor=_admin.email, meta={"model": req.model})
     await s.commit()
     return DoubaoIntegrationGet(configured=True, model=req.model)
+
+
+@router.get("/integrations/deepseek", response_model=DeepseekIntegrationGet)
+async def get_deepseek(
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> DeepseekIntegrationGet:
+    row = await svc.get(s, name="deepseek")
+    if row is None:
+        return DeepseekIntegrationGet()
+    return DeepseekIntegrationGet(
+        configured=True,
+        model=(row.extra_json or {}).get("model"),
+        last_synced_at=row.last_synced_at,
+        last_status=row.last_status,
+        last_error=row.last_error,
+    )
+
+
+@router.put(
+    "/integrations/deepseek",
+    response_model=DeepseekIntegrationGet,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def put_deepseek(
+    req: DeepseekIntegrationPut,
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> DeepseekIntegrationGet:
+    model = req.model or pet_gateway.PROVIDER_REGISTRY["deepseek"]["default_model"]
+    ok, err = await _smoke("deepseek", req.token, model)
+    if not ok:
+        raise HTTPException(422, f"deepseek smoke failed: {err}")
+    await svc.upsert(s, name="deepseek", username=None, secret=req.token, extra={"model": model})
+    await write_event(s, type="integration.deepseek.tested", actor=_admin.email, meta={"model": model})
+    await s.commit()
+    return DeepseekIntegrationGet(configured=True, model=model)

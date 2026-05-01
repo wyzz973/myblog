@@ -32,6 +32,12 @@ PROVIDER_REGISTRY: dict[str, dict[str, Any]] = {
         "adapter": "anthropic",
         "default_model": "claude-haiku-4-5-20251001",
     },
+    "deepseek": {
+        "adapter": "openai_compat",
+        "base_url": "https://api.deepseek.com",
+        "default_model": "deepseek-v4-flash",
+        "extra_body": {"thinking": {"type": "disabled"}},  # short quips, no reasoning trace
+    },
 }
 
 
@@ -52,6 +58,7 @@ async def _call(
         return await openai_compat.chat(
             api_key=api_key, base_url=cfg["base_url"], model=model,
             system=system, user=user, timeout=timeout,
+            extra_body=cfg.get("extra_body"),
         )
     if cfg["adapter"] == "anthropic":
         return await anthropic_adapter.chat(

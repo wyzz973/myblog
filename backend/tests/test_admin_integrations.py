@@ -281,3 +281,65 @@ async def test_get_qwen_after_put(client, admin_token, monkeypatch, cleanup_inte
     assert r.status_code == 200
     j = r.json()
     assert j["configured"] is True and j["model"] == "qwen-plus"
+
+
+async def test_get_deepseek_empty_returns_empty_envelope(client, admin_token, cleanup_integrations):
+    r = await client.get(
+        "/api/admin/integrations/deepseek",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j["configured"] is False
+
+
+async def test_put_deepseek_stores_secret_and_model(client, admin_token, monkeypatch, cleanup_integrations):
+    async def fake_chat(**kw):
+        return "ok"
+    from app.services.pet_adapters import openai_compat
+    monkeypatch.setattr(openai_compat, "chat", fake_chat)
+
+    r = await client.put(
+        "/api/admin/integrations/deepseek",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"token": "sk-deepseek-xyz", "model": "deepseek-v4-flash"},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j["configured"] is True
+    assert j["model"] == "deepseek-v4-flash"
+
+
+async def test_get_deepseek_after_put(client, admin_token, monkeypatch, cleanup_integrations):
+    async def fake_chat(**kw):
+        return "ok"
+    from app.services.pet_adapters import openai_compat
+    monkeypatch.setattr(openai_compat, "chat", fake_chat)
+    await client.put(
+        "/api/admin/integrations/deepseek",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"token": "sk-deepseek-xyz"},  # model omitted → server uses default
+    )
+    r = await client.get(
+        "/api/admin/integrations/deepseek",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j["configured"] is True
+    assert j["model"] == "deepseek-v4-flash"
+
+
+async def test_put_deepseek_rejects_when_smoke_test_fails(client, admin_token, monkeypatch, cleanup_integrations):
+    async def fake_chat(**kw):
+        from app.services.pet_adapters.openai_compat import OpenAICompatError
+        raise OpenAICompatError("auth failed")
+    from app.services.pet_adapters import openai_compat
+    monkeypatch.setattr(openai_compat, "chat", fake_chat)
+
+    r = await client.put(
+        "/api/admin/integrations/deepseek",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"token": "bad-key", "model": "deepseek-v4-flash"},
+    )
+    assert r.status_code == 422

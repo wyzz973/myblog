@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-ProviderName = Literal["zhipu", "qwen", "doubao", "anthropic"]
+ProviderName = Literal["zhipu", "qwen", "doubao", "anthropic", "deepseek"]
 
 
 class _Strict(BaseModel):
@@ -13,7 +13,7 @@ class PetConfig(_Strict):
     providers: list[ProviderName] = Field(
         default_factory=lambda: ["zhipu"],
         min_length=0,
-        max_length=4,
+        max_length=5,
     )
     system_prompt: str = Field(
         default=(
