@@ -7,6 +7,9 @@ dist
 .env.*
 !.env.example
 
+# Playwright MCP cache (snapshots / console logs from automated browser sessions)
+.playwright-mcp/
+
 # Backend (planned, will land later)
 backend/data/
 backend/__pycache__/
