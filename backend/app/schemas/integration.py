@@ -28,3 +28,30 @@ class AnthropicIntegrationGet(_Strict):
 class AnthropicIntegrationPut(_Strict):
     api_key: str = Field(min_length=1, max_length=256)
     model: str | None = Field(default=None, max_length=64)
+
+
+class _ProviderGet(BaseModel):
+    configured: bool = False
+    model: str | None = None
+    last_synced_at: datetime | None = None
+    last_status: str | None = None
+    last_error: str | None = None
+
+
+class ZhipuIntegrationGet(_ProviderGet): ...
+class QwenIntegrationGet(_ProviderGet): ...
+class DoubaoIntegrationGet(_ProviderGet): ...
+
+
+class _ProviderPut(BaseModel):
+    token: str = Field(min_length=4, max_length=512)
+    model: str | None = Field(default=None, max_length=128)
+
+
+class ZhipuIntegrationPut(_ProviderPut): ...
+class QwenIntegrationPut(_ProviderPut): ...
+
+
+class DoubaoIntegrationPut(BaseModel):
+    token: str = Field(min_length=4, max_length=512)
+    model: str = Field(min_length=4, max_length=128)  # endpoint id REQUIRED for doubao

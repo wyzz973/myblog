@@ -7,13 +7,21 @@ from app.models import Account
 from app.schemas.integration import (
     AnthropicIntegrationGet,
     AnthropicIntegrationPut,
+    DoubaoIntegrationGet,
+    DoubaoIntegrationPut,
     GithubIntegrationGet,
     GithubIntegrationPut,
+    QwenIntegrationGet,
+    QwenIntegrationPut,
+    ZhipuIntegrationGet,
+    ZhipuIntegrationPut,
 )
 from app.services import github as github_svc
 from app.services import integrations as svc
+from app.services import pet_gateway
 from app.services.event_log import write_event
 from app.services.pet_adapters import anthropic as anthropic_adapter
+from app.services.pet_adapters import openai_compat
 
 router = APIRouter()
 
@@ -150,3 +158,133 @@ async def put_anthropic(
         last_status=row.last_status,
         last_error=row.last_error,
     )
+
+
+def _registry(name: str) -> dict:
+    return pet_gateway.PROVIDER_REGISTRY[name]
+
+
+async def _smoke(name: str, token: str, model: str) -> tuple[bool, str | None]:
+    cfg = _registry(name)
+    try:
+        await openai_compat.chat(
+            api_key=token,
+            base_url=cfg["base_url"],
+            model=model,
+            system="ping", user="ping",
+            max_tokens=4, timeout=5.0,
+        )
+        return True, None
+    except Exception as e:  # noqa: BLE001
+        return False, str(e)[:200]
+
+
+@router.get("/integrations/zhipu", response_model=ZhipuIntegrationGet)
+async def get_zhipu(
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> ZhipuIntegrationGet:
+    row = await svc.get(s, name="zhipu")
+    if row is None:
+        return ZhipuIntegrationGet()
+    return ZhipuIntegrationGet(
+        configured=True,
+        model=(row.extra_json or {}).get("model"),
+        last_synced_at=row.last_synced_at,
+        last_status=row.last_status,
+        last_error=row.last_error,
+    )
+
+
+@router.put(
+    "/integrations/zhipu",
+    response_model=ZhipuIntegrationGet,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def put_zhipu(
+    req: ZhipuIntegrationPut,
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> ZhipuIntegrationGet:
+    model = req.model or pet_gateway.PROVIDER_REGISTRY["zhipu"]["default_model"]
+    ok, err = await _smoke("zhipu", req.token, model)
+    if not ok:
+        raise HTTPException(422, f"zhipu smoke failed: {err}")
+    await svc.upsert(s, name="zhipu", username=None, secret=req.token, extra={"model": model})
+    await write_event(s, type="integration.zhipu.tested", actor=_admin.email, meta={"model": model})
+    await s.commit()
+    return ZhipuIntegrationGet(configured=True, model=model)
+
+
+@router.get("/integrations/qwen", response_model=QwenIntegrationGet)
+async def get_qwen(
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> QwenIntegrationGet:
+    row = await svc.get(s, name="qwen")
+    if row is None:
+        return QwenIntegrationGet()
+    return QwenIntegrationGet(
+        configured=True,
+        model=(row.extra_json or {}).get("model"),
+        last_synced_at=row.last_synced_at,
+        last_status=row.last_status,
+        last_error=row.last_error,
+    )
+
+
+@router.put(
+    "/integrations/qwen",
+    response_model=QwenIntegrationGet,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def put_qwen(
+    req: QwenIntegrationPut,
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> QwenIntegrationGet:
+    model = req.model or pet_gateway.PROVIDER_REGISTRY["qwen"]["default_model"]
+    ok, err = await _smoke("qwen", req.token, model)
+    if not ok:
+        raise HTTPException(422, f"qwen smoke failed: {err}")
+    await svc.upsert(s, name="qwen", username=None, secret=req.token, extra={"model": model})
+    await write_event(s, type="integration.qwen.tested", actor=_admin.email, meta={"model": model})
+    await s.commit()
+    return QwenIntegrationGet(configured=True, model=model)
+
+
+@router.get("/integrations/doubao", response_model=DoubaoIntegrationGet)
+async def get_doubao(
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> DoubaoIntegrationGet:
+    row = await svc.get(s, name="doubao")
+    if row is None:
+        return DoubaoIntegrationGet()
+    return DoubaoIntegrationGet(
+        configured=True,
+        model=(row.extra_json or {}).get("model"),
+        last_synced_at=row.last_synced_at,
+        last_status=row.last_status,
+        last_error=row.last_error,
+    )
+
+
+@router.put(
+    "/integrations/doubao",
+    response_model=DoubaoIntegrationGet,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def put_doubao(
+    req: DoubaoIntegrationPut,
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> DoubaoIntegrationGet:
+    # doubao: model (endpoint id) is REQUIRED by DoubaoIntegrationPut schema — no default
+    ok, err = await _smoke("doubao", req.token, req.model)
+    if not ok:
+        raise HTTPException(422, f"doubao smoke failed: {err}")
+    await svc.upsert(s, name="doubao", username=None, secret=req.token, extra={"model": req.model})
+    await write_event(s, type="integration.doubao.tested", actor=_admin.email, meta={"model": req.model})
+    await s.commit()
+    return DoubaoIntegrationGet(configured=True, model=req.model)

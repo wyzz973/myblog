@@ -178,3 +178,106 @@ async def test_github_failed_emits_failed_event(client, admin_token, cleanup_int
         # Worker emits one failed event before raising; router catches and emits another.
         types = [e.type for e in events]
         assert "integration.github.failed" in types
+
+
+async def test_get_zhipu_empty_returns_empty_envelope(client, admin_token, cleanup_integrations):
+    r = await client.get(
+        "/api/admin/integrations/zhipu",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j["configured"] is False
+
+
+async def test_put_zhipu_stores_secret_and_model(client, admin_token, monkeypatch, cleanup_integrations):
+    # Mock the smoke test so we don't hit zhipu.com in unit tests
+    async def fake_chat(**kw):
+        return "ok"
+    from app.services.pet_adapters import openai_compat
+    monkeypatch.setattr(openai_compat, "chat", fake_chat)
+
+    r = await client.put(
+        "/api/admin/integrations/zhipu",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"token": "zhipu-key-xyz", "model": "glm-4-flash"},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j["configured"] is True
+    assert j["model"] == "glm-4-flash"
+
+
+async def test_put_zhipu_rejects_when_smoke_test_fails(client, admin_token, monkeypatch, cleanup_integrations):
+    async def fake_chat(**kw):
+        from app.services.pet_adapters.openai_compat import OpenAICompatError
+        raise OpenAICompatError("auth failed")
+    from app.services.pet_adapters import openai_compat
+    monkeypatch.setattr(openai_compat, "chat", fake_chat)
+
+    r = await client.put(
+        "/api/admin/integrations/zhipu",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"token": "bad", "model": "glm-4-flash"},
+    )
+    assert r.status_code == 422
+
+
+async def test_put_qwen_stores_secret(client, admin_token, monkeypatch, cleanup_integrations):
+    async def fake_chat(**kw):
+        return "ok"
+    from app.services.pet_adapters import openai_compat
+    monkeypatch.setattr(openai_compat, "chat", fake_chat)
+
+    r = await client.put(
+        "/api/admin/integrations/qwen",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"token": "qwen-key-xyz"},  # model omitted → server uses default
+    )
+    assert r.status_code == 200
+    assert r.json()["configured"] is True
+    assert r.json()["model"] == "qwen-turbo"
+
+
+async def test_put_doubao_requires_model_in_payload(client, admin_token, cleanup_integrations):
+    # No smoke test mock — should 422 on schema validation before reaching network
+    r = await client.put(
+        "/api/admin/integrations/doubao",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"token": "doubao-key"},  # missing required `model`
+    )
+    assert r.status_code == 422
+
+
+async def test_put_doubao_with_model(client, admin_token, monkeypatch, cleanup_integrations):
+    async def fake_chat(**kw):
+        return "ok"
+    from app.services.pet_adapters import openai_compat
+    monkeypatch.setattr(openai_compat, "chat", fake_chat)
+
+    r = await client.put(
+        "/api/admin/integrations/doubao",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"token": "doubao-key", "model": "ep-20260501-abc"},
+    )
+    assert r.status_code == 200
+    assert r.json()["model"] == "ep-20260501-abc"
+
+
+async def test_get_qwen_after_put(client, admin_token, monkeypatch, cleanup_integrations):
+    async def fake_chat(**kw):
+        return "ok"
+    from app.services.pet_adapters import openai_compat
+    monkeypatch.setattr(openai_compat, "chat", fake_chat)
+    await client.put(
+        "/api/admin/integrations/qwen",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"token": "qk-x", "model": "qwen-plus"},
+    )
+    r = await client.get(
+        "/api/admin/integrations/qwen",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j["configured"] is True and j["model"] == "qwen-plus"
