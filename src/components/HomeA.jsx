@@ -95,7 +95,12 @@ function ContribGraph({ grid, counts, months: monthsProp }) {
     colSun.setDate(colSun.getDate() - (weeksTotal - 1 - wi) * 7 - 6);
     const d = new Date(colSun);
     d.setDate(d.getDate() + di);
-    return d.toISOString().slice(0, 10);
+    // Local YYYY-MM-DD: toISOString() reinterprets in UTC and shifts the
+    // date by a day in non-UTC timezones (CN: -1d), corrupting tooltips.
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
   };
 
   const measure = (el) => {
@@ -195,16 +200,32 @@ function ContribGraph({ grid, counts, months: monthsProp }) {
         {months.map((m, i) => <span key={`${m}-${i}`}>{m}</span>)}
       </div>
       <div className="contrib">
-        <div className="contrib-grid" ref={gridRef} onMouseMove={onMove} onMouseLeave={onLeave}>
+        <div
+          className="contrib-grid"
+          ref={gridRef}
+          onMouseMove={onMove}
+          onMouseLeave={onLeave}
+          role="grid"
+          aria-label="GitHub contributions, last 52 weeks"
+        >
           {grid.map((col, wi) =>
-            col.map((lvl, di) => (
-              <div
-                key={`${wi}-${di}`}
-                className="contrib-cell"
-                data-l={lvl}
-                onMouseEnter={(e) => onCellEnter(e, wi, di)}
-              />
-            )),
+            col.map((lvl, di) => {
+              const date = cellDate(wi, di);
+              const count = counts?.[wi]?.[di] ?? 0;
+              const label = `${WEEKDAY_NAMES[di]} ${date}: ${
+                count === 0 ? 'no commits' : `${count} commit${count === 1 ? '' : 's'}`
+              }`;
+              return (
+                <div
+                  key={`${wi}-${di}`}
+                  className="contrib-cell"
+                  data-l={lvl}
+                  role="gridcell"
+                  aria-label={label}
+                  onMouseEnter={(e) => onCellEnter(e, wi, di)}
+                />
+              );
+            }),
           )}
           {tip && (
             <div
