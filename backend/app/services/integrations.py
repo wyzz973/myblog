@@ -10,11 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Integration
 from app.services import secret_box
 
+ProviderName = Literal["github", "anthropic", "zhipu", "qwen", "doubao"]
+
 
 async def upsert(
     s: AsyncSession,
     *,
-    name: Literal["github", "anthropic"],
+    name: ProviderName,
     username: str | None = None,
     secret: str,
     extra: dict[str, Any] | None = None,

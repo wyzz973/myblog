@@ -86,3 +86,25 @@ async def test_upsert_rotates_ciphertext_on_each_call():
         assert row2.secret_encrypted != first_ct
     async with AsyncSessionLocal() as s:
         assert await svc.get_secret(s, name="github") == "same-token"
+
+
+async def test_upsert_accepts_zhipu():
+    async with AsyncSessionLocal() as s:
+        row = await svc.upsert(
+            s, name="zhipu", username=None, secret="zhipu-key-1",
+            extra={"model": "glm-4-flash"},
+        )
+        await s.commit()
+        assert row.name == "zhipu"
+        assert row.extra_json["model"] == "glm-4-flash"
+
+
+async def test_upsert_accepts_qwen_and_doubao():
+    async with AsyncSessionLocal() as s:
+        await svc.upsert(s, name="qwen", username=None, secret="qwen-key")
+        await svc.upsert(s, name="doubao", username=None, secret="doubao-key", extra={"model": "ep-test"})
+        await s.commit()
+    async with AsyncSessionLocal() as s:
+        z = await svc.get(s, name="qwen")
+        d = await svc.get(s, name="doubao")
+        assert z is not None and d is not None
