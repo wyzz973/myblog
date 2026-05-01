@@ -101,7 +101,7 @@ async def public_pet_summon(
             meta={"source": "rate_limited", "breach": breach},
         )
         await s.commit()
-        return {"quip": quip, "source": "rate_limited"}
+        return {"quip": quip, "source": "rate_limited", "mode": "rate_limited"}
 
     # Resolve post
     post: Post | None = None
