@@ -43,7 +43,7 @@ async def public_pet_summon(
 ) -> dict:
     cfg = await _load_pet_config(s)
     ip_key = client_ip_key_part(request)
-    await rate_limit.hit(redis, f"rl:pet:{ip_key}", limit=cfg.rate_limit_per_min, window_sec=60)
+    await rate_limit.hit(redis, f"rl:pet:{ip_key}", limit=cfg.per_ip_per_min, window_sec=60)
 
     api_key = await integrations_svc.get_secret(s, name="anthropic")
     if api_key is None or not cfg.enabled:
@@ -53,7 +53,7 @@ async def public_pet_summon(
         quip, source = await pet_llm.summon(
             api_key=api_key,
             system_prompt=cfg.system_prompt,
-            model=cfg.model,
+            model="claude-haiku-4-5-20251001",  # TODO: rewritten in Task 8 (multi-provider gateway)
             fallback_lines=cfg.fallback_lines,
         )
     await write_event(
