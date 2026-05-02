@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import BigInteger, DateTime, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -25,13 +26,15 @@ class PetMessage(Base):
     visitor_hash: Mapped[str] = mapped_column(String(16), nullable=False)
     species: Mapped[str] = mapped_column(String(32), nullable=False)
     mode: Mapped[str] = mapped_column(String(32), nullable=False)
-    post_id: Mapped[str | None] = mapped_column(String(80))
+    # Free-form: not a FK to posts.id. Archive must survive post deletion;
+    # if a post is later deleted, this column keeps the snapshot for history.
+    post_id: Mapped[str | None] = mapped_column(String(64))
     title: Mapped[str | None] = mapped_column(String(200))
     tag_slug: Mapped[str | None] = mapped_column(String(40))
     summary: Mapped[str | None] = mapped_column(Text)
     selection: Mapped[str | None] = mapped_column(Text)
     system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
-    prior_turns: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, default=list)
+    prior_turns: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     reply: Mapped[str] = mapped_column(Text, nullable=False)
     source: Mapped[str] = mapped_column(String(32), nullable=False)
     created_at: Mapped[datetime] = mapped_column(

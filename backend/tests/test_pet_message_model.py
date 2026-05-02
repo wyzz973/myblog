@@ -36,6 +36,7 @@ async def test_insert_pet_message_basic_roundtrip():
         await s.refresh(m)
         assert m.id is not None
         assert isinstance(m.created_at, datetime)
+        assert m.created_at.tzinfo is not None  # DateTime(timezone=True)
         # Cleanup
         await s.delete(m)
         await s.commit()

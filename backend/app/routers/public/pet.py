@@ -27,7 +27,7 @@ router = APIRouter()
 
 
 class SummonRequest(BaseModel):
-    post_id: str | None = Field(default=None, max_length=80)
+    post_id: str | None = Field(default=None, max_length=64)
     selection: str | None = Field(default=None, max_length=4000)
     mode: PetMode | None = None
 

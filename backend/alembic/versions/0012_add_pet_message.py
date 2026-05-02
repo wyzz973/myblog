@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column("visitor_hash", sa.String(16), nullable=False),
         sa.Column("species", sa.String(32), nullable=False),
         sa.Column("mode", sa.String(32), nullable=False),
-        sa.Column("post_id", sa.String(80), nullable=True),
+        sa.Column("post_id", sa.String(64), nullable=True),
         sa.Column("title", sa.String(200), nullable=True),
         sa.Column("tag_slug", sa.String(40), nullable=True),
         sa.Column("summary", sa.Text(), nullable=True),
