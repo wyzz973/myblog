@@ -39,7 +39,7 @@ def test_build_system_known_species_greet_mode():
                        summary=None, selection=None)
     assert "cat" in out
     assert cfg.personas.cat in out
-    assert "summoned you out of nowhere" in out  # from greet template
+    assert "tapped on you" in out  # from greet template
 
 
 def test_build_system_unknown_species_falls_back_to_system_prompt():

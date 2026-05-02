@@ -1822,3 +1822,234 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   25%  { opacity: 1; }
   100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.2) rotate(360deg); opacity: 0; }
 }
+
+/* ── Admin · Pet (3-tab Behavior / Personas / Templates) ─────────────── */
+
+.admin-pet {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  color: var(--fg);
+  max-width: 960px;
+}
+
+.admin-pet .tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 16px;
+  padding-bottom: 0;
+}
+.admin-pet .tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: var(--fg-3);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  transition: color 0.15s, background 0.15s;
+  position: relative;
+  bottom: -1px;
+}
+.admin-pet .tab:hover { color: var(--fg); }
+.admin-pet .tab.active {
+  color: var(--accent);
+  background: var(--bg-2);
+  border-color: var(--line);
+  border-bottom-color: var(--bg-2);
+}
+.admin-pet .grow { flex: 1; }
+.admin-pet .primary {
+  background: var(--accent);
+  color: var(--bg);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 4px;
+  border: 0;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+.admin-pet .primary:hover:not(:disabled) { filter: brightness(1.1); }
+.admin-pet .primary:disabled { opacity: 0.5; cursor: default; }
+.admin-pet .saved-hint {
+  color: var(--accent);
+  font-size: 11px;
+  margin-left: 10px;
+  opacity: 0;
+  animation: petSavedHint 1.6s ease-out forwards;
+}
+@keyframes petSavedHint {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.admin-pet .form { display: flex; flex-direction: column; gap: 14px; }
+.admin-pet .pad { padding: 4px 0; }
+
+.admin-pet fieldset {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin: 0;
+  background: var(--bg-2);
+}
+.admin-pet legend {
+  color: var(--fg-3);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 6px;
+}
+.admin-pet label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  margin-right: 14px;
+  color: var(--fg-2);
+}
+.admin-pet input[type="checkbox"],
+.admin-pet input[type="radio"] {
+  accent-color: var(--accent);
+  width: 14px; height: 14px;
+  cursor: pointer;
+}
+.admin-pet input[type="text"],
+.admin-pet input[type="number"],
+.admin-pet textarea {
+  background: var(--bg-3);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.admin-pet textarea {
+  resize: vertical;
+  min-height: 60px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.admin-pet input:focus,
+.admin-pet textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 25%, transparent);
+}
+.admin-pet input[type="number"] { width: 100px; }
+
+.admin-pet .hint {
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0 0 4px;
+}
+.admin-pet .hint code {
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 11px;
+  color: var(--accent-2);
+}
+
+.admin-pet .danger {
+  background: transparent;
+  color: color-mix(in oklab, #e07070 80%, var(--fg));
+  border: 1px solid color-mix(in oklab, #e07070 40%, var(--line));
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: background 0.15s, color 0.15s;
+}
+.admin-pet .danger:hover:not(:disabled) {
+  background: color-mix(in oklab, #e07070 15%, transparent);
+  color: #e07070;
+}
+.admin-pet .danger:disabled { opacity: 0.5; cursor: default; }
+
+.admin-pet .err {
+  border: 1px solid color-mix(in oklab, #e07070 40%, var(--line));
+  background: color-mix(in oklab, #e07070 8%, var(--bg-2));
+  color: color-mix(in oklab, #e07070 80%, var(--fg));
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.admin-pet .err button {
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 1px 8px;
+  font-size: 11px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.admin-pet details {
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.admin-pet details > summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--fg-2);
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.admin-pet details > summary:hover { color: var(--fg); }
+.admin-pet details[open] > summary {
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+}
+
+.admin-pet .rarity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.admin-pet .persona-row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  align-items: start;
+  gap: 12px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+}
+.admin-pet .persona-row:first-of-type { border-top: 0; }
+.admin-pet .species-label {
+  color: var(--accent);
+  font-size: 12px;
+  padding-top: 6px;
+  margin: 0;
+}
+.admin-pet .persona-row textarea {
+  min-height: 60px;
+}
+
+/* PetBehavior — providers comma-edit field & advanced details */
+.admin-pet .form > fieldset > input[type="text"] {
+  margin-top: 6px;
+}
+.admin-pet details summary { list-style: revert; }

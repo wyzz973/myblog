@@ -45,7 +45,7 @@ async def test_greet_mode_when_no_post_no_selection(client, captured_calls, fake
     assert r.status_code == 200
     body = r.json()
     assert body["mode"] == "greet"
-    assert "summoned you out of nowhere" in captured_calls[0]["system"]
+    assert "tapped on you" in captured_calls[0]["system"]
 
 
 async def test_summary_react_mode_with_post(client, captured_calls, fake_post_id):
@@ -68,7 +68,7 @@ async def test_selection_explain_when_explicit_flag(client, captured_calls, fake
     body = r.json()
     assert body["mode"] == "selection_explain"
     assert "useEffect" in captured_calls[0]["system"]
-    assert "Explain what it does" in captured_calls[0]["system"]
+    assert "Explain what this snippet" in captured_calls[0]["system"]
 
 
 async def test_selection_qa_default_when_selection_no_mode(client, captured_calls, fake_post_id):
