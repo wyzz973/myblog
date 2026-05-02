@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import engine
@@ -74,9 +75,17 @@ async def seed_pet_messages():
             s.add(r)
         await s.commit()
         yield rows
-        # Cleanup
-        for r in rows:
-            await s.delete(r)
+        # Cleanup — delete by visitor_hash so we don't choke if a test
+        # under-test (e.g. DELETE endpoint) already removed some rows.
+        await s.execute(
+            sql_delete(PetMessage).where(
+                PetMessage.visitor_hash.in_([
+                    "alice000000000aa",
+                    "bob000000000000b",
+                    "carol00000000000",
+                ])
+            )
+        )
         await s.commit()
 
 
@@ -190,3 +199,55 @@ async def test_get_conversation_detail_unknown_visitor_empty(
     )
     assert r.status_code == 200
     assert r.json()["items"] == []
+
+
+async def test_delete_conversation_removes_db_rows(
+    client, admin_token, seed_pet_messages,
+):
+    from sqlalchemy import select as sql_select
+    from app.db import AsyncSessionLocal
+    from app.models import PetMessage
+
+    r = await client.delete(
+        "/api/admin/pet/conversations/alice000000000aa",
+        headers=_hdr(admin_token),
+    )
+    assert r.status_code == 204
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(
+            sql_select(PetMessage).where(PetMessage.visitor_hash == "alice000000000aa")
+        )).scalars().all()
+        assert rows == []
+        # Bob's rows should be untouched
+        bob = (await s.execute(
+            sql_select(PetMessage).where(PetMessage.visitor_hash == "bob000000000000b")
+        )).scalars().all()
+        assert len(bob) == 2
+
+
+async def test_delete_conversation_clears_redis_ctx(
+    client, admin_token, redis,
+):
+    from app.services.pet_context import KEY_PREFIX, append
+
+    await append(
+        redis, "deleteme00000000",
+        user_turn={"role": "user", "content": "hi"},
+        assistant_turn={"role": "assistant", "content": "hello"},
+    )
+    assert await redis.exists(f"{KEY_PREFIX}deleteme00000000") == 1
+    r = await client.delete(
+        "/api/admin/pet/conversations/deleteme00000000",
+        headers=_hdr(admin_token),
+    )
+    assert r.status_code == 204
+    assert await redis.exists(f"{KEY_PREFIX}deleteme00000000") == 0
+
+
+async def test_delete_nonexistent_returns_204(client, admin_token):
+    """Idempotent — DELETE on a never-seen visitor is success."""
+    r = await client.delete(
+        "/api/admin/pet/conversations/nonexistent00000",
+        headers=_hdr(admin_token),
+    )
+    assert r.status_code == 204
