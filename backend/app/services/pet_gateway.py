@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import random
+from collections.abc import AsyncIterator
 from typing import Any
 
 import structlog
@@ -104,3 +105,89 @@ async def summon(
             log.warning("pet_gateway.provider_failed", name=name, error=repr(e))
             continue
     return random.choice(fallback_lines) if fallback_lines else "...", "fallback"
+
+
+async def _call_stream(
+    *,
+    name: str,
+    api_key: str,
+    model_override: str | None,
+    system: str,
+    user: str,
+    timeout: float,  # noqa: ASYNC109
+) -> AsyncIterator[str]:
+    cfg = PROVIDER_REGISTRY[name]
+    model = model_override or cfg["default_model"]
+    if model is None:
+        raise RuntimeError(f"{name}: no model configured (set extra_json.model)")
+    if cfg["adapter"] == "openai_compat":
+        async for chunk in openai_compat.chat_stream(
+            api_key=api_key, base_url=cfg["base_url"], model=model,
+            system=system, user=user, timeout=timeout,
+            extra_body=cfg.get("extra_body"),
+        ):
+            yield chunk
+        return
+    if cfg["adapter"] == "anthropic":
+        async for chunk in anthropic_adapter.chat_stream(
+            api_key=api_key, model=model,
+            system=system, user=user, timeout=timeout,
+        ):
+            yield chunk
+        return
+    raise RuntimeError(f"{name}: unknown adapter {cfg['adapter']!r}")
+
+
+async def summon_stream(
+    *,
+    providers: list[str],
+    secrets: dict[str, dict[str, Any]],
+    system: str,
+    user: str,
+    fallback_lines: list[str],
+    timeout_per_call: float = 30.0,
+) -> AsyncIterator[dict[str, Any]]:
+    """Stream from the first working provider. Yields events:
+      - {"type": "chunk", "text": "..."} per delta
+      - {"type": "done", "source": "<provider>"} on success
+      - {"type": "fallback", "text": "...", "source": "fallback"}
+        if all providers fail before producing any chunk
+
+    If a provider produces partial output then errors mid-stream, we keep
+    the partial output (yield 'done') rather than fall back, so the visitor
+    isn't shown two different replies.
+    """
+    for name in providers:
+        if name not in PROVIDER_REGISTRY:
+            log.warning("pet_gateway.unknown_provider", name=name)
+            continue
+        sec = secrets.get(name)
+        if not sec or not sec.get("key"):
+            log.info("pet_gateway.skip_no_secret", name=name)
+            continue
+        received_any = False
+        try:
+            async for chunk in _call_stream(
+                name=name,
+                api_key=sec["key"],
+                model_override=sec.get("model"),
+                system=system,
+                user=user,
+                timeout=timeout_per_call,
+            ):
+                received_any = True
+                yield {"type": "chunk", "text": chunk}
+        except Exception as e:  # noqa: BLE001
+            if received_any:
+                # Mid-stream failure — keep what we already sent.
+                log.warning("pet_gateway.stream_partial_failure", name=name, error=repr(e))
+                yield {"type": "done", "source": name}
+                return
+            log.warning("pet_gateway.stream_provider_failed", name=name, error=repr(e))
+            continue
+        if received_any:
+            yield {"type": "done", "source": name}
+            return
+        # Provider succeeded but yielded zero chunks — try next.
+    fallback = random.choice(fallback_lines) if fallback_lines else "..."
+    yield {"type": "fallback", "text": fallback, "source": "fallback"}

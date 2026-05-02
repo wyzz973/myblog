@@ -1,15 +1,18 @@
 """Pet public endpoint — multi-provider gateway with article context."""
 from __future__ import annotations
 
+import json
 import random
 
+import structlog
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_session
+from app.db import AsyncSessionLocal, get_session
 from app.models import Post, SiteMeta, Tag
 from app.redis import get_redis
 from app.schemas.pet import PetConfig, PetMode, PublicPetConfig
@@ -19,6 +22,7 @@ from app.services.client_ip import client_ip_from, client_ip_key_part
 from app.services.event_log import write_event
 from app.services.hashing import ip_hash
 
+log = structlog.get_logger(__name__)
 router = APIRouter()
 
 
@@ -163,3 +167,145 @@ async def public_pet_summon(
     )
     await s.commit()
     return {"quip": quip, "source": source, "mode": mode}
+
+
+def _sse(payload: dict) -> str:
+    """Format a dict as a single SSE 'data:' frame."""
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+@router.post("/pet/summon/stream")
+async def public_pet_summon_stream(
+    req: SummonRequest,
+    request: Request,
+    s: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> StreamingResponse:
+    """Streaming variant of /pet/summon. Emits SSE frames:
+
+      data: {"type":"meta","mode":"...","species":"..."}
+      data: {"type":"chunk","text":"..."}        (one or more)
+      data: {"type":"done","source":"<provider>"}
+      data: {"type":"fallback","text":"...","source":"fallback"}
+      data: {"type":"rate_limited","text":"...","breach":"..."}
+
+    Front-end accumulates `chunk.text` and replaces with `fallback.text`
+    or `rate_limited.text` when those terminal events arrive.
+    """
+    # Front-load all DB reads; the streaming body must not depend on `s`
+    # because the dependency-managed session may be closed before the
+    # generator finishes flushing chunks.
+    cfg = await _load_pet_config(s)
+    ip_key = client_ip_key_part(request)
+
+    breach = await rate_limit.check_pet(
+        redis, ip=ip_key,
+        per_ip_per_min=cfg.per_ip_per_min,
+        per_ip_per_day=cfg.per_ip_per_day,
+        global_per_day=cfg.global_per_day,
+        unlimited=cfg.unlimited,
+        hard_ceiling_per_day=cfg.hard_ceiling_per_day,
+    )
+    actor_hash = ip_hash(client_ip_from(request))[:12]
+
+    if breach is not None:
+        quip = random.choice(cfg.tired_lines)
+        await write_event(
+            s, type="pet.summoned", actor=actor_hash,
+            meta={"source": "rate_limited", "breach": breach},
+        )
+        await s.commit()
+
+        async def rate_limited_stream():
+            yield _sse({"type": "rate_limited", "text": quip, "breach": breach})
+
+        return StreamingResponse(rate_limited_stream(), media_type="text/event-stream")
+
+    # Mode + post lookup.
+    if not cfg.enable_article_context:
+        post_id = None
+        selection = None
+        mode: PetMode = "greet"
+    else:
+        post_id = req.post_id
+        selection = req.selection
+        mode = req.mode or pet_prompt.infer_mode(post_id=post_id, selection=selection)
+
+    title: str | None = None
+    tag_label: str | None = None
+    summary: str | None = None
+    if post_id:
+        post = (await s.execute(select(Post).where(Post.id == post_id))).scalar_one_or_none()
+        if post is not None:
+            title = post.title
+            summary = post.summary
+            if post.tag_id is not None:
+                t = (await s.execute(select(Tag).where(Tag.id == post.tag_id))).scalar_one_or_none()
+                tag_label = t.slug if t else None
+
+    assigned = pet_assignment.verify_cookie(
+        request.cookies.get(pet_assignment.COOKIE_NAME)
+    ) or pet_assignment.assign_species(
+        ip=client_ip_from(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    system = pet_prompt.build_system(
+        cfg, species=assigned, mode=mode,
+        title=title, tag=tag_label, summary=summary, selection=selection,
+    )
+
+    if not cfg.enabled or not cfg.providers:
+        quip = random.choice(cfg.fallback_lines)
+        await write_event(
+            s, type="pet.summoned", actor=actor_hash,
+            meta={"source": "fallback", "mode": mode, "species": assigned, "stream": True},
+        )
+        await s.commit()
+
+        async def disabled_stream():
+            yield _sse({"type": "meta", "mode": mode, "species": assigned})
+            yield _sse({"type": "fallback", "text": quip, "source": "fallback"})
+
+        return StreamingResponse(disabled_stream(), media_type="text/event-stream")
+
+    secrets = await _resolve_secrets(s, cfg.providers)
+    # Capture immutables for the generator; dropping `s` so we don't depend
+    # on session lifetime during chunked send.
+    providers = list(cfg.providers)
+    fallback_lines = list(cfg.fallback_lines)
+
+    async def event_stream():
+        terminal_source = "fallback"
+        try:
+            yield _sse({"type": "meta", "mode": mode, "species": assigned})
+            async for evt in pet_gateway.summon_stream(
+                providers=providers,
+                secrets=secrets,
+                system=system,
+                user="summon",
+                fallback_lines=fallback_lines,
+            ):
+                yield _sse(evt)
+                if evt.get("type") in ("done", "fallback"):
+                    terminal_source = evt.get("source", "fallback")
+                    break
+        except Exception as e:  # noqa: BLE001
+            log.warning("pet_summon_stream.error", error=repr(e))
+            yield _sse({"type": "error", "message": "stream failed"})
+        # Log the event with a fresh session — the request-scoped session
+        # may already be closed by the time we get here.
+        try:
+            async with AsyncSessionLocal() as s2:
+                await write_event(
+                    s2, type="pet.summoned", actor=actor_hash,
+                    meta={
+                        "source": terminal_source, "mode": mode,
+                        "species": assigned, "stream": True,
+                    },
+                )
+                await s2.commit()
+        except Exception as e:  # noqa: BLE001
+            log.warning("pet_summon_stream.event_log_failed", error=repr(e))
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

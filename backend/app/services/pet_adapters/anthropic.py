@@ -1,6 +1,8 @@
 """Anthropic adapter for the pet gateway."""
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import anthropic
 import structlog
 
@@ -30,6 +32,30 @@ async def chat(
     if not text.strip():
         raise RuntimeError("anthropic returned empty content")
     return text.strip()
+
+
+async def chat_stream(
+    *,
+    api_key: str,
+    model: str,
+    system: str,
+    user: str,
+    max_tokens: int = 200,
+    temperature: float = 0.9,
+    timeout: float = 30.0,  # noqa: ASYNC109
+) -> AsyncIterator[str]:
+    """Yield text deltas from streaming messages.create."""
+    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=timeout)
+    async with client.messages.stream(
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        system=system,
+        messages=[{"role": "user", "content": user}],
+    ) as stream:
+        async for text in stream.text_stream:
+            if text:
+                yield text
 
 
 async def ping(api_key: str, model: str) -> bool:

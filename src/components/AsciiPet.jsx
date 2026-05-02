@@ -231,59 +231,97 @@ export default function AsciiPet({ hint = null }) {
     }, 260);
   };
 
-  const typingTimer = useRef(null);
-  const stopTyping = () => {
-    if (typingTimer.current) {
-      clearInterval(typingTimer.current);
-      typingTimer.current = null;
-    }
-  };
-  const typeOut = (full) => {
-    stopTyping();
-    // Reserve full text width via a hidden ghost so the bubble doesn't
-    // resize as characters arrive, which used to make the pet jump.
-    setSpeech({ text: '', full, typing: true });
-    let i = 0;
-    const stepMs = full.length > 30 ? 35 : 55; // longer text → faster
-    typingTimer.current = setInterval(() => {
-      i += 1;
-      if (i >= full.length) {
-        stopTyping();
-        setSpeech({ text: full, full, typing: false });
-        return;
+  const streamAbort = useRef(null);
+
+  // Parse a single accumulated buffer for complete SSE frames; returns
+  // { events: [...], rest: '...' } where rest is the unfinished tail.
+  const parseSSE = (buf) => {
+    const events = [];
+    let rest = buf;
+    while (true) {
+      const i = rest.indexOf('\n\n');
+      if (i < 0) break;
+      const frame = rest.slice(0, i);
+      rest = rest.slice(i + 2);
+      for (const line of frame.split('\n')) {
+        if (line.startsWith('data: ')) {
+          try { events.push(JSON.parse(line.slice(6))); } catch { /* skip */ }
+        }
       }
-      setSpeech({ text: full.slice(0, i), full, typing: true });
-    }, stepMs);
+    }
+    return { events, rest };
   };
 
   const summonSpeech = async () => {
     clearTimeout(speechTimer.current);
-    stopTyping();
-    setSpeech({ text: '', thinking: true });
+    if (streamAbort.current) streamAbort.current.abort();
+    streamAbort.current = new AbortController();
+    setSpeech({ text: '', full: '', thinking: true });
     setState('thinking');
-    tempStateUntil.current = Date.now() + 8000;
-    let text = null;
+    tempStateUntil.current = Date.now() + 12000;
+
+    let accumulated = '';
+    let firstChunkReceived = false;
+    let terminal = null; // 'done' | 'fallback' | 'rate_limited' | 'error'
     try {
       const payload = buildSummonPayload(500);
-      const r = await fetch('/api/pet/summon', {
+      const r = await fetch('/api/pet/summon/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        signal: streamAbort.current.signal,
       });
-      if (r.ok) {
-        const j = await r.json();
-        text = (j.quip || '').trim().slice(0, 80);
+      if (!r.ok || !r.body) throw new Error(`http ${r.status}`);
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const { events, rest } = parseSSE(buffer);
+        buffer = rest;
+        for (const evt of events) {
+          if (evt.type === 'chunk') {
+            if (!firstChunkReceived) {
+              firstChunkReceived = true;
+              setState('happy');
+              tempStateUntil.current = Date.now() + 12000;
+            }
+            accumulated += evt.text || '';
+            setSpeech({ text: accumulated, full: accumulated, typing: true });
+          } else if (evt.type === 'done') {
+            terminal = 'done';
+            setSpeech({ text: accumulated, full: accumulated, typing: false });
+          } else if (evt.type === 'fallback' || evt.type === 'rate_limited') {
+            terminal = evt.type;
+            const txt = (evt.text || '').trim();
+            accumulated = txt;
+            setSpeech({ text: txt, full: txt, typing: false });
+            if (evt.type === 'rate_limited') setState('error');
+          } else if (evt.type === 'error') {
+            terminal = 'error';
+          }
+          // 'meta' just informs of mode/species; nothing to render.
+        }
       }
-    } catch (_) { /* fall through to canned reply */ }
-    if (!text) text = QUIPS[Math.floor(Math.random() * QUIPS.length)];
-    typeOut(text);
-    setState('happy');
-    tempStateUntil.current = Date.now() + 1400;
+    } catch (e) {
+      if (e?.name !== 'AbortError') {
+        // network or http error before we got chunks — fall back to canned.
+      }
+    }
+
+    if (!accumulated) {
+      const text = QUIPS[Math.floor(Math.random() * QUIPS.length)];
+      accumulated = text;
+      setSpeech({ text, full: text, typing: false });
+    }
+    if (terminal !== 'rate_limited') {
+      setState('happy');
+      tempStateUntil.current = Date.now() + 1400;
+    }
     clearTimeout(speechTimer.current);
-    speechTimer.current = setTimeout(() => {
-      stopTyping();
-      setSpeech(null);
-    }, 8000);
+    speechTimer.current = setTimeout(() => setSpeech(null), 9000);
   };
 
   // Public API: trigger states from blog events
@@ -389,23 +427,23 @@ export default function AsciiPet({ hint = null }) {
         const bubbleText = speech?.text ?? hint?.text ?? '';
         const bubbleFull = speech?.full ?? hint?.text ?? '';
         const bubbleThinking = speech?.thinking;
-        const isTyping = !!speech?.typing && bubbleFull.length > bubbleText.length;
+        const isTyping = !!speech?.typing;
+        const hasHiddenTail = bubbleFull.length > bubbleText.length;
         const bubbleVisible = (bubbleText || bubbleThinking) && !mini;
         return bubbleVisible ? (
           <div className="clawd-bubble" style={{ borderColor: color, color }}>
             {bubbleThinking ? (
               <Dots />
-            ) : isTyping ? (
+            ) : (
               <span className="clawd-bubble-text">
                 <span>{bubbleText}</span>
-                <span className="clawd-caret">▍</span>
-                {/* Hidden tail keeps the bubble width steady while typing */}
-                <span className="clawd-bubble-tail" aria-hidden="true">
-                  {bubbleFull.slice(bubbleText.length)}
-                </span>
+                {isTyping && <span className="clawd-caret">▍</span>}
+                {hasHiddenTail && (
+                  <span className="clawd-bubble-tail" aria-hidden="true">
+                    {bubbleFull.slice(bubbleText.length)}
+                  </span>
+                )}
               </span>
-            ) : (
-              <span className="clawd-bubble-text">{bubbleText}</span>
             )}
             <span className="clawd-bubble-arrow" style={{ '--bc': color }} />
           </div>
