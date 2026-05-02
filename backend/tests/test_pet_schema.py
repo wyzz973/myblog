@@ -62,3 +62,21 @@ def test_petconfig_partial_personas_dict_fills_per_species_defaults():
     c = PetConfig(personas={"cat": "custom cat"})
     assert c.personas.cat == "custom cat"
     assert c.personas.dragon  # default filled at field level
+
+
+def test_context_window_turns_default_and_bounds():
+    c = PetConfig()
+    assert c.context_window_turns == 10
+    with pytest.raises(ValidationError):
+        PetConfig(context_window_turns=0)
+    with pytest.raises(ValidationError):
+        PetConfig(context_window_turns=51)
+
+
+def test_context_ttl_seconds_default_and_bounds():
+    c = PetConfig()
+    assert c.context_ttl_seconds == 7200
+    with pytest.raises(ValidationError):
+        PetConfig(context_ttl_seconds=59)
+    with pytest.raises(ValidationError):
+        PetConfig(context_ttl_seconds=86401)

@@ -88,6 +88,8 @@ class PetConfig(_Strict):
     mode_templates: PetModeTemplates = Field(default_factory=PetModeTemplates)
     unlimited: bool = False
     hard_ceiling_per_day: int = Field(default=20000, ge=100, le=100000)
+    context_window_turns: int = Field(default=10, ge=1, le=50)
+    context_ttl_seconds: int = Field(default=7200, ge=60, le=86400)
 
     @field_validator("providers")
     @classmethod
