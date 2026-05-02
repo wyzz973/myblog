@@ -147,3 +147,46 @@ async def test_conversations_pagination(
 async def test_conversations_requires_auth(client):
     r = await client.get("/api/admin/pet/conversations")
     assert r.status_code == 401
+
+
+async def test_get_conversation_detail_returns_messages_oldest_first(
+    client, admin_token, seed_pet_messages,
+):
+    r = await client.get(
+        "/api/admin/pet/conversations/alice000000000aa",
+        headers=_hdr(admin_token),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    items = body["items"]
+    assert len(items) == 2
+    # Oldest first
+    assert items[0]["reply"] == "alice-1"
+    assert items[1]["reply"] == "alice-2"
+    # Includes archive metadata
+    assert "system_prompt" in items[0]
+    assert "prior_turns" in items[0]
+
+
+async def test_get_conversation_detail_pagination(
+    client, admin_token, seed_pet_messages,
+):
+    r = await client.get(
+        "/api/admin/pet/conversations/alice000000000aa?limit=1",
+        headers=_hdr(admin_token),
+    )
+    body = r.json()
+    assert len(body["items"]) == 1
+    assert body["items"][0]["reply"] == "alice-1"
+    assert body.get("next_cursor")
+
+
+async def test_get_conversation_detail_unknown_visitor_empty(
+    client, admin_token,
+):
+    r = await client.get(
+        "/api/admin/pet/conversations/nonexistent",
+        headers=_hdr(admin_token),
+    )
+    assert r.status_code == 200
+    assert r.json()["items"] == []

@@ -157,3 +157,43 @@ async def list_conversations(
             last["visitor_hash"],
         )
     return {"items": items, "next_cursor": next_cursor}
+
+
+@router.get("/pet/conversations/{visitor_hash}")
+async def get_conversation_detail(
+    visitor_hash: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    cursor: int | None = Query(default=None),
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """All messages for one visitor, oldest first, paginated by id ascending."""
+    stmt = (
+        select(PetMessage)
+        .where(PetMessage.visitor_hash == visitor_hash)
+        .order_by(PetMessage.created_at, PetMessage.id)
+        .limit(limit + 1)
+    )
+    if cursor is not None:
+        stmt = stmt.where(PetMessage.id > cursor)
+    rows = (await s.execute(stmt)).scalars().all()
+    items = []
+    for r in rows[:limit]:
+        items.append({
+            "id": r.id,
+            "visitor_hash": r.visitor_hash,
+            "species": r.species,
+            "mode": r.mode,
+            "post_id": r.post_id,
+            "title": r.title,
+            "tag_slug": r.tag_slug,
+            "summary": r.summary,
+            "selection": r.selection,
+            "system_prompt": r.system_prompt,
+            "prior_turns": r.prior_turns,
+            "reply": r.reply,
+            "source": r.source,
+            "created_at": r.created_at.isoformat(),
+        })
+    next_cursor = items[-1]["id"] if len(rows) > limit and items else None
+    return {"items": items, "next_cursor": next_cursor}
