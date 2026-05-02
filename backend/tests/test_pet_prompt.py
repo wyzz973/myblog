@@ -137,3 +137,18 @@ def test_build_system_uses_summary_max_chars_from_config():
                        title="T", tag="t", summary=long_summary, selection=None)
     assert "a" * 50 in out
     assert "a" * 51 not in out
+
+
+def test_safe_format_ignores_format_spec_width():
+    """Defends against {title:>1000000000} memory amplification.
+    Format specs (width / alignment / precision) are ignored entirely."""
+    out = _safe_format("X: {title:>1000000}", title="hi")
+    # Should NOT pad to 1M chars — should just substitute the value
+    assert out == "X: hi"
+
+
+def test_safe_format_ignores_format_spec_padding():
+    out = _safe_format("[{title:^10}]", title="hi")
+    # Center-pad to 10 chars would normally yield "[    hi    ]";
+    # we ignore the spec and emit the value as-is.
+    assert out == "[hi]"

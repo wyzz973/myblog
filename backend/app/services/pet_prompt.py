@@ -31,6 +31,9 @@ class _SafeFormatter(string.Formatter):
     - disallows attribute/index traversal: {title.foo} or {title[0]} are
       treated as the field name "title.foo" / "title[0]" — looked up in
       the SafeDict, not found, returned literal as-is.
+    - ignores format specs entirely: {title:>1000000000} becomes the
+      stringified value, not a billion-character pad. Without this, an
+      admin-typed template could OOM the worker.
     - never raises on malformed templates (returns the template unchanged
       if vformat fails for any reason).
     """
@@ -38,6 +41,12 @@ class _SafeFormatter(string.Formatter):
     def get_field(self, field_name, args, kwargs):
         # Disable attribute/index access by treating the entire name as a key.
         return self.get_value(field_name, args, kwargs), field_name
+
+    def format_field(self, value, format_spec):
+        # Ignore format specs (alignment / width / precision / type).
+        # Defends against memory amplification from admin-typed templates
+        # like {title:>1000000000}.
+        return str(value)
 
 
 def _safe_format(template: str, /, **values: str) -> str:
