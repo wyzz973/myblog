@@ -2102,3 +2102,31 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   color: var(--fg-2); font-size: 12px; margin-top: 4px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.admin-pet .conv-msg {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--bg-2);
+}
+.admin-pet .conv-msg-head {
+  display: flex; gap: 10px; font-size: 11px; color: var(--fg-3);
+  align-items: center; margin-bottom: 6px;
+}
+.admin-pet .conv-msg-mode { color: var(--accent); }
+.admin-pet .conv-msg-path { color: var(--accent-2); font-family: 'JetBrains Mono', monospace; }
+.admin-pet .conv-msg-source { color: var(--fg-4); }
+.admin-pet .conv-msg-sel {
+  background: var(--bg-3); border-left: 2px solid var(--accent);
+  padding: 6px 8px; font-size: 12px; margin-bottom: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  white-space: pre-wrap; word-break: break-word;
+}
+.admin-pet .conv-msg-reply { font-size: 13px; color: var(--fg); white-space: pre-wrap; }
+.admin-pet .conv-msg-debug { margin-top: 8px; }
+.admin-pet .conv-msg-debug summary { color: var(--fg-4); font-size: 11px; cursor: pointer; }
+.admin-pet .conv-msg-debug pre {
+  background: var(--bg-3); border: 1px solid var(--line);
+  padding: 6px 8px; font-size: 11px; overflow-x: auto;
+  border-radius: 3px; margin: 4px 0;
+}
