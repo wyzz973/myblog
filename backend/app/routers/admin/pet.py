@@ -2,8 +2,10 @@ import base64
 from datetime import datetime
 from typing import Any, Literal
 
+import structlog
 from fastapi import APIRouter, Depends, Query, Response
 from fastapi import status as http_status
+from redis.asyncio import Redis
 from sqlalchemy import delete, desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +15,8 @@ from app.models import Account, PetMessage, SiteMeta
 from app.redis import get_redis
 from app.schemas.pet import PetConfig, PetModeTemplates, PetPersonas
 from app.services import pet_context
+
+log = structlog.get_logger(__name__)
 
 router = APIRouter()
 
@@ -211,14 +215,18 @@ async def delete_conversation(
     visitor_hash: str,
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
-    redis = Depends(get_redis),
+    redis: Redis = Depends(get_redis),
 ) -> Response:
+    """Hard-delete all pet_message rows for one visitor and clear their
+    Redis context. Idempotent — DELETE on an unknown visitor returns 204."""
     await s.execute(
         delete(PetMessage).where(PetMessage.visitor_hash == visitor_hash)
     )
     await s.commit()
     try:
         await pet_context.clear(redis, visitor_hash)
-    except Exception:
-        pass  # Redis cleanup is best-effort; DB is the source of truth.
+    except Exception as e:  # noqa: BLE001
+        # Redis cleanup is best-effort; DB is the source of truth.
+        log.warning("admin.delete_conversation.ctx_clear_failed",
+                    visitor_hash=visitor_hash, error=repr(e))
     return Response(status_code=http_status.HTTP_204_NO_CONTENT)
