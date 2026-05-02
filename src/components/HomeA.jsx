@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSite, useProjects, useContrib } from '../api/hooks.js';
 import { copyToClipboard } from './CopyText.jsx';
 
@@ -81,7 +82,7 @@ function ContribGraph({ grid, counts, months: monthsProp }) {
     : ['May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr'];
   const gridRef = useRef(null);
   const rafRef = useRef(0);
-  const [tip, setTip] = useState(null); // { x, y, date, weekday, count } | null
+  const [tip, setTip] = useState(null); // { x, y, arrowX, date, weekday, count } | null
 
   const weeksTotal = grid.length;
   // Columns are weekday-aligned: the rightmost column is the Sun→Sat
@@ -166,12 +167,20 @@ function ContribGraph({ grid, counts, months: monthsProp }) {
   const onCellEnter = (e, wi, di) => {
     const date = cellDate(wi, di);
     const count = counts?.[wi]?.[di] ?? 0;
+    const el = gridRef.current;
     const r = e.currentTarget.getBoundingClientRect();
-    const grid = gridRef.current?.getBoundingClientRect();
-    if (!grid) return;
+    const scrollport = el?.parentElement;
+    if (!scrollport) return;
+    const viewport = scrollport.getBoundingClientRect();
+    const cellX = r.left + r.width / 2;
+    const visibleLeft = viewport.left + 8;
+    const visibleRight = viewport.right - 8;
+    const tooltipHalf = Math.min(92, Math.max(70, scrollport.clientWidth / 2 - 12));
+    const x = Math.max(visibleLeft + tooltipHalf, Math.min(visibleRight - tooltipHalf, cellX));
     setTip({
-      x: r.left - grid.left + r.width / 2,
-      y: r.top - grid.top,
+      x,
+      y: r.top,
+      arrowX: cellX - x,
       date,
       weekday: WEEKDAY_NAMES[di],
       count,
@@ -228,18 +237,21 @@ function ContribGraph({ grid, counts, months: monthsProp }) {
             }),
           )}
           {tip && (
-            <div
-              className="contrib-tip"
-              style={{ left: tip.x, top: tip.y }}
-              role="tooltip"
-            >
-              <div className="contrib-tip-count">
-                {tip.count === 0
-                  ? 'no commits'
-                  : `${tip.count} commit${tip.count === 1 ? '' : 's'}`}
-              </div>
-              <div className="contrib-tip-date">{tip.weekday} · {tip.date}</div>
-            </div>
+            createPortal(
+              <div
+                className="contrib-tip contrib-tip-fixed"
+                style={{ left: tip.x, top: tip.y, '--arrow-x': `${tip.arrowX}px` }}
+                role="tooltip"
+              >
+                <div className="contrib-tip-count">
+                  {tip.count === 0
+                    ? 'no commits'
+                    : `${tip.count} commit${tip.count === 1 ? '' : 's'}`}
+                </div>
+                <div className="contrib-tip-date">{tip.weekday} · {tip.date}</div>
+              </div>,
+              document.body,
+            )
           )}
         </div>
       </div>

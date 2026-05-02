@@ -23,7 +23,7 @@ async def test_get_defaults_returns_personas_and_templates(client, admin_token):
     expected_species = {s for pool in SPECIES_BY_RARITY.values() for s in pool}
     assert set(body["personas"]) == expected_species
     assert set(body["mode_templates"]) == {
-        "greet", "summary_react", "selection_explain", "selection_qa"
+        "greet", "idle_monologue", "summary_react", "selection_explain", "selection_qa"
     }
 
 

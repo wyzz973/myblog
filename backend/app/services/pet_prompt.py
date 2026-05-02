@@ -133,6 +133,8 @@ def build_messages(
 
     if mode == "greet":
         scene = "(visitor tapped on you)"
+    elif mode == "idle_monologue":
+        scene = "(visitor has been idle; say a spontaneous thought)"
     elif mode == "summary_react":
         scene = f'(visitor reading "{title_text}", tag: {tag_text})'
     elif mode == "selection_explain":

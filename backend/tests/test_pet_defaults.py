@@ -24,7 +24,7 @@ def test_personas_non_empty_and_within_limit():
 
 def test_default_templates_present():
     assert set(DEFAULT_TEMPLATES) == {
-        "greet", "summary_react", "selection_explain", "selection_qa"
+        "greet", "idle_monologue", "summary_react", "selection_explain", "selection_qa"
     }
     for mode, tpl in DEFAULT_TEMPLATES.items():
         assert tpl.strip(), f"{mode} template is empty"

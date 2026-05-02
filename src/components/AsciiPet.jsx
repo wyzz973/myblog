@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { buildSummonPayload } from './pet/payload.js';
-import { SPECIES, RARITY_COLOR, STATE_EYE } from './pet/species.js';
+import { SPECIES, RARITY_COLOR, STATE_EYE, STAT_KEYS, rarityStars } from './pet/species.js';
 
 const STATES = {
   idle:         { label: 'idle',         bob: 2.8, tint: null,      icon: null,  hint: 'idle' },
@@ -29,6 +29,8 @@ const TEST_STATES = [
 ];
 
 const QUIPS = ['meow.', 'purr…', 'have you committed?', 'seg loss ok ✓', '*yawn*'];
+export const IDLE_MONOLOGUE_MS = 90000;
+export const IDLE_MONOLOGUE_COOLDOWN_MS = 240000;
 
 const LEGACY_BODY_MAP = {
   capybara: 'capybara',
@@ -102,14 +104,28 @@ export default function AsciiPet({ hint = null }) {
   const [pos, setPos] = useState(() => {
     const saved = localStorage.getItem('pet.pos');
     if (saved) {
-      try { return JSON.parse(saved); } catch (_) { /* fall through */ }
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          x: Math.max(-40, Math.min(window.innerWidth - 120, Number(parsed.x) || 0)),
+          y: Math.max(0, Math.min(window.innerHeight - 140, Number(parsed.y) || 0)),
+        };
+      } catch (_) { /* fall through */ }
+    }
+    if (window.innerWidth <= 720) {
+      return { x: window.innerWidth - 60, y: window.innerHeight - 110 };
     }
     return { x: window.innerWidth - 220, y: window.innerHeight - 260 };
   });
   const posRef = useRef(pos);
-  const [mini, setMini] = useState(() => localStorage.getItem('pet.mini') === '1');
+  const [mini, setMini] = useState(() => {
+    const saved = localStorage.getItem('pet.mini');
+    if (saved != null) return saved === '1';
+    return window.innerWidth <= 720;
+  });
   const [peeking, setPeeking] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [gaze, setGaze] = useState({ x: 0, y: 0 });
   const [flail, setFlail] = useState(false);
@@ -123,7 +139,31 @@ export default function AsciiPet({ hint = null }) {
   const speechTimer = useRef(null);
   const clickTimer = useRef(null);
   const clickCount = useRef(0);
+  const longPressTimer = useRef(null);
+  const longPressFired = useRef(false);
+  const suppressClickOnce = useRef(false);
   const tempStateUntil = useRef(0);
+
+  useEffect(() => {
+    return () => clearTimeout(longPressTimer.current);
+  }, []);
+
+  useEffect(() => {
+    if (!profileOpen) return undefined;
+    const onPointerDownCapture = (e) => {
+      if (petRef.current?.contains(e.target)) return;
+      setProfileOpen(false);
+    };
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setProfileOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDownCapture, true);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDownCapture, true);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [profileOpen]);
 
   // Idle timeout → yawn → sleep
   useEffect(() => {
@@ -154,7 +194,7 @@ export default function AsciiPet({ hint = null }) {
   // Eye tracking + startle on mouse move
   useEffect(() => {
     const onMove = (e) => {
-      lastActivity.current = Date.now();
+      markActivity();
       if (state === 'sleeping' || state === 'yawning') {
         setState('startled');
         tempStateUntil.current = Date.now() + 900;
@@ -177,20 +217,41 @@ export default function AsciiPet({ hint = null }) {
 
   // Drag (pointer events for flick protection)
   const onPointerDown = (e) => {
-    if (e.target.closest('.pet-panel, .pet-panel-btn, .pet-ctl')) return;
+    if (e.target.closest('.pet-panel, .pet-profile, .pet-panel-btn, .pet-ctl')) return;
+    if (profileOpen) {
+      setProfileOpen(false);
+      suppressClickOnce.current = true;
+    }
     dragging.current = true;
     dragMoved.current = false;
-    lastActivity.current = Date.now();
+    longPressFired.current = false;
+    markActivity();
     if (state === 'sleeping' || state === 'yawning') setState('startled');
     const rect = petRef.current.getBoundingClientRect();
     dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     try { petRef.current.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+    clearTimeout(longPressTimer.current);
+    longPressTimer.current = setTimeout(() => {
+      if (!dragging.current || dragMoved.current) return;
+      longPressFired.current = true;
+      dragging.current = false;
+      setProfileOpen(true);
+      setPanelOpen(false);
+      setState('thinking');
+      tempStateUntil.current = Date.now() + 1600;
+      setTimeout(() => {
+        if (tempStateUntil.current <= Date.now()) setState('idle');
+      }, 1600);
+    }, 650);
     e.preventDefault();
   };
 
   const onPointerMove = (e) => {
     if (!dragging.current) return;
-    if (Math.abs(e.movementX) + Math.abs(e.movementY) > 1) dragMoved.current = true;
+    if (Math.abs(e.movementX) + Math.abs(e.movementY) > 1) {
+      dragMoved.current = true;
+      clearTimeout(longPressTimer.current);
+    }
     const nx = Math.max(-40, Math.min(window.innerWidth - 120, e.clientX - dragOffset.current.x));
     const ny = Math.max(0, Math.min(window.innerHeight - 140, e.clientY - dragOffset.current.y));
     const next = { x: nx, y: ny };
@@ -199,6 +260,12 @@ export default function AsciiPet({ hint = null }) {
   };
 
   const onPointerUp = (e) => {
+    clearTimeout(longPressTimer.current);
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      try { petRef.current.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      return;
+    }
     if (!dragging.current) return;
     dragging.current = false;
     try { petRef.current.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
@@ -214,7 +281,8 @@ export default function AsciiPet({ hint = null }) {
       localStorage.setItem('pet.mini', '0');
       localStorage.setItem('pet.pos', JSON.stringify(latestPos));
     }
-    if (!dragMoved.current) handleClick();
+    if (!dragMoved.current && !suppressClickOnce.current) handleClick();
+    suppressClickOnce.current = false;
   };
 
   const handleClick = () => {
@@ -240,6 +308,14 @@ export default function AsciiPet({ hint = null }) {
   };
 
   const streamAbort = useRef(null);
+  const summoning = useRef(false);
+  const nextIdleMonologueAt = useRef(Date.now() + IDLE_MONOLOGUE_MS);
+
+  const markActivity = () => {
+    const now = Date.now();
+    lastActivity.current = now;
+    nextIdleMonologueAt.current = now + IDLE_MONOLOGUE_MS;
+  };
 
   // Parse a single accumulated buffer for complete SSE frames; returns
   // { events: [...], rest: '...' } where rest is the unfinished tail.
@@ -260,7 +336,9 @@ export default function AsciiPet({ hint = null }) {
     return { events, rest };
   };
 
-  const summonSpeech = async () => {
+  const summonSpeech = async (payloadOverride = null) => {
+    if (summoning.current) return;
+    summoning.current = true;
     clearTimeout(speechTimer.current);
     if (streamAbort.current) streamAbort.current.abort();
     streamAbort.current = new AbortController();
@@ -272,7 +350,7 @@ export default function AsciiPet({ hint = null }) {
     let firstChunkReceived = false;
     let terminal = null; // 'done' | 'fallback' | 'rate_limited' | 'error'
     try {
-      const payload = buildSummonPayload(500);
+      const payload = payloadOverride || buildSummonPayload(500);
       const r = await fetch('/api/pet/summon/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -330,7 +408,23 @@ export default function AsciiPet({ hint = null }) {
     }
     clearTimeout(speechTimer.current);
     speechTimer.current = setTimeout(() => setSpeech(null), 9000);
+    nextIdleMonologueAt.current = Date.now() + IDLE_MONOLOGUE_COOLDOWN_MS;
+    summoning.current = false;
   };
+
+  useEffect(() => {
+    if (!petEnabled || hidden || panelOpen || profileOpen || mini) return undefined;
+    const id = setInterval(() => {
+      const now = Date.now();
+      if (summoning.current || speech) return;
+      if (dragging.current || tempStateUntil.current > now) return;
+      if (now - lastActivity.current < IDLE_MONOLOGUE_MS) return;
+      if (now < nextIdleMonologueAt.current) return;
+      nextIdleMonologueAt.current = now + IDLE_MONOLOGUE_COOLDOWN_MS;
+      summonSpeech({ mode: 'idle_monologue' });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [petEnabled, hidden, panelOpen, profileOpen, mini, speech]);
 
   // Public API: trigger states from blog events
   useEffect(() => {
@@ -339,7 +433,7 @@ export default function AsciiPet({ hint = null }) {
         if (!STATES[s]) return;
         setState(s);
         tempStateUntil.current = Date.now() + duration;
-        lastActivity.current = Date.now();
+        markActivity();
         setTimeout(() => {
           if (tempStateUntil.current <= Date.now()) setState('idle');
         }, duration);
@@ -347,7 +441,7 @@ export default function AsciiPet({ hint = null }) {
     };
     const onKey = (e) => {
       if (e.metaKey && e.key === 'k') window.__pet.trigger('juggling', 1500);
-      lastActivity.current = Date.now();
+      markActivity();
     };
     const onPostHover = (e) => {
       if (e.target.closest?.('.post-row')) window.__pet.trigger('thinking', 1200);
@@ -439,7 +533,7 @@ export default function AsciiPet({ hint = null }) {
         const bubbleThinking = speech?.thinking;
         const isTyping = !!speech?.typing;
         const hasHiddenTail = bubbleFull.length > bubbleText.length;
-        const bubbleVisible = (bubbleText || bubbleThinking) && !mini;
+        const bubbleVisible = (bubbleText || bubbleThinking) && !mini && !profileOpen;
         return bubbleVisible ? (
           <div className="clawd-bubble" style={{ borderColor: color, color }}>
             {bubbleThinking ? (
@@ -489,7 +583,7 @@ export default function AsciiPet({ hint = null }) {
       {!mini && (
         <div
           className="clawd-strip"
-          onClick={(e) => { e.stopPropagation(); setPanelOpen((o) => !o); }}
+          onClick={(e) => { e.stopPropagation(); setPanelOpen((o) => !o); setProfileOpen(false); }}
           onPointerDown={(e) => e.stopPropagation()}
           style={{ cursor: 'pointer' }}
           title="open settings"
@@ -497,6 +591,50 @@ export default function AsciiPet({ hint = null }) {
           <span className="clawd-dot" style={{ background: color }} />
           <span>{cfg.hint}</span>
           <span style={{ opacity: 0.5, marginLeft: 4 }}>⚙</span>
+        </div>
+      )}
+
+      {profileOpen && (
+        <div
+          role="dialog"
+          aria-label={`${bodyKey} profile`}
+          className="pet-profile"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          style={{ '--c': color }}
+        >
+          <button
+            type="button"
+            className="pet-profile-close"
+            onClick={() => setProfileOpen(false)}
+            aria-label="close pet profile"
+          >×</button>
+          <div className="pet-profile-head">
+            <div>
+              <div className="pet-profile-name">{bodyKey}</div>
+              <div className="pet-profile-trait">{body.trait}</div>
+            </div>
+            <div className="pet-profile-rarity" style={{ color: RARITY_COLOR[body.rarity] }}>
+              <span>{body.rarity}</span>
+              <span aria-label={`${body.rarity} rarity`}>{rarityStars(body.rarity)}</span>
+            </div>
+          </div>
+          <p className="pet-profile-desc">{body.description}</p>
+          <div className="pet-profile-personality">
+            <span>personality</span>
+            <strong>{body.personality}</strong>
+          </div>
+          <div className="pet-profile-stats">
+            {STAT_KEYS.map((stat) => (
+              <div className="pet-stat" key={stat}>
+                <span className="pet-stat-name">{stat}</span>
+                <span className="pet-stat-track" aria-hidden="true">
+                  <span className="pet-stat-fill" style={{ width: `${body.stats[stat]}%` }} />
+                </span>
+                <span className="pet-stat-value">{body.stats[stat]}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
