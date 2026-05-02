@@ -90,8 +90,9 @@ async def test_summon_comment_passes_post_title_to_prompt(client, fake_post_id, 
 
     r = await client.post("/api/pet/summon", json={"post_id": fake_post_id})
     assert r.status_code == 200
-    # The user prompt should mention the article title
-    assert "Title:" in captured["user"]
+    # The new prompt builder puts all article context into the system prompt
+    # (user message collapses to the literal "summon"). Title must appear.
+    assert "Pet Test" in captured["system"]
 
 
 async def test_summon_explain_truncates_selection(client, fake_post_id, monkeypatch):
@@ -107,11 +108,16 @@ async def test_summon_explain_truncates_selection(client, fake_post_id, monkeypa
     long_sel = "x" * 2000
     r = await client.post(
         "/api/pet/summon",
-        json={"post_id": fake_post_id, "selection": long_sel},
+        json={"post_id": fake_post_id, "selection": long_sel, "mode": "selection_explain"},
     )
     assert r.status_code == 200
-    # Default max_context_chars is 500
-    assert captured["user"].count("x") <= 500
+    # Default max_context_chars is 500 — selection is now embedded in system prompt.
+    # Look for the longest contiguous run of x's, which is the truncated selection.
+    import re
+    longest_x_run = max((len(m.group()) for m in re.finditer(r"x+", captured["system"])),
+                        default=0)
+    assert longest_x_run <= 500
+    assert longest_x_run == 500  # confirms truncation actually happened
 
 
 async def test_summon_returns_tired_line_when_rate_limited(client, monkeypatch):

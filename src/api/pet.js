@@ -55,6 +55,14 @@ export const apiPet = {
       body: JSON.stringify(config),
     });
   },
+  fetchDefaults() {
+    return request('/pet/defaults');
+  },
+  resetSection(section) {
+    return request(`/pet/reset?section=${encodeURIComponent(section)}`, {
+      method: 'POST',
+    });
+  },
 };
 
 export default apiPet;
