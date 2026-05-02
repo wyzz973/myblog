@@ -18,7 +18,7 @@ from app.models import PetMessage, Post, SiteMeta, Tag
 from app.redis import get_redis
 from app.schemas.pet import PetConfig, PetMode, PublicPetConfig
 from app.services import integrations as integrations_svc
-from app.services import pet_assignment, pet_context, pet_gateway, pet_prompt, rate_limit, secret_box
+from app.services import pet_archive, pet_assignment, pet_context, pet_gateway, pet_prompt, rate_limit, secret_box
 from app.services.client_ip import client_ip_from, client_ip_key_part
 from app.services.event_log import write_event
 from app.services.hashing import ip_hash
@@ -282,6 +282,10 @@ async def public_pet_summon_stream(
         title=title, tag=tag_label, summary=summary, selection=selection,
         prior=prior,
     )
+    archive_selection = pet_archive.sanitize_text(selection, max_chars=cfg.max_context_chars)
+    archive_summary = pet_archive.sanitize_text(summary, max_chars=cfg.summary_max_chars)
+    archive_system = pet_archive.sanitize_text(system, max_chars=4000) or system
+    archive_prior = pet_archive.sanitize_turns(prior, max_chars=cfg.max_context_chars)
 
     # Capture for post-stream Redis append (last item is current user turn).
     current_user_turn = messages[-1].copy()
@@ -298,8 +302,8 @@ async def public_pet_summon_stream(
                 m = PetMessage(
                     visitor_hash=visitor_hash, species=assigned,
                     mode=mode, post_id=post_id, title=title, tag_slug=tag_label,
-                    summary=summary, selection=selection,
-                    system_prompt=system, prior_turns=prior,
+                    summary=archive_summary, selection=archive_selection,
+                    system_prompt=archive_system, prior_turns=archive_prior,
                     reply=quip, source="fallback",
                 )
                 s2.add(m)
@@ -322,6 +326,7 @@ async def public_pet_summon_stream(
     async def event_stream():
         terminal_source = "fallback"
         accumulated_chunks: list[str] = []
+        fallback_text: str | None = None
         try:
             yield _sse({"type": "meta", "mode": mode, "species": assigned})
             async for evt in pet_gateway.summon_stream(
@@ -333,6 +338,8 @@ async def public_pet_summon_stream(
             ):
                 if evt.get("type") == "chunk":
                     accumulated_chunks.append(evt.get("text", ""))
+                elif evt.get("type") == "fallback":
+                    fallback_text = (evt.get("text") or "").strip()
                 yield _sse(evt)
                 if evt.get("type") in ("done", "fallback"):
                     terminal_source = evt.get("source", "fallback")
@@ -359,7 +366,7 @@ async def public_pet_summon_stream(
 
             # Archive every turn (including fallback) to pet_message.
             if full_reply or terminal_source == "fallback":
-                archive_reply = full_reply or random.choice(fallback_lines)
+                archive_reply = full_reply or fallback_text or random.choice(fallback_lines)
                 try:
                     async with AsyncSessionLocal() as s2:
                         m = PetMessage(
@@ -369,10 +376,10 @@ async def public_pet_summon_stream(
                             post_id=post_id,
                             title=title,
                             tag_slug=tag_label,
-                            summary=summary,
-                            selection=selection,
-                            system_prompt=system,
-                            prior_turns=prior,
+                            summary=archive_summary,
+                            selection=archive_selection,
+                            system_prompt=archive_system,
+                            prior_turns=archive_prior,
                             reply=archive_reply,
                             source=terminal_source,
                         )

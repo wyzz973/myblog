@@ -93,6 +93,32 @@ async def test_history_persists_to_pet_message_after_stream(
         await s.commit()
 
 
+async def test_stream_fallback_archive_matches_visible_fallback(
+    client, monkeypatch,
+):
+    from sqlalchemy import select
+    from app.db import AsyncSessionLocal
+    from app.models import PetMessage
+    from app.services import pet_gateway
+
+    async def _fallback_stream(**kwargs):
+        yield {"type": "fallback", "text": "same fallback", "source": "fallback"}
+
+    monkeypatch.setattr(pet_gateway, "summon_stream", _fallback_stream)
+
+    events = await _read_stream(client, {})
+    assert {"type": "fallback", "text": "same fallback", "source": "fallback"} in events
+
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(select(PetMessage))).scalars().all()
+        latest = max(rows, key=lambda r: r.created_at)
+        assert latest.reply == "same fallback"
+        assert latest.source == "fallback"
+        for r in rows:
+            await s.delete(r)
+        await s.commit()
+
+
 @pytest.fixture
 async def reset_redis_state(redis):
     """Clear pet:ctx:* + rl:pet:* keys to isolate this test."""

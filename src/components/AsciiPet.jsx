@@ -64,6 +64,7 @@ export default function AsciiPet({ hint = null }) {
     }
     return 'cat';  // placeholder; replaced on first /api/pet/config response
   });
+  const [petEnabled, setPetEnabled] = useState(true);
   const [celebrate, setCelebrate] = useState(null);  // species key when celebrating
   useEffect(() => {
     let alive = true;
@@ -71,6 +72,7 @@ export default function AsciiPet({ hint = null }) {
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (!alive || !j?.assigned_species) return;
+        setPetEnabled(j.enabled !== false);
         const k = j.assigned_species;
         if (!SPECIES[k]) return;
         if (k !== bodyKey) {
@@ -104,6 +106,7 @@ export default function AsciiPet({ hint = null }) {
     }
     return { x: window.innerWidth - 220, y: window.innerHeight - 260 };
   });
+  const posRef = useRef(pos);
   const [mini, setMini] = useState(() => localStorage.getItem('pet.mini') === '1');
   const [peeking, setPeeking] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -190,21 +193,26 @@ export default function AsciiPet({ hint = null }) {
     if (Math.abs(e.movementX) + Math.abs(e.movementY) > 1) dragMoved.current = true;
     const nx = Math.max(-40, Math.min(window.innerWidth - 120, e.clientX - dragOffset.current.x));
     const ny = Math.max(0, Math.min(window.innerHeight - 140, e.clientY - dragOffset.current.y));
-    setPos({ x: nx, y: ny });
+    const next = { x: nx, y: ny };
+    posRef.current = next;
+    setPos(next);
   };
 
   const onPointerUp = (e) => {
     if (!dragging.current) return;
     dragging.current = false;
     try { petRef.current.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-    if (pos.x > window.innerWidth - 160) {
+    const latestPos = posRef.current;
+    if (latestPos.x > window.innerWidth - 160) {
       setMini(true);
       localStorage.setItem('pet.mini', '1');
-      setPos((p) => ({ x: window.innerWidth - 60, y: p.y }));
+      const next = { x: window.innerWidth - 60, y: latestPos.y };
+      posRef.current = next;
+      setPos(next);
     } else {
       setMini(false);
       localStorage.setItem('pet.mini', '0');
-      localStorage.setItem('pet.pos', JSON.stringify(pos));
+      localStorage.setItem('pet.pos', JSON.stringify(latestPos));
     }
     if (!dragMoved.current) handleClick();
   };
@@ -356,6 +364,8 @@ export default function AsciiPet({ hint = null }) {
       document.removeEventListener('click', onPostClick);
     };
   }, [bodyKey]);
+
+  if (!petEnabled) return null;
 
   if (hidden) {
     return (
