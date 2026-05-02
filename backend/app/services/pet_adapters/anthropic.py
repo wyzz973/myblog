@@ -39,19 +39,28 @@ async def chat_stream(
     api_key: str,
     model: str,
     system: str,
-    user: str,
+    user: str | None = None,
+    messages: list[dict] | None = None,
     max_tokens: int = 200,
     temperature: float = 0.9,
     timeout: float = 30.0,  # noqa: ASYNC109
 ) -> AsyncIterator[str]:
-    """Yield text deltas from streaming messages.create."""
+    """Yield text deltas from streaming messages.create.
+
+    Pass either `messages` (preferred, full conversation list of {role, content})
+    or legacy `user` (single-turn string). At least one is required.
+    """
+    if messages is None:
+        if user is None:
+            raise ValueError("chat_stream requires either `messages` or `user`")
+        messages = [{"role": "user", "content": user}]
     client = anthropic.AsyncAnthropic(api_key=api_key, timeout=timeout)
     async with client.messages.stream(
         model=model,
         max_tokens=max_tokens,
         temperature=temperature,
         system=system,
-        messages=[{"role": "user", "content": user}],
+        messages=messages,
     ) as stream:
         async for text in stream.text_stream:
             if text:

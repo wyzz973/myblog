@@ -72,7 +72,8 @@ async def chat_stream(
     base_url: str,
     model: str,
     system: str,
-    user: str,
+    user: str | None = None,
+    messages: list[dict] | None = None,
     max_tokens: int = 200,
     temperature: float = 0.9,
     extra_body: dict[str, Any] | None = None,
@@ -81,17 +82,24 @@ async def chat_stream(
 ) -> AsyncIterator[str]:
     """Yield text chunks from a streaming chat/completions call.
 
+    Pass either `messages` (preferred, full conversation list of {role, content})
+    or legacy `user` (single-turn string). At least one is required.
+
     Errors before the first chunk raise OpenAICompatError. Errors mid-stream
     are logged but the partial output is honored (caller decides whether to
     retain or replace).
     """
+    if messages is None:
+        if user is None:
+            raise ValueError("chat_stream requires either `messages` or `user`")
+        messages = [{"role": "user", "content": user}]
     url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     body: dict[str, Any] = {
         "model": model,
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user", "content": user},
+            *messages,
         ],
         "max_tokens": max_tokens,
         "temperature": temperature,

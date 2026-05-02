@@ -113,7 +113,7 @@ async def _call_stream(
     api_key: str,
     model_override: str | None,
     system: str,
-    user: str,
+    messages: list[dict],
     timeout: float,  # noqa: ASYNC109
 ) -> AsyncIterator[str]:
     cfg = PROVIDER_REGISTRY[name]
@@ -123,7 +123,7 @@ async def _call_stream(
     if cfg["adapter"] == "openai_compat":
         async for chunk in openai_compat.chat_stream(
             api_key=api_key, base_url=cfg["base_url"], model=model,
-            system=system, user=user, timeout=timeout,
+            system=system, messages=messages, timeout=timeout,
             extra_body=cfg.get("extra_body"),
         ):
             yield chunk
@@ -131,7 +131,7 @@ async def _call_stream(
     if cfg["adapter"] == "anthropic":
         async for chunk in anthropic_adapter.chat_stream(
             api_key=api_key, model=model,
-            system=system, user=user, timeout=timeout,
+            system=system, messages=messages, timeout=timeout,
         ):
             yield chunk
         return
@@ -143,7 +143,8 @@ async def summon_stream(
     providers: list[str],
     secrets: dict[str, dict[str, Any]],
     system: str,
-    user: str,
+    user: str | None = None,
+    messages: list[dict] | None = None,
     fallback_lines: list[str],
     timeout_per_call: float = 30.0,
 ) -> AsyncIterator[dict[str, Any]]:
@@ -153,10 +154,17 @@ async def summon_stream(
       - {"type": "fallback", "text": "...", "source": "fallback"}
         if all providers fail before producing any chunk
 
+    Pass either `messages` (preferred, full conversation list) or legacy
+    `user` (single-turn string). At least one is required.
+
     If a provider produces partial output then errors mid-stream, we keep
     the partial output (yield 'done') rather than fall back, so the visitor
     isn't shown two different replies.
     """
+    if messages is None:
+        if user is None:
+            raise ValueError("summon_stream requires either `messages` or `user`")
+        messages = [{"role": "user", "content": user}]
     for name in providers:
         if name not in PROVIDER_REGISTRY:
             log.warning("pet_gateway.unknown_provider", name=name)
@@ -172,7 +180,7 @@ async def summon_stream(
                 api_key=sec["key"],
                 model_override=sec.get("model"),
                 system=system,
-                user=user,
+                messages=messages,
                 timeout=timeout_per_call,
             ):
                 received_any = True
