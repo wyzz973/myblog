@@ -24,3 +24,7 @@ backend/.ruff_cache/
 
 # Handoff zip is a redundant copy of myblog/; keep myblog/ as source of truth
 MyBlog-handoff.zip
+
+# Private — never commit (server credentials, prod runbook)
+.env.deploy
+docs/private/
