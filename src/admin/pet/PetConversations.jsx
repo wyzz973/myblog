@@ -28,7 +28,7 @@ export default function PetConversations() {
       if (!reset && cursor) params.cursor = cursor;
       if (species) params.species = species;
       const r = await apiPet.listConversations(params);
-      setItems(reset ? r.items : [...items, ...r.items]);
+      setItems((prev) => (reset ? r.items : [...prev, ...r.items]));
       setCursor(r.next_cursor);
       setHasMore(!!r.next_cursor);
       setError(null);
