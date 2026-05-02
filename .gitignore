@@ -27,4 +27,9 @@ MyBlog-handoff.zip
 
 # Private — never commit (server credentials, prod runbook)
 .env.deploy
-docs/private/
+
+# Internal docs — design/spec/plan/runbook, keep repo to code only
+docs/
+
+# Claude Code working directory (plans, scheduled tasks, cache)
+.claude/
