@@ -64,3 +64,18 @@ async def test_reset_both_section(client, admin_token):
 async def test_reset_invalid_section_returns_422(client, admin_token):
     r = await client.post("/api/admin/pet/reset?section=garbage", headers=_hdr(admin_token))
     assert r.status_code == 422
+
+
+async def test_reset_personas_preserves_other_fields(client, admin_token):
+    """The reset endpoint must only touch its named section. All other
+    PetConfig fields (rate-limit, providers, system_prompt, etc.) survive."""
+    cur = (await client.get("/api/admin/pet", headers=_hdr(admin_token))).json()
+    cur["per_ip_per_min"] = 42
+    cur["providers"] = ["zhipu", "qwen"]
+    cur["personas"]["cat"] = "MUT"
+    await client.put("/api/admin/pet", json=cur, headers=_hdr(admin_token))
+    after = (await client.post("/api/admin/pet/reset?section=personas",
+                                headers=_hdr(admin_token))).json()
+    assert after["per_ip_per_min"] == 42
+    assert after["providers"] == ["zhipu", "qwen"]
+    assert after["personas"]["cat"] != "MUT"
