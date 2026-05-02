@@ -256,13 +256,20 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   font-size: 11px;
   padding: 6px 10px;
   border-radius: 6px;
-  max-width: 240px;
+  /* width:max-content lets the bubble grow to its natural single-line
+     size, clamped by max-width (which then forces wrapping). Without
+     this, the parent .clawd-pet is only as wide as the sprite (~96px),
+     and shrink-to-fit would pin the bubble to min-width even when the
+     text only needed 200px. */
+  width: max-content;
+  max-width: min(240px, 60vw);
   min-width: 60px;
   text-align: center;
   line-height: 1.4;
   animation: clawdPop 0.22s ease-out;
   white-space: normal;
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .clawd-bubble-text { display: inline; }
 .clawd-bubble-tail {
