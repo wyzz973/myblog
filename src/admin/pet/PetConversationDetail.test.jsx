@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import PetConversationDetail from './PetConversationDetail.jsx';
 
@@ -36,10 +36,6 @@ beforeEach(async () => {
   const { apiPet } = await import('../../api/pet.js');
   apiPet.getConversation.mockResolvedValue(FIXTURE);
   apiPet.deleteConversation.mockResolvedValue(null);
-});
-
-afterEach(() => {
-  cleanup();
 });
 
 describe('PetConversationDetail', () => {
