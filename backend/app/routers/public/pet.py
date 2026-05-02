@@ -1,6 +1,7 @@
 """Pet public endpoint — multi-provider gateway with article context."""
 from __future__ import annotations
 
+import asyncio
 import json
 import random
 
@@ -209,23 +210,31 @@ async def public_pet_summon_stream(
     actor_hash = ip_hash(client_ip_from(request))[:12]
     visitor_hash = ip_hash(client_ip_from(request))[:16]
 
+    # Resolve assigned species early so rate-limited archive carries real species
+    # rather than "unknown".
+    assigned = pet_assignment.verify_cookie(
+        request.cookies.get(pet_assignment.COOKIE_NAME)
+    ) or pet_assignment.assign_species(
+        ip=client_ip_from(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+
     if breach is not None:
         quip = random.choice(cfg.tired_lines)
-        await write_event(
-            s, type="pet.summoned", actor=actor_hash,
-            meta={"source": "rate_limited", "breach": breach},
-        )
-        await s.commit()
         try:
             async with AsyncSessionLocal() as s2:
                 m = PetMessage(
-                    visitor_hash=visitor_hash, species="unknown",
+                    visitor_hash=visitor_hash, species=assigned,
                     mode="rate_limited",
                     system_prompt="(rate-limited; no LLM call)",
                     prior_turns=[],
                     reply=quip, source="rate_limited",
                 )
                 s2.add(m)
+                await write_event(
+                    s2, type="pet.summoned", actor=actor_hash,
+                    meta={"source": "rate_limited", "breach": breach},
+                )
                 await s2.commit()
         except Exception as e:  # noqa: BLE001
             log.warning("pet_summon_stream.archive_failed_rl", error=repr(e))
@@ -256,13 +265,6 @@ async def public_pet_summon_stream(
             if post.tag_id is not None:
                 t = (await s.execute(select(Tag).where(Tag.id == post.tag_id))).scalar_one_or_none()
                 tag_label = t.slug if t else None
-
-    assigned = pet_assignment.verify_cookie(
-        request.cookies.get(pet_assignment.COOKIE_NAME)
-    ) or pet_assignment.assign_species(
-        ip=client_ip_from(request),
-        user_agent=request.headers.get("user-agent"),
-    )
 
     system = pet_prompt.build_system(
         cfg, species=assigned, mode=mode,
@@ -341,48 +343,55 @@ async def public_pet_summon_stream(
 
         full_reply = "".join(accumulated_chunks).strip()
 
-        # Update Redis ctx — only for real LLM replies (not fallback).
-        if terminal_source not in ("fallback", "rate_limited") and full_reply:
-            try:
-                await pet_context.append(
-                    redis, visitor_hash,
-                    user_turn=current_user_turn,
-                    assistant_turn={"role": "assistant", "content": full_reply},
-                    max_turns=cfg.context_window_turns,
-                    ttl_sec=cfg.context_ttl_seconds,
-                )
-            except Exception as e:  # noqa: BLE001
-                log.warning("pet_summon_stream.ctx_append_failed", error=repr(e))
+        async def _flush():
+            # Update Redis ctx — only for real LLM replies (not fallback).
+            if terminal_source not in ("fallback", "rate_limited") and full_reply:
+                try:
+                    await pet_context.append(
+                        redis, visitor_hash,
+                        user_turn=current_user_turn,
+                        assistant_turn={"role": "assistant", "content": full_reply},
+                        max_turns=cfg.context_window_turns,
+                        ttl_sec=cfg.context_ttl_seconds,
+                    )
+                except Exception as e:  # noqa: BLE001
+                    log.warning("pet_summon_stream.ctx_append_failed", error=repr(e))
 
-        # Archive every turn (including fallback) to pet_message.
-        if full_reply or terminal_source == "fallback":
-            archive_reply = full_reply or random.choice(fallback_lines)
-            try:
-                async with AsyncSessionLocal() as s2:
-                    m = PetMessage(
-                        visitor_hash=visitor_hash,
-                        species=assigned,
-                        mode=mode,
-                        post_id=post_id,
-                        title=title,
-                        tag_slug=tag_label,
-                        summary=summary,
-                        selection=selection,
-                        system_prompt=system,
-                        prior_turns=prior,
-                        reply=archive_reply,
-                        source=terminal_source,
-                    )
-                    s2.add(m)
-                    await write_event(
-                        s2, type="pet.summoned", actor=actor_hash,
-                        meta={
-                            "source": terminal_source, "mode": mode,
-                            "species": assigned, "stream": True,
-                        },
-                    )
-                    await s2.commit()
-            except Exception as e:  # noqa: BLE001
-                log.warning("pet_summon_stream.archive_failed", error=repr(e))
+            # Archive every turn (including fallback) to pet_message.
+            if full_reply or terminal_source == "fallback":
+                archive_reply = full_reply or random.choice(fallback_lines)
+                try:
+                    async with AsyncSessionLocal() as s2:
+                        m = PetMessage(
+                            visitor_hash=visitor_hash,
+                            species=assigned,
+                            mode=mode,
+                            post_id=post_id,
+                            title=title,
+                            tag_slug=tag_label,
+                            summary=summary,
+                            selection=selection,
+                            system_prompt=system,
+                            prior_turns=prior,
+                            reply=archive_reply,
+                            source=terminal_source,
+                        )
+                        s2.add(m)
+                        await write_event(
+                            s2, type="pet.summoned", actor=actor_hash,
+                            meta={
+                                "source": terminal_source, "mode": mode,
+                                "species": assigned, "stream": True,
+                            },
+                        )
+                        await s2.commit()
+                except Exception as e:  # noqa: BLE001
+                    log.warning("pet_summon_stream.archive_failed", error=repr(e))
+
+        try:
+            await asyncio.shield(_flush())
+        except asyncio.CancelledError:
+            # Already shielded — only propagates if shield itself cancelled twice.
+            pass
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

@@ -91,3 +91,63 @@ async def test_history_persists_to_pet_message_after_stream(
         for r in rows:
             await s.delete(r)
         await s.commit()
+
+
+@pytest.fixture
+async def reset_redis_state(redis):
+    """Clear pet:ctx:* + rl:pet:* keys to isolate this test."""
+    for pattern in ("pet:ctx:*", "rl:pet:*"):
+        keys = await redis.keys(pattern)
+        for k in keys:
+            await redis.delete(k)
+    yield
+    for pattern in ("pet:ctx:*", "rl:pet:*"):
+        keys = await redis.keys(pattern)
+        for k in keys:
+            await redis.delete(k)
+
+
+async def test_rate_limited_does_not_pollute_history(
+    client, captured_streams, fake_post_id, redis, reset_redis_state,
+):
+    """A rate-limited canned reply must NOT enter Redis ctx so the
+    next successful summon doesn't see 'pets 累了' in messages."""
+    from sqlalchemy import update
+    from app.db import AsyncSessionLocal
+    from app.models import SiteMeta
+    from app.schemas.pet import PetConfig
+
+    # Tighten rate limit so the second call breaches.
+    cfg = PetConfig(per_ip_per_min=1, per_ip_per_day=99, global_per_day=99)
+    async with AsyncSessionLocal() as s:
+        await s.execute(update(SiteMeta).where(SiteMeta.id == 1)
+                        .values(pet_config=cfg.model_dump()))
+        await s.commit()
+
+    # First call: ok (gateway captured)
+    await _read_stream(client, {})
+    # Second call: rate limited (gateway NOT captured)
+    events2 = await _read_stream(client, {})
+    rl = [e for e in events2 if e.get("type") == "rate_limited"]
+    assert rl, f"expected rate_limited event, got {events2}"
+    assert len(captured_streams) == 1, "gateway should be skipped on rate limit"
+
+    # Reset to defaults + clear rl counters; third call should NOT see canned reply in history.
+    cfg2 = PetConfig()
+    async with AsyncSessionLocal() as s:
+        await s.execute(update(SiteMeta).where(SiteMeta.id == 1)
+                        .values(pet_config=cfg2.model_dump()))
+        await s.commit()
+    keys = await redis.keys("rl:pet:*")
+    for k in keys:
+        await redis.delete(k)
+
+    await _read_stream(client, {})
+    msgs3 = captured_streams[1]["messages"]
+    # 3 messages = first ok user + first ok assistant + current user.
+    # Rate-limited canned line MUST be absent.
+    assert len(msgs3) == 3
+    contents = [m["content"] for m in msgs3]
+    for c in contents[:-1]:
+        assert "累了" not in c
+        assert "nap" not in c.lower()
