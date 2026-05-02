@@ -5,7 +5,7 @@ const MODES = [
   { id: 'selection_qa', label: 'selection_qa — selected prose' },
 ];
 
-export default function PetTemplates({ config, patch, onReset }) {
+export default function PetTemplates({ config, patch, saving, onReset }) {
   const tpl = config.mode_templates || {};
   function setTpl(mode, value) {
     patch({ mode_templates: { ...tpl, [mode]: value } });
@@ -28,7 +28,7 @@ export default function PetTemplates({ config, patch, onReset }) {
             style={{ fontFamily: 'monospace' }} />
         </fieldset>
       ))}
-      <button type="button" onClick={onReset} className="danger">
+      <button type="button" onClick={onReset} disabled={saving} className="danger">
         Reset all templates to defaults
       </button>
     </div>

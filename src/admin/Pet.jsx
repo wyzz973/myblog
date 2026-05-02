@@ -58,6 +58,7 @@ export default function Pet() {
       const next = await apiPet.resetSection(section);
       setConfig(next);
       setSavedTick((t) => t + 1);
+      setError(null);
     } catch (e) {
       setError(e?.detail || e?.message || 'reset failed');
     } finally {
@@ -66,7 +67,8 @@ export default function Pet() {
   }
 
   if (loading) return <div className="pad">loading…</div>;
-  if (error) return <div className="pad err">{error}</div>;
+  // Initial-load failure (no config to edit): full-page error.
+  if (error && !config) return <div className="pad err">{error}</div>;
   if (!config) return null;
 
   return (
@@ -74,24 +76,41 @@ export default function Pet() {
       <nav className="tabs">
         {TABS.map((t) => (
           <button
+            type="button"
             key={t.id}
             className={`tab ${tab === t.id ? 'active' : ''}`}
             onClick={() => setParams({ tab: t.id })}
           >{t.label}</button>
         ))}
         <span className="grow" />
-        <button className="primary" onClick={save} disabled={saving}>
+        <button type="button" className="primary" onClick={save} disabled={saving}>
           {saving ? 'saving…' : 'Save'}
         </button>
         {savedTick > 0 && <span className="saved-hint">✓ saved</span>}
       </nav>
 
+      {/* Inline error banner (save / reset failure) — keeps the form usable. */}
+      {error && config && (
+        <div className="pad err" role="alert" style={{ marginBottom: 8 }}>
+          {error}
+          <button type="button" onClick={() => setError(null)} style={{ marginLeft: 12 }}>
+            dismiss
+          </button>
+        </div>
+      )}
+
       {tab === 'behavior' && <PetBehavior config={config} patch={patch} />}
       {tab === 'personas' && (
-        <PetPersonas config={config} patch={patch} onReset={() => resetSection('personas')} />
+        <PetPersonas
+          config={config} patch={patch} saving={saving}
+          onReset={() => resetSection('personas')}
+        />
       )}
       {tab === 'templates' && (
-        <PetTemplates config={config} patch={patch} onReset={() => resetSection('templates')} />
+        <PetTemplates
+          config={config} patch={patch} saving={saving}
+          onReset={() => resetSection('templates')}
+        />
       )}
     </div>
   );
