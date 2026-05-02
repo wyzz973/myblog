@@ -231,9 +231,35 @@ export default function AsciiPet({ hint = null }) {
     }, 260);
   };
 
+  const typingTimer = useRef(null);
+  const stopTyping = () => {
+    if (typingTimer.current) {
+      clearInterval(typingTimer.current);
+      typingTimer.current = null;
+    }
+  };
+  const typeOut = (full) => {
+    stopTyping();
+    // Reserve full text width via a hidden ghost so the bubble doesn't
+    // resize as characters arrive, which used to make the pet jump.
+    setSpeech({ text: '', full, typing: true });
+    let i = 0;
+    const stepMs = full.length > 30 ? 35 : 55; // longer text → faster
+    typingTimer.current = setInterval(() => {
+      i += 1;
+      if (i >= full.length) {
+        stopTyping();
+        setSpeech({ text: full, full, typing: false });
+        return;
+      }
+      setSpeech({ text: full.slice(0, i), full, typing: true });
+    }, stepMs);
+  };
+
   const summonSpeech = async () => {
     clearTimeout(speechTimer.current);
-    setSpeech({ text: '…', thinking: true });
+    stopTyping();
+    setSpeech({ text: '', thinking: true });
     setState('thinking');
     tempStateUntil.current = Date.now() + 8000;
     let text = null;
@@ -250,11 +276,14 @@ export default function AsciiPet({ hint = null }) {
       }
     } catch (_) { /* fall through to canned reply */ }
     if (!text) text = QUIPS[Math.floor(Math.random() * QUIPS.length)];
-    setSpeech({ text });
+    typeOut(text);
     setState('happy');
     tempStateUntil.current = Date.now() + 1400;
     clearTimeout(speechTimer.current);
-    speechTimer.current = setTimeout(() => setSpeech(null), 8000);
+    speechTimer.current = setTimeout(() => {
+      stopTyping();
+      setSpeech(null);
+    }, 8000);
   };
 
   // Public API: trigger states from blog events
@@ -357,11 +386,27 @@ export default function AsciiPet({ hint = null }) {
       )}
 
       {(() => {
-        const bubbleText = speech?.text || hint?.text;
+        const bubbleText = speech?.text ?? hint?.text ?? '';
+        const bubbleFull = speech?.full ?? hint?.text ?? '';
         const bubbleThinking = speech?.thinking;
-        return bubbleText && !mini ? (
+        const isTyping = !!speech?.typing && bubbleFull.length > bubbleText.length;
+        const bubbleVisible = (bubbleText || bubbleThinking) && !mini;
+        return bubbleVisible ? (
           <div className="clawd-bubble" style={{ borderColor: color, color }}>
-            <span>{bubbleThinking ? <Dots /> : bubbleText}</span>
+            {bubbleThinking ? (
+              <Dots />
+            ) : isTyping ? (
+              <span className="clawd-bubble-text">
+                <span>{bubbleText}</span>
+                <span className="clawd-caret">▍</span>
+                {/* Hidden tail keeps the bubble width steady while typing */}
+                <span className="clawd-bubble-tail" aria-hidden="true">
+                  {bubbleFull.slice(bubbleText.length)}
+                </span>
+              </span>
+            ) : (
+              <span className="clawd-bubble-text">{bubbleText}</span>
+            )}
             <span className="clawd-bubble-arrow" style={{ '--bc': color }} />
           </div>
         ) : null;
