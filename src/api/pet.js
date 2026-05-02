@@ -63,6 +63,30 @@ export const apiPet = {
       method: 'POST',
     });
   },
+  listConversations(params = {}) {
+    const qs = new URLSearchParams();
+    if (params.cursor) qs.set('cursor', params.cursor);
+    if (params.species) qs.set('species', params.species);
+    if (params.since) qs.set('since', params.since);
+    if (params.limit) qs.set('limit', String(params.limit));
+    const suffix = qs.toString();
+    return request(`/pet/conversations${suffix ? '?' + suffix : ''}`);
+  },
+  getConversation(visitorHash, params = {}) {
+    const qs = new URLSearchParams();
+    if (params.cursor) qs.set('cursor', String(params.cursor));
+    if (params.limit) qs.set('limit', String(params.limit));
+    const suffix = qs.toString();
+    return request(
+      `/pet/conversations/${encodeURIComponent(visitorHash)}${suffix ? '?' + suffix : ''}`,
+    );
+  },
+  deleteConversation(visitorHash) {
+    return request(
+      `/pet/conversations/${encodeURIComponent(visitorHash)}`,
+      { method: 'DELETE' },
+    );
+  },
 };
 
 export default apiPet;

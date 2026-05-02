@@ -14,6 +14,7 @@ from app.models.like_event import LikeEvent
 from app.models.magic_link import MagicLink
 from app.models.media import Media
 from app.models.now_entry import NowEntry
+from app.models.pet_message import PetMessage
 from app.models.post import Post
 from app.models.project import Project
 from app.models.site_meta import SiteMeta
@@ -26,6 +27,8 @@ __all__ = [
     "EventLogArchive",
     "ExportJob",
     "HitDaily", "HitEvent",
-    "Integration", "LikeEvent", "MagicLink", "Media", "NowEntry", "Post", "Project",
+    "Integration", "LikeEvent", "MagicLink", "Media", "NowEntry",
+    "PetMessage",
+    "Post", "Project",
     "SiteMeta", "Tag", "TfaRecoveryCode",
 ]

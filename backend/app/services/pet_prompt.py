@@ -108,3 +108,43 @@ def infer_mode(*, post_id: str | None, selection: str | None) -> PetMode:
     if post_id:
         return "summary_react"
     return "greet"
+
+
+def build_messages(
+    cfg: PetConfig,
+    *,
+    mode: PetMode,
+    title: str | None,
+    tag: str | None,
+    summary: str | None,
+    selection: str | None,
+    prior: list[dict],
+) -> list[dict]:
+    """Compose the messages array for the LLM gateway.
+
+    Returns: prior turns (user/assistant alternating, role+content only)
+    followed by a single new user turn whose content is a "scene tag"
+    describing what the visitor just did. The system prompt is built
+    separately by build_system().
+    """
+    selection_text = truncate_selection(selection, cfg.max_context_chars) if selection else ""
+    title_text = title or ""
+    tag_text = tag or ""
+
+    if mode == "greet":
+        scene = "(visitor tapped on you)"
+    elif mode == "summary_react":
+        scene = f'(visitor reading "{title_text}", tag: {tag_text})'
+    elif mode == "selection_explain":
+        scene = f'(visitor highlighted code from "{title_text}"): {selection_text}'
+    elif mode == "selection_qa":
+        scene = f'(visitor highlighted from "{title_text}"): {selection_text}'
+    else:
+        scene = "(visitor summoned you)"
+
+    cleaned_prior = [
+        {"role": t.get("role", "user"), "content": t.get("content", "")}
+        for t in prior
+        if t.get("role") in ("user", "assistant")
+    ]
+    return [*cleaned_prior, {"role": "user", "content": scene}]

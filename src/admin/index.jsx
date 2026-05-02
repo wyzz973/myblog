@@ -14,6 +14,7 @@ import Contacts from './Contacts.jsx';
 import Projects from './Projects.jsx';
 import Now from './Now.jsx';
 import Pet from './Pet.jsx';
+import PetConversationDetail from './pet/PetConversationDetail.jsx';
 import Settings from './Settings.jsx';
 
 function RequireAuth({ children }) {
@@ -68,6 +69,7 @@ export default function AdminApp() {
           <Route path="projects" element={<Projects />} />
           <Route path="now" element={<Now />} />
           <Route path="pet" element={<Pet />} />
+          <Route path="pet/conversations/:visitorHash" element={<PetConversationDetail />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin" replace />} />

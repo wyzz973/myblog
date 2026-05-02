@@ -2078,3 +2078,55 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   margin-top: 6px;
 }
 .admin-pet details summary { list-style: revert; }
+
+.admin-pet .conv-row {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  background: var(--bg-2);
+  text-decoration: none;
+  color: var(--fg);
+  transition: border-color 0.15s;
+}
+.admin-pet .conv-row:hover { border-color: var(--accent); }
+.admin-pet .conv-row-head {
+  display: flex; gap: 12px; font-size: 12px; align-items: baseline;
+}
+.admin-pet .conv-vh { color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+.admin-pet .conv-species { color: var(--accent-2); }
+.admin-pet .conv-count { color: var(--fg-3); }
+.admin-pet .conv-when { color: var(--fg-3); margin-left: auto; }
+.admin-pet .conv-preview {
+  color: var(--fg-2); font-size: 12px; margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.admin-pet .conv-msg {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--bg-2);
+}
+.admin-pet .conv-msg-head {
+  display: flex; gap: 10px; font-size: 11px; color: var(--fg-3);
+  align-items: center; margin-bottom: 6px;
+}
+.admin-pet .conv-msg-mode { color: var(--accent); }
+.admin-pet .conv-msg-path { color: var(--accent-2); font-family: 'JetBrains Mono', monospace; }
+.admin-pet .conv-msg-source { color: var(--fg-4); }
+.admin-pet .conv-msg-sel {
+  background: var(--bg-3); border-left: 2px solid var(--accent);
+  padding: 6px 8px; font-size: 12px; margin-bottom: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  white-space: pre-wrap; word-break: break-word;
+}
+.admin-pet .conv-msg-reply { font-size: 13px; color: var(--fg); white-space: pre-wrap; }
+.admin-pet .conv-msg-debug { margin-top: 8px; }
+.admin-pet .conv-msg-debug summary { color: var(--fg-4); font-size: 11px; cursor: pointer; }
+.admin-pet .conv-msg-debug pre {
+  background: var(--bg-3); border: 1px solid var(--line);
+  padding: 6px 8px; font-size: 11px; overflow-x: auto;
+  border-radius: 3px; margin: 4px 0;
+}

@@ -1,17 +1,40 @@
-from typing import Literal
+import base64
+from datetime import datetime
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, update
+import structlog
+from fastapi import APIRouter, Depends, Query, Response
+from fastapi import status as http_status
+from redis.asyncio import Redis
+from sqlalchemy import delete, desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import current_admin, require_scope
-from app.models import Account, SiteMeta
+from app.models import Account, PetMessage, SiteMeta
+from app.redis import get_redis
 from app.schemas.pet import PetConfig, PetModeTemplates, PetPersonas
+from app.services import pet_context
+
+log = structlog.get_logger(__name__)
 
 router = APIRouter()
 
 ResetSection = Literal["personas", "templates", "both"]
+
+
+def _encode_cursor(last_msg_at: datetime, visitor_hash: str) -> str:
+    raw = f"{last_msg_at.isoformat()}|{visitor_hash}"
+    return base64.urlsafe_b64encode(raw.encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> tuple[datetime, str] | None:
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+        ts_str, vh = raw.rsplit("|", 1)
+        return datetime.fromisoformat(ts_str), vh
+    except Exception:
+        return None
 
 
 @router.get("/pet", response_model=PetConfig)
@@ -75,3 +98,135 @@ async def reset_pet_section(
     )
     await s.commit()
     return new
+
+
+@router.get("/pet/conversations")
+async def list_conversations(
+    limit: int = Query(default=50, ge=1, le=200),
+    cursor: str | None = Query(default=None),
+    species: str | None = Query(default=None, max_length=32),
+    since: datetime | None = Query(default=None),
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """List conversations grouped by visitor_hash, ordered by last_msg_at desc."""
+    # Step 1: aggregate query — visitor_hash, max(created_at), count(id)
+    stmt = (
+        select(
+            PetMessage.visitor_hash,
+            func.max(PetMessage.created_at).label("last_msg_at"),
+            func.count(PetMessage.id).label("message_count"),
+        )
+        .group_by(PetMessage.visitor_hash)
+    )
+    if species:
+        stmt = stmt.where(PetMessage.species == species)
+    if since:
+        stmt = stmt.where(PetMessage.created_at >= since)
+
+    # Cursor logic: filter rows older than (ts, vh) using HAVING (compound cursor).
+    if cursor:
+        decoded = _decode_cursor(cursor)
+        if decoded is not None:
+            ts, vh = decoded
+            stmt = stmt.having(
+                (func.max(PetMessage.created_at) < ts)
+                | (
+                    (func.max(PetMessage.created_at) == ts)
+                    & (PetMessage.visitor_hash > vh)
+                )
+            )
+
+    stmt = stmt.order_by(desc("last_msg_at"), PetMessage.visitor_hash).limit(limit + 1)
+
+    rows = (await s.execute(stmt)).all()
+    items: list[dict[str, Any]] = []
+    for row in rows[:limit]:
+        # Per-visitor follow-up: latest species + latest reply preview
+        latest = (await s.execute(
+            select(PetMessage.species, PetMessage.reply, PetMessage.created_at)
+            .where(PetMessage.visitor_hash == row.visitor_hash)
+            .order_by(desc(PetMessage.created_at))
+            .limit(1)
+        )).first()
+        items.append({
+            "visitor_hash": row.visitor_hash,
+            "species": latest.species if latest else "unknown",
+            "last_msg_at": row.last_msg_at.isoformat(),
+            "message_count": int(row.message_count),
+            "last_reply_preview": (latest.reply or "")[:80] if latest else "",
+        })
+    next_cursor = None
+    if len(rows) > limit:
+        last = items[-1]
+        next_cursor = _encode_cursor(
+            datetime.fromisoformat(last["last_msg_at"]),
+            last["visitor_hash"],
+        )
+    return {"items": items, "next_cursor": next_cursor}
+
+
+@router.get("/pet/conversations/{visitor_hash}")
+async def get_conversation_detail(
+    visitor_hash: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    cursor: int | None = Query(default=None),
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """All messages for one visitor, oldest first, paginated by id ascending."""
+    stmt = (
+        select(PetMessage)
+        .where(PetMessage.visitor_hash == visitor_hash)
+        .order_by(PetMessage.created_at, PetMessage.id)
+        .limit(limit + 1)
+    )
+    if cursor is not None:
+        stmt = stmt.where(PetMessage.id > cursor)
+    rows = (await s.execute(stmt)).scalars().all()
+    items = []
+    for r in rows[:limit]:
+        items.append({
+            "id": r.id,
+            "visitor_hash": r.visitor_hash,
+            "species": r.species,
+            "mode": r.mode,
+            "post_id": r.post_id,
+            "title": r.title,
+            "tag_slug": r.tag_slug,
+            "summary": r.summary,
+            "selection": r.selection,
+            "system_prompt": r.system_prompt,
+            "prior_turns": r.prior_turns,
+            "reply": r.reply,
+            "source": r.source,
+            "created_at": r.created_at.isoformat(),
+        })
+    next_cursor = items[-1]["id"] if len(rows) > limit and items else None
+    return {"items": items, "next_cursor": next_cursor}
+
+
+@router.delete(
+    "/pet/conversations/{visitor_hash}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def delete_conversation(
+    visitor_hash: str,
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> Response:
+    """Hard-delete all pet_message rows for one visitor and clear their
+    Redis context. Idempotent — DELETE on an unknown visitor returns 204."""
+    await s.execute(
+        delete(PetMessage).where(PetMessage.visitor_hash == visitor_hash)
+    )
+    await s.commit()
+    try:
+        await pet_context.clear(redis, visitor_hash)
+    except Exception as e:  # noqa: BLE001
+        # Redis cleanup is best-effort; DB is the source of truth.
+        log.warning("admin.delete_conversation.ctx_clear_failed",
+                    visitor_hash=visitor_hash, error=repr(e))
+    return Response(status_code=http_status.HTTP_204_NO_CONTENT)
