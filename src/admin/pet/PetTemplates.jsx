@@ -1,5 +1,6 @@
 const MODES = [
   { id: 'greet', label: 'greet — visitor summoned with no article context' },
+  { id: 'idle_monologue', label: 'idle_monologue — pet speaks after quiet time' },
   { id: 'summary_react', label: 'summary_react — visitor on article, no selection' },
   { id: 'selection_explain', label: 'selection_explain — selected code/snippet' },
   { id: 'selection_qa', label: 'selection_qa — selected prose' },

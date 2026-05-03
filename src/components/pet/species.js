@@ -12,7 +12,71 @@ export const RARITY_COLOR = {
   legendary: '#f5b44c',
 };
 
-export const SPECIES = {
+export const RARITY_STARS = {
+  common: '★',
+  uncommon: '★★',
+  rare: '★★★',
+  epic: '★★★★',
+  legendary: '★★★★★',
+};
+
+export const STAT_KEYS = ['debugging', 'patience', 'chaos', 'wisdom', 'snark'];
+
+const RARITY_STAT_BASE = {
+  common:    { debugging: 42, patience: 64, chaos: 30, wisdom: 38, snark: 24 },
+  uncommon:  { debugging: 55, patience: 58, chaos: 38, wisdom: 52, snark: 34 },
+  rare:      { debugging: 68, patience: 50, chaos: 52, wisdom: 62, snark: 48 },
+  epic:      { debugging: 78, patience: 44, chaos: 66, wisdom: 72, snark: 58 },
+  legendary: { debugging: 88, patience: 40, chaos: 80, wisdom: 84, snark: 72 },
+};
+
+const PET_PROFILES = {
+  duck:      { trait: 'rubber debugger', personality: 'Cheerful, literal, and suspicious of silent failures.', description: 'A tiny desk duck that listens first and quacks only when a bug is obvious.', stats: { patience: 78, snark: 12 } },
+  goose:     { trait: 'strict reviewer', personality: 'Loud, protective, and impossible to ignore.', description: 'Guards the page like a build gate and honks at vague requirements.', stats: { debugging: 58, chaos: 55, snark: 50 } },
+  blob:      { trait: 'soft buffer', personality: 'Calm, squishy, and good at absorbing messy context.', description: 'Turns scattered thoughts into one small, usable next step.', stats: { patience: 82, chaos: 18 } },
+  cat:       { trait: 'terminal familiar', personality: 'Curious, picky, and quietly helpful when it feels like it.', description: 'A classic coding companion with sharp eyes and selective affection.', stats: { debugging: 62, snark: 44 } },
+  rabbit:    { trait: 'quick scanner', personality: 'Fast, gentle, and easily distracted by edge cases.', description: 'Hops through drafts and catches tiny inconsistencies before they multiply.', stats: { debugging: 56, chaos: 42 } },
+  penguin:   { trait: 'release keeper', personality: 'Orderly, cool-headed, and fond of clean deploys.', description: 'Keeps its feathers neat and its checklists shorter than they look.', stats: { patience: 72, wisdom: 68 } },
+  owl:       { trait: 'night analyst', personality: 'Quiet, observant, and annoyingly right after midnight.', description: 'Watches the whole code path before blinking once.', stats: { wisdom: 82, snark: 42 } },
+  turtle:    { trait: 'steady shipper', personality: 'Slow, stubborn, and deeply resistant to panic.', description: 'Prefers durable fixes, small diffs, and migrations that can be explained.', stats: { patience: 88, chaos: 14 } },
+  capybara:  { trait: 'team mediator', personality: 'Unbothered, warm, and useful during ambiguous product debates.', description: 'Sits beside hard tradeoffs until they stop looking dramatic.', stats: { patience: 86, snark: 18 } },
+  mushroom:  { trait: 'spore profiler', personality: 'Odd, patient, and quietly excellent at finding hidden growth.', description: 'Finds patterns in dark corners and leaves tiny notes behind.', stats: { wisdom: 70, chaos: 58 } },
+  ghost:     { trait: 'regression haunt', personality: 'Playful, elusive, and obsessed with bugs that came back.', description: 'Floats through old assumptions and rattles the flaky tests.', stats: { debugging: 74, chaos: 70 } },
+  snail:     { trait: 'latency oracle', personality: 'Methodical, dry, and never rushed by a progress bar.', description: 'Measures twice, crawls once, and still reaches the root cause.', stats: { patience: 92, wisdom: 76 } },
+  cactus:    { trait: 'boundary guard', personality: 'Prickly, concise, and excellent at saying no.', description: 'Protects APIs, scopes, and personal space with the same energy.', stats: { patience: 46, snark: 70 } },
+  chonk:     { trait: 'cache warmer', personality: 'Cozy, loyal, and very serious about snack breaks.', description: 'Stabilizes the room and occasionally sits on over-engineered ideas.', stats: { patience: 74, snark: 38 } },
+  octopus:   { trait: 'parallel thinker', personality: 'Clever, restless, and always holding three contexts at once.', description: 'Juggles options, traces data flow, and still has an arm free for notes.', stats: { debugging: 86, chaos: 74 } },
+  jellyfish: { trait: 'signal drifter', personality: 'Elegant, weird, and lightly judgmental about bad abstractions.', description: 'Glows when the architecture is clean and stings when it is not.', stats: { wisdom: 84, snark: 76 } },
+  axolotl:   { trait: 'recovery mode', personality: 'Hopeful, resilient, and strangely good at undoing damage.', description: 'Regenerates broken flows from the smallest surviving invariant.', stats: { patience: 72, chaos: 64 } },
+  robot:     { trait: 'lint engine', personality: 'Precise, tireless, and allergic to inconsistent formatting.', description: 'Runs on structured inputs, crisp errors, and exactly one source of truth.', stats: { debugging: 92, snark: 54 } },
+  dragon:    { trait: 'prod firekeeper', personality: 'Proud, intense, and happiest near difficult launches.', description: 'Breathes controlled fire at blockers and hoards useful logs.', stats: { debugging: 96, chaos: 90 } },
+  phoenix:   { trait: 'rollback rebirth', personality: 'Dramatic, optimistic, and excellent after incidents.', description: 'Turns failed deploys into cleaner release rituals.', stats: { wisdom: 92, chaos: 86 } },
+  fox:       { trait: 'clever scout', personality: 'Sharp, sly, and quick to spot the shortcut that is actually safe.', description: 'Sneaks through edge cases and returns with the missing assumption.', stats: { debugging: 90, snark: 82 } },
+  shiba:     { trait: 'approval gate', personality: 'Confident, expressive, and unconvinced by vague success metrics.', description: 'Barks once for unclear acceptance criteria and twice for flaky demos.', stats: { snark: 88, patience: 34 } },
+  mochi:     { trait: 'sweet stabilizer', personality: 'Soft, cheerful, and surprisingly strict about polish.', description: 'Makes rough interactions feel finished without making a fuss.', stats: { patience: 76, wisdom: 78 } },
+  panda:     { trait: 'calm operator', personality: 'Gentle, sleepy, and very hard to shake during outages.', description: 'Reads the dashboard slowly and finds the one number that matters.', stats: { patience: 90, wisdom: 88 } },
+  hamster:   { trait: 'tiny optimizer', personality: 'Busy, bright-eyed, and prone to over-indexing on details.', description: 'Stores small improvements for later and occasionally finds a big one.', stats: { debugging: 84, chaos: 76 } },
+  bee:       { trait: 'workflow pollinator', personality: 'Energetic, social, and obsessed with moving useful context around.', description: 'Connects ideas, comments, and TODOs until the whole garden ships.', stats: { chaos: 82, patience: 52 } },
+  otter:     { trait: 'playful debugger', personality: 'Inventive, mischievous, and happiest with a failing repro.', description: 'Plays with the problem until the root cause floats up.', stats: { debugging: 94, snark: 80 } },
+};
+
+function withProfile(key, species) {
+  const profile = PET_PROFILES[key] || {};
+  const baseStats = RARITY_STAT_BASE[species.rarity] || RARITY_STAT_BASE.common;
+  return {
+    ...species,
+    trait: profile.trait || 'desk companion',
+    personality: profile.personality || 'Curious, compact, and tuned for quiet help.',
+    description: profile.description || `A ${species.rarity} buddy assigned to this visitor.`,
+    stats: { ...baseStats, ...(profile.stats || {}) },
+  };
+}
+
+export function rarityStars(rarity) {
+  return RARITY_STARS[rarity] || RARITY_STARS.common;
+}
+
+const SPECIES_BASE = {
   duck: {
     rarity: 'common', color: '#f5d44c',
     frames: [
@@ -244,6 +308,10 @@ export const SPECIES = {
     ],
   },
 };
+
+export const SPECIES = Object.fromEntries(
+  Object.entries(SPECIES_BASE).map(([key, species]) => [key, withProfile(key, species)]),
+);
 
 export function byRarity() {
   const out = {};

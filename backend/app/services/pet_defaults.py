@@ -172,6 +172,14 @@ DEFAULT_TEMPLATES: dict[str, str] = {
         "If you have an inner thought worth sharing in one breath, share it.\n"
         "Max 25 Chinese chars or 15 English words. ONE line. No quotes."
     ),
+    "idle_monologue": (
+        "The visitor has not poked you for a while. Say a spontaneous idle thought.\n"
+        "Stay fully in your species persona: use its rhythm, catchphrases, attitude,\n"
+        "and tiny desktop-pet point of view. Do NOT ask for attention directly.\n"
+        "It should feel like you are muttering to yourself while sitting on the page.\n"
+        "Make it different from a greeting. No generic 'hello' or 'I'm here'.\n"
+        "Max 25 Chinese chars or 15 English words. ONE line. No quotes."
+    ),
     "summary_react": (
         "The visitor is reading: \"{title}\" (tag: {tag})\n"
         "Article summary: {summary}\n\n"

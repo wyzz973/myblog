@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.services.pet_defaults import DEFAULT_PERSONAS, DEFAULT_TEMPLATES
 
 ProviderName = Literal["zhipu", "qwen", "doubao", "anthropic", "deepseek"]
-PetMode = Literal["greet", "summary_react", "selection_explain", "selection_qa"]
+PetMode = Literal["greet", "idle_monologue", "summary_react", "selection_explain", "selection_qa"]
 
 
 class _Strict(BaseModel):
@@ -44,6 +44,7 @@ class PetPersonas(_Strict):
 
 class PetModeTemplates(_Strict):
     greet: str = Field(default=DEFAULT_TEMPLATES["greet"], max_length=800)
+    idle_monologue: str = Field(default=DEFAULT_TEMPLATES["idle_monologue"], max_length=800)
     summary_react: str = Field(default=DEFAULT_TEMPLATES["summary_react"], max_length=800)
     selection_explain: str = Field(default=DEFAULT_TEMPLATES["selection_explain"], max_length=800)
     selection_qa: str = Field(default=DEFAULT_TEMPLATES["selection_qa"], max_length=800)

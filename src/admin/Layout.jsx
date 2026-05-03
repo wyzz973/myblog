@@ -27,20 +27,21 @@ export default function Layout() {
   }
 
   return (
-    <div style={styles.shell}>
-      <aside style={styles.sidebar}>
-        <div style={styles.brand}>
-          <span style={styles.brandDot} />
+    <div className="admin-shell" style={styles.shell}>
+      <aside className="admin-sidebar" style={styles.sidebar}>
+        <div className="admin-brand" style={styles.brand}>
+          <span className="admin-brand-dot" style={styles.brandDot} />
           <div>
             <div style={styles.brandTitle}>myblog</div>
             <div style={styles.brandSub}>admin console</div>
           </div>
         </div>
-        <nav style={styles.nav}>
+        <nav className="admin-nav" style={styles.nav}>
           {NAV.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
+              className="admin-nav-item"
               style={({ isActive }) => ({
                 ...styles.navItem,
                 ...(isActive ? styles.navItemActive : null),
@@ -52,22 +53,22 @@ export default function Layout() {
         </nav>
       </aside>
 
-      <div style={styles.main}>
-        <header style={styles.topbar}>
-          <div style={styles.crumbs}>
+      <div className="admin-main" style={styles.main}>
+        <header className="admin-topbar" style={styles.topbar}>
+          <div className="admin-crumbs" style={styles.crumbs}>
             <span style={styles.dim}>~</span>
             <span style={styles.sep}>/</span>
             <span>admin</span>
           </div>
-          <div style={styles.userBox}>
-            <span style={styles.userEmail}>{email || 'unknown'}</span>
+          <div className="admin-user-box" style={styles.userBox}>
+            <span className="admin-user-email" style={styles.userEmail}>{email || 'unknown'}</span>
             <button type="button" onClick={onLogout} style={styles.logout}>
               logout
             </button>
           </div>
         </header>
 
-        <main style={styles.content}>
+        <main className="admin-content" style={styles.content}>
           <Outlet />
         </main>
       </div>

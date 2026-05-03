@@ -27,6 +27,19 @@ def test_build_messages_summary_react_scene_tag():
     assert "devtools" in last["content"]
 
 
+def test_build_messages_idle_monologue_scene_tag():
+    cfg = PetConfig()
+    msgs = build_messages(
+        cfg, mode="idle_monologue",
+        title=None, tag=None, summary=None, selection=None,
+        prior=[],
+    )
+    assert msgs[-1] == {
+        "role": "user",
+        "content": "(visitor has been idle; say a spontaneous thought)",
+    }
+
+
 def test_build_messages_selection_explain_includes_selection():
     cfg = PetConfig()
     msgs = build_messages(

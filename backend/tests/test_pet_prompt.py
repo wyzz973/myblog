@@ -42,6 +42,16 @@ def test_build_system_known_species_greet_mode():
     assert "tapped on you" in out  # from greet template
 
 
+def test_build_system_idle_monologue_uses_persona():
+    cfg = PetConfig()
+    out = build_system(cfg, species="cat", mode="idle_monologue", title=None, tag=None,
+                       summary=None, selection=None)
+    assert "cat" in out
+    assert cfg.personas.cat in out
+    assert "has not poked" in out
+    assert "spontaneous" in out
+
+
 def test_build_system_unknown_species_falls_back_to_system_prompt():
     """Defensive: cookie/fingerprint produced a species not in the catalog."""
     cfg = PetConfig()

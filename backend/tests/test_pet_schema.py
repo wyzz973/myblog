@@ -14,9 +14,10 @@ def test_petconfig_default_includes_27_personas():
     assert c.personas.dragon
 
 
-def test_petconfig_default_includes_4_mode_templates():
+def test_petconfig_default_includes_5_mode_templates():
     c = PetConfig()
     assert c.mode_templates.greet
+    assert c.mode_templates.idle_monologue
     assert c.mode_templates.summary_react
     assert c.mode_templates.selection_explain
     assert c.mode_templates.selection_qa
@@ -52,7 +53,9 @@ def test_persona_field_max_length_400():
 def test_pet_mode_literal_rejects_garbage():
     from typing import get_args
     valid = get_args(PetMode)
-    assert set(valid) == {"greet", "summary_react", "selection_explain", "selection_qa"}
+    assert set(valid) == {
+        "greet", "idle_monologue", "summary_react", "selection_explain", "selection_qa"
+    }
 
 
 def test_petconfig_partial_personas_dict_fills_per_species_defaults():
