@@ -209,6 +209,20 @@ describe('AsciiPet', () => {
     expect(screen.queryByLabelText('message pet')).not.toBeInTheDocument();
   });
 
+  it('closes chat input from the x button without entering quiet mode', async () => {
+    render(<AsciiPet />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/pet/config'));
+
+    fireEvent.click(screen.getByTitle('chat with pet'));
+    const input = screen.getByLabelText('message pet');
+    fireEvent.change(input, { target: { value: 'draft' } });
+    fireEvent.click(screen.getByTitle('close chat'));
+
+    expect(screen.queryByLabelText('message pet')).not.toBeInTheDocument();
+    expect(screen.queryByText('安静 30 分钟。')).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('shows local proactive article-finished prompt and sends article_finished only after click', async () => {
     vi.useFakeTimers();
     window.__petScene = () => ({

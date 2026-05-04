@@ -695,7 +695,14 @@ export default function AsciiPet({ hint = null }) {
             disabled={summoning.current}
           />
           <button type="submit" disabled={summoning.current} title="send to pet">↵</button>
-          <button type="button" onClick={setQuietMode} title="quiet mode">×</button>
+          <button
+            type="button"
+            onClick={() => {
+              setChatOpen(false);
+              setChatText('');
+            }}
+            title="close chat"
+          >×</button>
         </form>
       )}
 
