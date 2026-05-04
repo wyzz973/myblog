@@ -85,6 +85,18 @@ SUMMARY_REACTION_ANGLES = (
     "tiny_hot_take",
 )
 
+CONTENT_AWARE_MODES = {
+    "summary_react",
+    "selection_explain",
+    "selection_qa",
+    "free_chat",
+    "follow_up",
+    "article_finished",
+    "reading_assist",
+    "code_assist",
+    "recommend_next",
+}
+
 
 def _behavior_text(species: str) -> str:
     behavior = DEFAULT_BEHAVIOR.get(species, DEFAULT_BEHAVIOR.get("cat", {}))
@@ -283,6 +295,10 @@ def build_messages(
     )
     if intent:
         scene_lines.append(f"intent: {intent[:48]}")
+    if mode in CONTENT_AWARE_MODES:
+        scene_lines.append(
+            "natural_speech_constraint: zero stock catchphrases; zero unrelated hunger/tiredness/snack/sleep/body-state jokes; avoid formulaic parenthetical openings"
+        )
     if mode in ("summary_react", "recommend_next"):
         replies = _recent_assistant_replies(prior)
         angle = SUMMARY_REACTION_ANGLES[len(replies) % len(SUMMARY_REACTION_ANGLES)]

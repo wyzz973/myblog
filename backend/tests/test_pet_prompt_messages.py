@@ -28,6 +28,7 @@ def test_build_messages_summary_react_scene_tag():
     assert "Hello" in last["content"]
     assert "devtools" in last["content"]
     assert "reaction_angle:" in last["content"]
+    assert "natural_speech_constraint:" in last["content"]
 
 
 def test_build_messages_summary_react_avoids_recent_replies():
@@ -71,6 +72,8 @@ def test_build_messages_recommend_next_uses_home_context_and_recent_replies():
     assert "VPS Setup" in content
     assert "avoid_repeating_recent_assistant_replies" in content
     assert "old home line" in content
+    assert "zero stock catchphrases" in content
+    assert "avoid formulaic parenthetical openings" in content
 
 
 def test_build_messages_idle_monologue_scene_tag():

@@ -40,3 +40,27 @@ def test_base_instruction_has_species_and_persona_placeholders():
     assert "{persona}" in BASE_INSTRUCTION
     assert "{behavior}" in BASE_INSTRUCTION
     assert "{visitor_background}" in BASE_INSTRUCTION
+    assert "Persona catchphrases are optional seasoning" in BASE_INSTRUCTION
+    assert "Most replies should express personality" in BASE_INSTRUCTION
+    assert "avoid unrelated hunger" in BASE_INSTRUCTION
+    assert "do not start every reply" in BASE_INSTRUCTION
+
+
+def test_default_voice_rules_do_not_force_catchphrases():
+    all_text = "\n".join([
+        BASE_INSTRUCTION,
+        *DEFAULT_PERSONAS.values(),
+        *DEFAULT_TEMPLATES.values(),
+    ])
+    forbidden = [
+        "Lean on your persona's catchphrase",
+        "use its rhythm, catchphrases",
+        "永远在抱怨",
+        "挂嘴边",
+        "每句话像拥抱",
+        "频繁感叹",
+        "永远在抱怨累或想吃",
+        "想吃饭",
+    ]
+    for phrase in forbidden:
+        assert phrase not in all_text
