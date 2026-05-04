@@ -27,6 +27,23 @@ def test_build_messages_summary_react_scene_tag():
     assert last["role"] == "user"
     assert "Hello" in last["content"]
     assert "devtools" in last["content"]
+    assert "reaction_angle:" in last["content"]
+
+
+def test_build_messages_summary_react_avoids_recent_replies():
+    cfg = PetConfig()
+    msgs = build_messages(
+        cfg, mode="summary_react",
+        title="Hello", tag="devtools", summary="A summary.", selection=None,
+        message=None, intent=None, client_context=None,
+        prior=[
+            {"role": "user", "content": "u"},
+            {"role": "assistant", "content": "same old line"},
+        ],
+    )
+    last = msgs[-1]
+    assert "avoid_repeating_recent_assistant_replies" in last["content"]
+    assert "same old line" in last["content"]
 
 
 def test_build_messages_idle_monologue_scene_tag():

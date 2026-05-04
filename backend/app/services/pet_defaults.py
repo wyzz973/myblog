@@ -231,6 +231,8 @@ DEFAULT_TEMPLATES: dict[str, str] = {
         "The visitor is reading: \"{title}\" (tag: {tag})\n"
         "Article summary: {summary}\n\n"
         "React in your persona's voice — show that you actually read the summary.\n"
+        "Follow the requested reaction_angle from the current user turn when present.\n"
+        "Do NOT repeat or lightly paraphrase any recent assistant reply.\n"
         "Pick ONE concrete detail, claim, or angle from the summary to riff on.\n"
         "Reactions can be: a hot take, a curious follow-up question, a comparison\n"
         "to something else, a small joke about a specific phrase, a doubt or agreement —\n"

@@ -77,6 +77,14 @@ FOLLOW_UP_MESSAGES = {
     "continue", "why", "more", "example", "go on",
 }
 
+SUMMARY_REACTION_ANGLES = (
+    "risk_or_caveat",
+    "curious_follow_up",
+    "specific_joke",
+    "practical_next_step",
+    "tiny_hot_take",
+)
+
 
 def _behavior_text(species: str) -> str:
     behavior = DEFAULT_BEHAVIOR.get(species, DEFAULT_BEHAVIOR.get("cat", {}))
@@ -170,6 +178,15 @@ def _mode_scene_fallback(mode: PetMode, title: str | None, tag: str | None) -> s
     return "(visitor summoned you)"
 
 
+def _recent_assistant_replies(prior: list[dict], *, max_items: int = 3) -> list[str]:
+    replies = [
+        str(t.get("content", "")).strip()
+        for t in prior
+        if t.get("role") == "assistant" and str(t.get("content", "")).strip()
+    ]
+    return replies[-max_items:]
+
+
 def build_system(
     cfg: PetConfig,
     *,
@@ -258,6 +275,14 @@ def build_messages(
     )
     if intent:
         scene_lines.append(f"intent: {intent[:48]}")
+    if mode == "summary_react":
+        replies = _recent_assistant_replies(prior)
+        angle = SUMMARY_REACTION_ANGLES[len(replies) % len(SUMMARY_REACTION_ANGLES)]
+        scene_lines.append(f"reaction_angle: {angle}")
+        if replies:
+            scene_lines.append("avoid_repeating_recent_assistant_replies:")
+            for reply in replies:
+                scene_lines.append(f"- {reply[:120]}")
     if sanitized_message:
         scene_lines.extend(["", "[VISITOR_MESSAGE]", sanitized_message])
     elif not scene_lines:
@@ -266,7 +291,12 @@ def build_messages(
         scene_lines.extend(["", "[UNTRUSTED_SELECTION]", sanitized_selection, "[/UNTRUSTED_SELECTION]"])
     scene = "\n".join(scene_lines).strip()
 
-    if not sanitized_message and not sanitized_selection and not serialize_context(client_context):
+    if (
+        mode not in ("summary_react",)
+        and not sanitized_message
+        and not sanitized_selection
+        and not serialize_context(client_context)
+    ):
         scene = _mode_scene_fallback(mode, title, tag)
 
     cleaned_prior = [
