@@ -46,6 +46,33 @@ def test_build_messages_summary_react_avoids_recent_replies():
     assert "same old line" in last["content"]
 
 
+def test_build_messages_recommend_next_uses_home_context_and_recent_replies():
+    cfg = PetConfig()
+    msgs = build_messages(
+        cfg, mode="recommend_next",
+        title=None, tag=None, summary=None, selection=None,
+        message=None, intent=None,
+        client_context={
+            "page_type": "home",
+            "active_tag": "infra",
+            "post_count": 3,
+            "focused_post_title": "VPS Setup",
+            "visible_posts": ["VPS Setup — cheap server [infra]", "Deploy Notes [devtools]"],
+            "home_digest": "Home index filtered by infra; focused: VPS Setup",
+        },
+        prior=[
+            {"role": "assistant", "content": "old home line"},
+        ],
+    )
+    content = msgs[-1]["content"]
+    assert "mode: recommend_next" in content
+    assert "focused_post_title: VPS Setup" in content
+    assert "visible_posts:" in content
+    assert "VPS Setup" in content
+    assert "avoid_repeating_recent_assistant_replies" in content
+    assert "old home line" in content
+
+
 def test_build_messages_idle_monologue_scene_tag():
     cfg = PetConfig()
     msgs = build_messages(

@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -42,10 +42,18 @@ class ClientContext(_Loose):
     recent_action: str | None = Field(default=None, max_length=40)
     locale: str | None = Field(default=None, max_length=32)
     timezone: str | None = Field(default=None, max_length=64)
+    active_tag: str | None = Field(default=None, max_length=40)
+    post_count: int | None = Field(default=None, ge=0, le=1000)
+    focused_post_title: str | None = Field(default=None, max_length=160)
+    focused_post_tag: str | None = Field(default=None, max_length=40)
+    focused_post_subtitle: str | None = Field(default=None, max_length=160)
+    home_digest: str | None = Field(default=None, max_length=600)
+    visible_posts: list[str] | None = Field(default=None, max_length=8)
 
     @field_validator(
         "page_type", "path", "title", "tag", "active_heading", "visible_block_type",
-        "selection_kind", "recent_action", "locale", "timezone",
+        "selection_kind", "recent_action", "locale", "timezone", "active_tag",
+        "focused_post_title", "focused_post_tag", "focused_post_subtitle", "home_digest",
         mode="before",
     )
     @classmethod
@@ -64,8 +72,22 @@ class ClientContext(_Loose):
             "recent_action": 40,
             "locale": 32,
             "timezone": 64,
+            "active_tag": 40,
+            "focused_post_title": 160,
+            "focused_post_tag": 40,
+            "focused_post_subtitle": 160,
+            "home_digest": 600,
         }
         return s[:caps.get(info.field_name, 120)] or None
+
+    @field_validator("visible_posts", mode="before")
+    @classmethod
+    def _cap_visible_posts(cls, v: Any) -> list[str] | None:
+        if v is None:
+            return None
+        items = [v] if isinstance(v, str) else list(v) if isinstance(v, (list, tuple)) else []
+        capped = [str(item).strip()[:120] for item in items[:8] if str(item).strip()]
+        return capped or None
 
 
 class SummonRequest(_Strict):

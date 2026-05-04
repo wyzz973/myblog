@@ -298,10 +298,14 @@ DEFAULT_TEMPLATES: dict[str, str] = {
         "Max 2 short sentences."
     ),
     "recommend_next": (
-        "Task: Recommend what the visitor could read next.\n"
-        "Use current tag and anonymous interests if present.\n"
+        "Task: Recommend or react to what the visitor could read next.\n"
+        "Use homepage scene fields when present: active_tag, post_count,\n"
+        "focused_post_title, focused_post_tag, focused_post_subtitle,\n"
+        "visible_posts, and home_digest.\n"
+        "Follow reaction_angle when present and do NOT repeat recent replies.\n"
+        "Mention ONE concrete title, tag, or topic from the homepage context.\n"
         "If there is not enough context, make a playful generic suggestion.\n"
-        "Max 35 Chinese chars or 22 English words."
+        "Max 45 Chinese chars or 28 English words."
     ),
     "pet_care": (
         "Task: React to a light pet interaction such as petting, feeding, or praise.\n"

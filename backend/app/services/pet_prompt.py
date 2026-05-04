@@ -103,7 +103,13 @@ def _context_dict(client_context: Any) -> dict[str, Any]:
     allow = {
         "page_type", "path", "title", "tag", "read_progress", "active_heading",
         "visible_block_type", "selection_kind", "dwell_seconds", "recent_action",
-        "locale", "timezone",
+        "locale", "timezone", "active_tag", "post_count", "focused_post_title",
+        "focused_post_tag", "focused_post_subtitle", "home_digest", "visible_posts",
+    }
+    string_caps = {
+        "home_digest": 600,
+        "focused_post_title": 160,
+        "focused_post_subtitle": 160,
     }
     out: dict[str, Any] = {}
     for key in allow:
@@ -111,7 +117,9 @@ def _context_dict(client_context: Any) -> dict[str, Any]:
         if value is None:
             continue
         if isinstance(value, str):
-            out[key] = value[:180]
+            out[key] = value[:string_caps.get(key, 180)]
+        elif isinstance(value, list):
+            out[key] = [str(item).strip()[:120] for item in value[:8] if str(item).strip()]
         elif isinstance(value, (int, float, bool)):
             out[key] = value
     return out
@@ -123,7 +131,7 @@ def serialize_context(client_context: Any, *, max_chars: int = 1200) -> dict[str
     if len(raw) <= max_chars:
         return data
     # Drop least important verbose fields first.
-    for key in ("path", "title", "active_heading", "timezone"):
+    for key in ("path", "title", "active_heading", "timezone", "home_digest", "visible_posts"):
         data.pop(key, None)
         raw = json.dumps(data, ensure_ascii=False, sort_keys=True)
         if len(raw) <= max_chars:
@@ -174,7 +182,7 @@ def _mode_scene_fallback(mode: PetMode, title: str | None, tag: str | None) -> s
     if mode == "code_assist":
         return f'(visitor wants help with code in "{title_text}")'
     if mode == "recommend_next":
-        return f'(visitor wants another article after tag {tag_text})'
+        return f'(visitor wants a page-aware next read after tag {tag_text})'
     return "(visitor summoned you)"
 
 
@@ -275,7 +283,7 @@ def build_messages(
     )
     if intent:
         scene_lines.append(f"intent: {intent[:48]}")
-    if mode == "summary_react":
+    if mode in ("summary_react", "recommend_next"):
         replies = _recent_assistant_replies(prior)
         angle = SUMMARY_REACTION_ANGLES[len(replies) % len(SUMMARY_REACTION_ANGLES)]
         scene_lines.append(f"reaction_angle: {angle}")

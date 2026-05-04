@@ -66,6 +66,29 @@ describe('buildSummonPayload', () => {
     expect(buildSummonPayload()).toEqual({ mode: 'greet' });
   });
 
+  it('uses recommend_next on home when page content context is available', () => {
+    setPath('/');
+    const payload = buildSummonPayload({
+      clientContext: {
+        page_type: 'home',
+        active_tag: 'devtools',
+        focused_post_title: 'VPS Setup',
+        visible_posts: ['VPS Setup — cheap server [infra]'],
+        post_count: 4,
+      },
+    });
+    expect(payload).toEqual({
+      mode: 'recommend_next',
+      client_context: {
+        page_type: 'home',
+        active_tag: 'devtools',
+        focused_post_title: 'VPS Setup',
+        visible_posts: ['VPS Setup — cheap server [infra]'],
+        post_count: 4,
+      },
+    });
+  });
+
   it('returns summary_react when on article with no selection', () => {
     setPath('/p/hello-world');
     expect(buildSummonPayload()).toEqual({ post_id: 'hello-world', mode: 'summary_react' });

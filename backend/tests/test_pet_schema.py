@@ -118,6 +118,29 @@ def test_summon_request_accepts_message_intent_and_client_context():
     assert "ignored_dom" not in dumped
 
 
+def test_summon_request_accepts_home_content_context():
+    req = SummonRequest(
+        client_context={
+            "page_type": "home",
+            "active_tag": "devtools",
+            "post_count": 12,
+            "focused_post_title": "VPS Setup" * 40,
+            "focused_post_tag": "infra",
+            "focused_post_subtitle": "Cheap and stable",
+            "home_digest": "x" * 800,
+            "visible_posts": [f"post {i}" for i in range(12)],
+            "raw_posts": [{"title": "ignored"}],
+        },
+    )
+    dumped = req.client_context.model_dump(exclude_none=True)
+    assert dumped["active_tag"] == "devtools"
+    assert dumped["post_count"] == 12
+    assert len(dumped["focused_post_title"]) <= 160
+    assert len(dumped["home_digest"]) <= 600
+    assert len(dumped["visible_posts"]) == 8
+    assert "raw_posts" not in dumped
+
+
 def test_summon_request_rejects_too_long_message():
     with pytest.raises(ValidationError):
         SummonRequest(message="x" * 501)
