@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.pet import PetConfig, PetMode
+from app.schemas.pet import ClientContext, PetConfig, PetMode, SummonRequest
 
 
 def test_petconfig_default_includes_27_personas():
@@ -14,13 +14,17 @@ def test_petconfig_default_includes_27_personas():
     assert c.personas.dragon
 
 
-def test_petconfig_default_includes_5_mode_templates():
+def test_petconfig_default_includes_smart_mode_templates():
     c = PetConfig()
     assert c.mode_templates.greet
     assert c.mode_templates.idle_monologue
     assert c.mode_templates.summary_react
     assert c.mode_templates.selection_explain
     assert c.mode_templates.selection_qa
+    assert c.mode_templates.free_chat
+    assert c.mode_templates.follow_up
+    assert c.mode_templates.article_finished
+    assert c.mode_templates.code_assist
 
 
 def test_unlimited_defaults_to_false():
@@ -54,7 +58,9 @@ def test_pet_mode_literal_rejects_garbage():
     from typing import get_args
     valid = get_args(PetMode)
     assert set(valid) == {
-        "greet", "idle_monologue", "summary_react", "selection_explain", "selection_qa"
+        "greet", "idle_monologue", "summary_react", "selection_explain", "selection_qa",
+        "free_chat", "follow_up", "article_finished", "reading_assist", "code_assist",
+        "recommend_next", "pet_care",
     }
 
 
@@ -83,3 +89,51 @@ def test_context_ttl_seconds_default_and_bounds():
         PetConfig(context_ttl_seconds=59)
     with pytest.raises(ValidationError):
         PetConfig(context_ttl_seconds=86401)
+
+
+def test_summon_request_accepts_message_intent_and_client_context():
+    req = SummonRequest(
+        post_id="hello",
+        message="这段为什么要 cleanup？",
+        intent="ask_selection",
+        client_context={
+            "page_type": "post",
+            "path": "/p/hello",
+            "read_progress": 62,
+            "active_heading": "部署策略",
+            "visible_block_type": "code",
+            "selection_kind": "code",
+            "dwell_seconds": 24,
+            "recent_action": "copied_code",
+            "locale": "zh-CN",
+            "timezone": "Asia/Shanghai",
+            "ignored_dom": "<main>nope</main>",
+        },
+    )
+    assert req.message == "这段为什么要 cleanup？"
+    assert req.intent == "ask_selection"
+    assert isinstance(req.client_context, ClientContext)
+    dumped = req.client_context.model_dump(exclude_none=True)
+    assert dumped["read_progress"] == 62
+    assert "ignored_dom" not in dumped
+
+
+def test_summon_request_rejects_too_long_message():
+    with pytest.raises(ValidationError):
+        SummonRequest(message="x" * 501)
+
+
+def test_client_context_bounds_and_string_caps():
+    with pytest.raises(ValidationError):
+        SummonRequest(client_context={"read_progress": 101})
+    req = SummonRequest(client_context={"active_heading": "x" * 400})
+    assert len(req.client_context.active_heading) <= 120
+
+
+def test_petconfig_includes_cost_and_memory_controls():
+    cfg = PetConfig()
+    assert cfg.enable_free_chat is True
+    assert cfg.enable_proactive is True
+    assert cfg.enable_long_term_memory is True
+    assert cfg.per_mode_output_budget["free_chat"] == 100
+    assert cfg.per_mode_daily_limit["free_chat"] > 0

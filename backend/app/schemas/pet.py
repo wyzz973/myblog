@@ -5,11 +5,84 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.services.pet_defaults import DEFAULT_PERSONAS, DEFAULT_TEMPLATES
 
 ProviderName = Literal["zhipu", "qwen", "doubao", "anthropic", "deepseek"]
-PetMode = Literal["greet", "idle_monologue", "summary_react", "selection_explain", "selection_qa"]
+PetMode = Literal[
+    "greet",
+    "idle_monologue",
+    "summary_react",
+    "selection_explain",
+    "selection_qa",
+    "free_chat",
+    "follow_up",
+    "article_finished",
+    "reading_assist",
+    "code_assist",
+    "recommend_next",
+    "pet_care",
+]
 
 
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class _Loose(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+
+class ClientContext(_Loose):
+    page_type: str | None = Field(default=None, max_length=24)
+    path: str | None = Field(default=None, max_length=180)
+    title: str | None = Field(default=None, max_length=160)
+    tag: str | None = Field(default=None, max_length=40)
+    read_progress: int | None = Field(default=None, ge=0, le=100)
+    active_heading: str | None = Field(default=None, max_length=120)
+    visible_block_type: str | None = Field(default=None, max_length=24)
+    selection_kind: str | None = Field(default=None, max_length=24)
+    dwell_seconds: int | None = Field(default=None, ge=0, le=3600)
+    recent_action: str | None = Field(default=None, max_length=40)
+    locale: str | None = Field(default=None, max_length=32)
+    timezone: str | None = Field(default=None, max_length=64)
+
+    @field_validator(
+        "page_type", "path", "title", "tag", "active_heading", "visible_block_type",
+        "selection_kind", "recent_action", "locale", "timezone",
+        mode="before",
+    )
+    @classmethod
+    def _cap_context_strings(cls, v: str | None, info) -> str | None:
+        if v is None:
+            return None
+        s = str(v).strip()
+        caps = {
+            "page_type": 24,
+            "path": 180,
+            "title": 160,
+            "tag": 40,
+            "active_heading": 120,
+            "visible_block_type": 24,
+            "selection_kind": 24,
+            "recent_action": 40,
+            "locale": 32,
+            "timezone": 64,
+        }
+        return s[:caps.get(info.field_name, 120)] or None
+
+
+class SummonRequest(_Strict):
+    post_id: str | None = Field(default=None, max_length=64)
+    selection: str | None = Field(default=None, max_length=4000)
+    mode: PetMode | None = None
+    message: str | None = Field(default=None, max_length=500)
+    intent: str | None = Field(default=None, max_length=48)
+    client_context: ClientContext | None = None
+
+    @field_validator("message", "selection", "intent", mode="before")
+    @classmethod
+    def _strip_blank(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s or None
 
 
 class PetPersonas(_Strict):
@@ -48,6 +121,13 @@ class PetModeTemplates(_Strict):
     summary_react: str = Field(default=DEFAULT_TEMPLATES["summary_react"], max_length=800)
     selection_explain: str = Field(default=DEFAULT_TEMPLATES["selection_explain"], max_length=800)
     selection_qa: str = Field(default=DEFAULT_TEMPLATES["selection_qa"], max_length=800)
+    free_chat: str = Field(default=DEFAULT_TEMPLATES["free_chat"], max_length=800)
+    follow_up: str = Field(default=DEFAULT_TEMPLATES["follow_up"], max_length=800)
+    article_finished: str = Field(default=DEFAULT_TEMPLATES["article_finished"], max_length=800)
+    reading_assist: str = Field(default=DEFAULT_TEMPLATES["reading_assist"], max_length=800)
+    code_assist: str = Field(default=DEFAULT_TEMPLATES["code_assist"], max_length=800)
+    recommend_next: str = Field(default=DEFAULT_TEMPLATES["recommend_next"], max_length=800)
+    pet_care: str = Field(default=DEFAULT_TEMPLATES["pet_care"], max_length=800)
 
 
 class PetConfig(_Strict):
@@ -91,6 +171,60 @@ class PetConfig(_Strict):
     hard_ceiling_per_day: int = Field(default=20000, ge=100, le=100000)
     context_window_turns: int = Field(default=10, ge=1, le=50)
     context_ttl_seconds: int = Field(default=7200, ge=60, le=86400)
+    enable_free_chat: bool = True
+    enable_proactive: bool = True
+    enable_long_term_memory: bool = True
+    per_mode_daily_limit: dict[str, int] = Field(
+        default_factory=lambda: {
+            "greet": 80,
+            "idle_monologue": 20,
+            "summary_react": 50,
+            "selection_explain": 40,
+            "selection_qa": 40,
+            "free_chat": 60,
+            "follow_up": 60,
+            "article_finished": 10,
+            "reading_assist": 30,
+            "code_assist": 40,
+            "recommend_next": 20,
+            "pet_care": 0,
+        },
+        max_length=20,
+    )
+    per_mode_input_budget: dict[str, int] = Field(
+        default_factory=lambda: {
+            "greet": 400,
+            "idle_monologue": 400,
+            "summary_react": 700,
+            "selection_explain": 1100,
+            "selection_qa": 1100,
+            "free_chat": 1300,
+            "follow_up": 1100,
+            "article_finished": 900,
+            "reading_assist": 900,
+            "code_assist": 1200,
+            "recommend_next": 1000,
+            "pet_care": 100,
+        },
+        max_length=20,
+    )
+    per_mode_output_budget: dict[str, int] = Field(
+        default_factory=lambda: {
+            "greet": 40,
+            "idle_monologue": 35,
+            "summary_react": 60,
+            "selection_explain": 100,
+            "selection_qa": 80,
+            "free_chat": 100,
+            "follow_up": 90,
+            "article_finished": 70,
+            "reading_assist": 70,
+            "code_assist": 100,
+            "recommend_next": 80,
+            "pet_care": 20,
+        },
+        max_length=20,
+    )
 
     @field_validator("providers")
     @classmethod

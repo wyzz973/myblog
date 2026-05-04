@@ -4,7 +4,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { buildSummonPayload } from './pet/payload.js';
-import { SPECIES, RARITY_COLOR, STATE_EYE, STAT_KEYS, rarityStars } from './pet/species.js';
+import {
+  SPECIES,
+  SPECIES_BEHAVIOR,
+  RARITY_COLOR,
+  STATE_EYE,
+  STAT_KEYS,
+  rarityStars,
+} from './pet/species.js';
 
 const STATES = {
   idle:         { label: 'idle',         bob: 2.8, tint: null,      icon: null,  hint: 'idle' },
@@ -31,6 +38,8 @@ const TEST_STATES = [
 const QUIPS = ['meow.', 'purr…', 'have you committed?', 'seg loss ok ✓', '*yawn*'];
 export const IDLE_MONOLOGUE_MS = 90000;
 export const IDLE_MONOLOGUE_COOLDOWN_MS = 240000;
+export const PROACTIVE_CHECK_MS = 1200;
+export const QUIET_MODE_MS = 30 * 60 * 1000;
 
 const LEGACY_BODY_MAP = {
   capybara: 'capybara',
@@ -127,6 +136,9 @@ export default function AsciiPet({ hint = null }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatText, setChatText] = useState('');
+  const [proactivePrompt, setProactivePrompt] = useState(null);
   const [gaze, setGaze] = useState({ x: 0, y: 0 });
   const [flail, setFlail] = useState(false);
   const [poke, setPoke] = useState(false);
@@ -143,10 +155,40 @@ export default function AsciiPet({ hint = null }) {
   const longPressFired = useRef(false);
   const suppressClickOnce = useRef(false);
   const tempStateUntil = useRef(0);
+  const quietUntil = useRef(Number(localStorage.getItem('pet.quietUntil') || 0));
+  const proactiveSeen = useRef(new Set());
+  const proactiveCount = useRef(0);
 
   useEffect(() => {
     return () => clearTimeout(longPressTimer.current);
   }, []);
+
+  const getScene = () => {
+    try {
+      const scene = window.__petScene?.();
+      return scene && typeof scene === 'object' ? scene : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const currentBehavior = () => SPECIES_BEHAVIOR[bodyKey] || SPECIES_BEHAVIOR.default;
+  const idleDelay = () => {
+    const freq = currentBehavior().idleFrequency;
+    if (freq === 'high') return Math.round(IDLE_MONOLOGUE_MS * 0.72);
+    if (freq === 'low') return Math.round(IDLE_MONOLOGUE_MS * 1.35);
+    return IDLE_MONOLOGUE_MS;
+  };
+  const idleCooldown = () => {
+    const freq = currentBehavior().idleFrequency;
+    if (freq === 'high') return Math.round(IDLE_MONOLOGUE_COOLDOWN_MS * 0.75);
+    if (freq === 'low') return Math.round(IDLE_MONOLOGUE_COOLDOWN_MS * 1.35);
+    return IDLE_MONOLOGUE_COOLDOWN_MS;
+  };
+  const localLine = () => {
+    const lines = currentBehavior().localLines || SPECIES_BEHAVIOR.default.localLines;
+    return lines[Math.floor(Math.random() * lines.length)] || QUIPS[Math.floor(Math.random() * QUIPS.length)];
+  };
 
   useEffect(() => {
     if (!profileOpen) return undefined;
@@ -217,7 +259,7 @@ export default function AsciiPet({ hint = null }) {
 
   // Drag (pointer events for flick protection)
   const onPointerDown = (e) => {
-    if (e.target.closest('.pet-panel, .pet-profile, .pet-panel-btn, .pet-ctl')) return;
+    if (e.target.closest('.pet-panel, .pet-profile, .pet-panel-btn, .pet-ctl, .pet-chat')) return;
     if (profileOpen) {
       setProfileOpen(false);
       suppressClickOnce.current = true;
@@ -314,7 +356,7 @@ export default function AsciiPet({ hint = null }) {
   const markActivity = () => {
     const now = Date.now();
     lastActivity.current = now;
-    nextIdleMonologueAt.current = now + IDLE_MONOLOGUE_MS;
+    nextIdleMonologueAt.current = now + idleDelay();
   };
 
   // Parse a single accumulated buffer for complete SSE frames; returns
@@ -350,7 +392,10 @@ export default function AsciiPet({ hint = null }) {
     let firstChunkReceived = false;
     let terminal = null; // 'done' | 'fallback' | 'rate_limited' | 'error'
     try {
-      const payload = payloadOverride || buildSummonPayload(500);
+      const payload = payloadOverride || buildSummonPayload({
+        maxSelectionChars: 500,
+        clientContext: getScene(),
+      });
       const r = await fetch('/api/pet/summon/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -398,7 +443,7 @@ export default function AsciiPet({ hint = null }) {
     }
 
     if (!accumulated) {
-      const text = QUIPS[Math.floor(Math.random() * QUIPS.length)];
+      const text = localLine();
       accumulated = text;
       setSpeech({ text, full: text, typing: false });
     }
@@ -408,8 +453,38 @@ export default function AsciiPet({ hint = null }) {
     }
     clearTimeout(speechTimer.current);
     speechTimer.current = setTimeout(() => setSpeech(null), 9000);
-    nextIdleMonologueAt.current = Date.now() + IDLE_MONOLOGUE_COOLDOWN_MS;
+    nextIdleMonologueAt.current = Date.now() + idleCooldown();
     summoning.current = false;
+  };
+
+  const submitChat = (mode = null, message = chatText, intent = null) => {
+    const text = (message || '').trim();
+    setChatText('');
+    setChatOpen(false);
+    setProactivePrompt(null);
+    if (!text && !mode) {
+      summonSpeech();
+      return;
+    }
+    const payload = buildSummonPayload({
+      message: text,
+      mode,
+      intent,
+      clientContext: getScene(),
+      maxSelectionChars: 500,
+      maxMessageChars: 500,
+    });
+    summonSpeech(payload);
+  };
+
+  const setQuietMode = () => {
+    const until = Date.now() + QUIET_MODE_MS;
+    quietUntil.current = until;
+    try { localStorage.setItem('pet.quietUntil', String(until)); } catch { /* ignore */ }
+    setProactivePrompt(null);
+    setSpeech({ text: '安静 30 分钟。', full: '安静 30 分钟。', typing: false });
+    clearTimeout(speechTimer.current);
+    speechTimer.current = setTimeout(() => setSpeech(null), 5000);
   };
 
   useEffect(() => {
@@ -418,13 +493,57 @@ export default function AsciiPet({ hint = null }) {
       const now = Date.now();
       if (summoning.current || speech) return;
       if (dragging.current || tempStateUntil.current > now) return;
-      if (now - lastActivity.current < IDLE_MONOLOGUE_MS) return;
+      if (now - lastActivity.current < idleDelay()) return;
       if (now < nextIdleMonologueAt.current) return;
-      nextIdleMonologueAt.current = now + IDLE_MONOLOGUE_COOLDOWN_MS;
+      nextIdleMonologueAt.current = now + idleCooldown();
       summonSpeech({ mode: 'idle_monologue' });
     }, 1000);
     return () => clearInterval(id);
-  }, [petEnabled, hidden, panelOpen, profileOpen, mini, speech]);
+  }, [petEnabled, hidden, panelOpen, profileOpen, mini, speech, bodyKey]);
+
+  useEffect(() => {
+    if (!petEnabled || hidden || panelOpen || profileOpen || mini || chatOpen) return undefined;
+    const id = setInterval(() => {
+      if (Date.now() < quietUntil.current) return;
+      if (summoning.current || speech || proactivePrompt) return;
+      if (proactiveCount.current >= 4) return;
+      const scene = getScene();
+      if (scene.page_type !== 'post') return;
+      const behavior = currentBehavior();
+      if ((behavior.proactiveLevel || 0) <= 0) return;
+      if (scene.recent_action === 'reached_end' || Number(scene.read_progress || 0) >= 98) {
+        const key = `done:${scene.post_id || scene.path || 'post'}`;
+        if (!proactiveSeen.current.has(key)) {
+          proactiveSeen.current.add(key);
+          proactiveCount.current += 1;
+          setProactivePrompt({
+            key,
+            text: '要我总结一下吗？',
+            mode: 'article_finished',
+            intent: 'article_finished',
+          });
+        }
+        return;
+      }
+      if (
+        (scene.visible_block_type === 'code' || scene.selection_kind === 'code')
+        && Number(scene.dwell_seconds || 0) >= 20
+      ) {
+        const key = `code:${scene.post_id || scene.path || 'post'}:${scene.active_heading || ''}`;
+        if (!proactiveSeen.current.has(key)) {
+          proactiveSeen.current.add(key);
+          proactiveCount.current += 1;
+          setProactivePrompt({
+            key,
+            text: '要我解释这段吗？',
+            mode: 'code_assist',
+            intent: 'code_assist',
+          });
+        }
+      }
+    }, PROACTIVE_CHECK_MS);
+    return () => clearInterval(id);
+  }, [petEnabled, hidden, panelOpen, profileOpen, mini, chatOpen, speech, proactivePrompt, bodyKey]);
 
   // Public API: trigger states from blog events
   useEffect(() => {
@@ -525,6 +644,74 @@ export default function AsciiPet({ hint = null }) {
           <span className="legendary-spark s6">✧</span>
         </div>,
         document.body,
+      )}
+
+      {!mini && !profileOpen && (
+        <button
+          type="button"
+          className="pet-chat-toggle pet-ctl"
+          title="chat with pet"
+          onClick={(e) => {
+            e.stopPropagation();
+            setChatOpen((o) => !o);
+            setPanelOpen(false);
+            setProactivePrompt(null);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{ borderColor: color, color }}
+        >
+          ?
+        </button>
+      )}
+
+      {chatOpen && !mini && !profileOpen && (
+        <form
+          className="pet-chat"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitChat();
+          }}
+          style={{ '--c': color }}
+        >
+          <input
+            aria-label="message pet"
+            value={chatText}
+            maxLength={500}
+            autoFocus
+            onChange={(e) => setChatText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setChatOpen(false);
+                setChatText('');
+              } else if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submitChat();
+              }
+            }}
+            placeholder="ask..."
+            disabled={summoning.current}
+          />
+          <button type="submit" disabled={summoning.current} title="send to pet">↵</button>
+          <button type="button" onClick={setQuietMode} title="quiet mode">×</button>
+        </form>
+      )}
+
+      {proactivePrompt && !mini && !profileOpen && !chatOpen && (
+        <button
+          type="button"
+          className="pet-proactive"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            submitChat(proactivePrompt.mode, '', proactivePrompt.intent);
+          }}
+          style={{ '--c': color }}
+        >
+          {proactivePrompt.text}
+        </button>
       )}
 
       {(() => {
@@ -711,6 +898,25 @@ export default function AsciiPet({ hint = null }) {
 
           <div className="pet-panel-row" style={{ display: 'flex', gap: 4 }}>
             <button
+              onClick={() => { submitChat('pet_care', '摸摸你', 'pet_care'); setPanelOpen(false); }}
+              style={{
+                flex: 1, fontSize: 10, padding: '6px 8px', border: '1px solid var(--line)',
+                borderRadius: 3, background: 'var(--bg-3)', color: 'var(--fg-3)', cursor: 'pointer',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+            >pet</button>
+            <button
+              onClick={() => { setQuietMode(); setPanelOpen(false); }}
+              style={{
+                flex: 1, fontSize: 10, padding: '6px 8px', border: '1px solid var(--line)',
+                borderRadius: 3, background: 'var(--bg-3)', color: 'var(--fg-3)', cursor: 'pointer',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+            >quiet</button>
+          </div>
+
+          <div className="pet-panel-row" style={{ display: 'flex', gap: 4 }}>
+            <button
               onClick={() => { setMini(true); localStorage.setItem('pet.mini', '1'); setPanelOpen(false); }}
               style={{
                 flex: 1, fontSize: 10, padding: '6px 8px', border: '1px solid var(--line)',
@@ -727,6 +933,25 @@ export default function AsciiPet({ hint = null }) {
               }}
             >hide pet</button>
           </div>
+
+          <button
+            onClick={async () => {
+              try {
+                await fetch('/api/pet/forget', { method: 'POST' });
+                localStorage.removeItem('pet.pos');
+                localStorage.removeItem('pet.quietUntil');
+                setSpeech({ text: '记忆已清。', full: '记忆已清。', typing: false });
+              } catch {
+                setSpeech({ text: '清理失败。', full: '清理失败。', typing: false });
+              }
+              setPanelOpen(false);
+            }}
+            style={{
+              fontSize: 10, padding: '6px 8px', border: '1px solid var(--line)',
+              borderRadius: 3, background: 'var(--bg-3)', color: 'var(--fg-3)', cursor: 'pointer',
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
+          >forget me</button>
         </div>,
         document.body,
       )}

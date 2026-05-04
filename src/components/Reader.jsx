@@ -26,6 +26,9 @@ function CodeBlock({ code }) {
   const lines = code.split('\n');
   const onCopy = () => {
     navigator.clipboard?.writeText(code);
+    window.dispatchEvent(new CustomEvent('pet:reader-action', {
+      detail: { recent_action: 'copied_code', visible_block_type: 'code' },
+    }));
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
   };
@@ -35,7 +38,7 @@ function CodeBlock({ code }) {
     : firstLine.toUpperCase().includes('SELECT') ? 'sql'
     : 'text';
   return (
-    <div className="codeblock">
+    <div className="codeblock" data-pet-block="code">
       <div className="codeblock-head">
         <span className="codeblock-dots">
           <span style={{ background: '#ff5f57' }} />
@@ -66,6 +69,16 @@ export default function Reader({ post: postSummary, onBack, onOpenPost, onSelect
   const [liked, setLiked] = useState(false);
   const [likes, setLikes] = useState(0);
   const [linkCopied, setLinkCopied] = useState(false);
+  const sceneRef = useRef({
+    page_type: 'post',
+    read_progress: 0,
+    active_heading: '',
+    visible_block_type: 'prose',
+    selection_kind: 'none',
+    dwell_seconds: 0,
+    recent_action: 'opened_post',
+  });
+  const blockEnterAt = useRef(Date.now());
 
   const { data: site } = useSite();
   const { data: postsResp } = usePosts({ limit: 100 });
@@ -84,25 +97,86 @@ export default function Reader({ post: postSummary, onBack, onOpenPost, onSelect
   useEffect(() => {
     if (!post) return;
     const el = scrollRef.current;
+    const updateScene = (patch = {}) => {
+      sceneRef.current = {
+        ...sceneRef.current,
+        page_type: 'post',
+        post_id: post.id,
+        path: window.location.pathname,
+        title: post.title,
+        tag: post.tag,
+        locale: navigator.language,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        ...patch,
+      };
+    };
     const onScroll = () => {
       if (!el) return;
       const max = el.scrollHeight - el.clientHeight;
-      setProgress(max > 0 ? Math.min(100, (el.scrollTop / max) * 100) : 0);
+      const nextProgress = max > 0 ? Math.min(100, (el.scrollTop / max) * 100) : 0;
+      setProgress(nextProgress);
       const heads = el.querySelectorAll('h2[data-h]');
       let active = 0;
       heads.forEach((h, i) => {
         if (h.getBoundingClientRect().top < 140) active = i;
       });
       setActiveHeading(active);
+      const headingText = heads[active]?.textContent?.replace('§', '').trim() || '';
+      const codeBlocks = el.querySelectorAll('[data-pet-block="code"]');
+      let visibleBlockType = 'prose';
+      codeBlocks.forEach((b) => {
+        const r = b.getBoundingClientRect();
+        if (r.top < window.innerHeight * 0.72 && r.bottom > 120) visibleBlockType = 'code';
+      });
+      if (visibleBlockType !== sceneRef.current.visible_block_type) {
+        blockEnterAt.current = Date.now();
+      }
+      updateScene({
+        read_progress: Math.round(nextProgress),
+        active_heading: headingText,
+        visible_block_type: visibleBlockType,
+        dwell_seconds: Math.round((Date.now() - blockEnterAt.current) / 1000),
+        recent_action: nextProgress >= 98 ? 'reached_end' : sceneRef.current.recent_action,
+      });
     };
     el?.addEventListener('scroll', onScroll, { passive: true });
+    updateScene();
+    onScroll();
     return () => el?.removeEventListener('scroll', onScroll);
   }, [post]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo(0, 0);
     setProgress(0);
+    sceneRef.current = {
+      page_type: 'post',
+      post_id: post?.id,
+      path: window.location.pathname,
+      title: post?.title,
+      tag: post?.tag,
+      read_progress: 0,
+      active_heading: '',
+      visible_block_type: 'prose',
+      selection_kind: 'none',
+      dwell_seconds: 0,
+      recent_action: 'opened_post',
+      locale: navigator.language,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
+    blockEnterAt.current = Date.now();
   }, [post?.id]);
+
+  useEffect(() => {
+    window.__petScene = () => ({ ...sceneRef.current });
+    const onReaderAction = (e) => {
+      sceneRef.current = { ...sceneRef.current, ...(e.detail || {}) };
+    };
+    window.addEventListener('pet:reader-action', onReaderAction);
+    return () => {
+      window.removeEventListener('pet:reader-action', onReaderAction);
+      if (window.__petScene) window.__petScene = () => ({ page_type: 'home' });
+    };
+  }, []);
 
   useEffect(() => {
     if (!post?.id) return;
@@ -117,6 +191,20 @@ export default function Reader({ post: postSummary, onBack, onOpenPost, onSelect
       timer = setTimeout(() => {
         const sel = (window.getSelection?.()?.toString() || '').trim();
         if (sel.length >= 5) {
+          const range = window.getSelection?.()?.rangeCount
+            ? window.getSelection().getRangeAt(0)
+            : null;
+          const ancestor = range?.commonAncestorContainer;
+          const inCode = ancestor
+            ? (ancestor.nodeType === 1
+              ? ancestor.closest?.('pre, code')
+              : ancestor.parentElement?.closest?.('pre, code'))
+            : null;
+          sceneRef.current = {
+            ...sceneRef.current,
+            selection_kind: inCode ? 'code' : 'prose',
+            recent_action: 'selected_text',
+          };
           onSelection({ text: 'click pet to explain ↑', kind: 'explain' });
           // auto-clear after 2s
           setTimeout(() => onSelection(null), 2000);

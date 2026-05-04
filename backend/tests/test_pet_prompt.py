@@ -1,9 +1,9 @@
 from app.schemas.pet import PetConfig
 from app.services.pet_prompt import (
+    _safe_format,
     build_system,
     infer_mode,
     truncate_selection,
-    _safe_format,
 )
 
 

@@ -50,6 +50,8 @@ async def _call(
     system: str,
     user: str,
     timeout: float,  # noqa: ASYNC109 — adapter timeout, not asyncio
+    max_tokens: int = 80,
+    temperature: float = 0.9,
 ) -> str:
     cfg = PROVIDER_REGISTRY[name]
     model = model_override or cfg["default_model"]
@@ -59,12 +61,14 @@ async def _call(
         return await openai_compat.chat(
             api_key=api_key, base_url=cfg["base_url"], model=model,
             system=system, user=user, timeout=timeout,
+            max_tokens=max_tokens, temperature=temperature,
             extra_body=cfg.get("extra_body"),
         )
     if cfg["adapter"] == "anthropic":
         return await anthropic_adapter.chat(
             api_key=api_key, model=model,
             system=system, user=user, timeout=timeout,
+            max_tokens=max_tokens, temperature=temperature,
         )
     raise RuntimeError(f"{name}: unknown adapter {cfg['adapter']!r}")
 
@@ -77,6 +81,8 @@ async def summon(
     user: str,
     fallback_lines: list[str],
     timeout_per_call: float = 5.0,
+    max_tokens: int = 80,
+    temperature: float = 0.9,
 ) -> tuple[str, str]:
     """Try each provider in order. Return (text, source).
 
@@ -99,6 +105,8 @@ async def summon(
                 system=system,
                 user=user,
                 timeout=timeout_per_call,
+                max_tokens=max_tokens,
+                temperature=temperature,
             )
             return text, name
         except Exception as e:  # noqa: BLE001
@@ -115,6 +123,8 @@ async def _call_stream(
     system: str,
     messages: list[dict],
     timeout: float,  # noqa: ASYNC109
+    max_tokens: int,
+    temperature: float,
 ) -> AsyncIterator[str]:
     cfg = PROVIDER_REGISTRY[name]
     model = model_override or cfg["default_model"]
@@ -124,6 +134,7 @@ async def _call_stream(
         async for chunk in openai_compat.chat_stream(
             api_key=api_key, base_url=cfg["base_url"], model=model,
             system=system, messages=messages, timeout=timeout,
+            max_tokens=max_tokens, temperature=temperature,
             extra_body=cfg.get("extra_body"),
         ):
             yield chunk
@@ -132,6 +143,7 @@ async def _call_stream(
         async for chunk in anthropic_adapter.chat_stream(
             api_key=api_key, model=model,
             system=system, messages=messages, timeout=timeout,
+            max_tokens=max_tokens, temperature=temperature,
         ):
             yield chunk
         return
@@ -147,6 +159,8 @@ async def summon_stream(
     messages: list[dict] | None = None,
     fallback_lines: list[str],
     timeout_per_call: float = 30.0,
+    max_tokens: int = 200,
+    temperature: float = 0.9,
 ) -> AsyncIterator[dict[str, Any]]:
     """Stream from the first working provider. Yields events:
       - {"type": "chunk", "text": "..."} per delta
@@ -182,6 +196,8 @@ async def summon_stream(
                 system=system,
                 messages=messages,
                 timeout=timeout_per_call,
+                max_tokens=max_tokens,
+                temperature=temperature,
             ):
                 received_any = True
                 yield {"type": "chunk", "text": chunk}

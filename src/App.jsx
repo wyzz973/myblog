@@ -66,6 +66,16 @@ export default function App() {
     document.title = reading?.title ? `${reading.title} — myblog` : 'myblog';
   }, [reading?.title]);
 
+  useEffect(() => {
+    if (reading) return;
+    window.__petScene = () => ({
+      page_type: 'home',
+      path: window.location.pathname,
+      locale: navigator.language,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+  }, [reading]);
+
   // Sync the browser tab favicon to the configured GitHub avatar — auto-
   // updates whenever the user changes their avatar on github.com. The
   // handle is also cached so main.jsx can prime the favicon BEFORE React

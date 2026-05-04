@@ -2,6 +2,12 @@ import pytest
 
 from app.services.pet_assignment import SPECIES_BY_RARITY
 
+EXPECTED_TEMPLATES = {
+    "greet", "idle_monologue", "summary_react", "selection_explain", "selection_qa",
+    "free_chat", "follow_up", "article_finished", "reading_assist", "code_assist",
+    "recommend_next", "pet_care",
+}
+
 EMAIL = "hi@wangyang.dev"
 PASS = "changeme"
 
@@ -22,9 +28,7 @@ async def test_get_defaults_returns_personas_and_templates(client, admin_token):
     body = r.json()
     expected_species = {s for pool in SPECIES_BY_RARITY.values() for s in pool}
     assert set(body["personas"]) == expected_species
-    assert set(body["mode_templates"]) == {
-        "greet", "idle_monologue", "summary_react", "selection_explain", "selection_qa"
-    }
+    assert set(body["mode_templates"]) == EXPECTED_TEMPLATES
 
 
 async def test_reset_personas_section(client, admin_token):

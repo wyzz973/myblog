@@ -6,12 +6,14 @@ import PetBehavior from './pet/PetBehavior.jsx';
 import PetConversations from './pet/PetConversations.jsx';
 import PetPersonas from './pet/PetPersonas.jsx';
 import PetTemplates from './pet/PetTemplates.jsx';
+import PetUsage from './pet/PetUsage.jsx';
 
 const TABS = [
   { id: 'behavior', label: 'Behavior' },
   { id: 'personas', label: 'Personas' },
   { id: 'templates', label: 'Prompt templates' },
   { id: 'conversations', label: 'Conversations' },
+  { id: 'usage', label: 'Usage' },
 ];
 
 export default function Pet() {
@@ -115,6 +117,7 @@ export default function Pet() {
         />
       )}
       {tab === 'conversations' && <PetConversations />}
+      {tab === 'usage' && <PetUsage />}
     </div>
   );
 }

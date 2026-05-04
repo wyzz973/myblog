@@ -1,8 +1,24 @@
 import json
 
 import pytest
+from sqlalchemy import update
 
 from app.services import pet_gateway
+
+
+@pytest.fixture(autouse=True)
+async def reset_pet_config(request):
+    if "client" not in request.fixturenames:
+        yield
+        return
+    from app.db import AsyncSessionLocal
+    from app.models import SiteMeta
+    from app.schemas.pet import PetConfig
+
+    async with AsyncSessionLocal() as s:
+        await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(pet_config=PetConfig().model_dump()))
+        await s.commit()
+    yield
 
 
 @pytest.fixture
@@ -69,9 +85,9 @@ async def test_history_persists_to_pet_message_after_stream(
     client, captured_streams, fake_post_id,
 ):
     from sqlalchemy import select
+
     from app.db import AsyncSessionLocal
     from app.models import PetMessage
-
     from app.services.pet_assignment import SPECIES_BY_RARITY
 
     valid_species = {s for pool in SPECIES_BY_RARITY.values() for s in pool}
@@ -87,16 +103,83 @@ async def test_history_persists_to_pet_message_after_stream(
         assert latest.mode in ("greet", "summary_react")
         assert latest.reply == "hello world"
         assert latest.source == "zhipu"
+        assert hasattr(latest, "message")
+        assert hasattr(latest, "client_context")
+        assert hasattr(latest, "estimated_total_tokens")
         # Cleanup
         for r in rows:
             await s.delete(r)
         await s.commit()
 
 
+async def test_stream_archives_message_context_profile_and_usage(
+    client, captured_streams, fake_post_id,
+):
+    from sqlalchemy import select
+
+    from app.db import AsyncSessionLocal
+    from app.models import PetMessage, PetUsageEvent, PetVisitorProfile
+
+    await _read_stream(client, {
+        "post_id": fake_post_id,
+        "message": "这段为什么需要 cleanup？",
+        "intent": "ask_selection",
+        "client_context": {
+            "page_type": "post",
+            "read_progress": 88,
+            "active_heading": "Cleanup",
+            "locale": "zh-CN",
+        },
+    })
+    msgs = captured_streams[0]["messages"]
+    assert "这段为什么需要 cleanup" in msgs[-1]["content"]
+
+    async with AsyncSessionLocal() as s:
+        latest = (
+            await s.execute(select(PetMessage).order_by(PetMessage.created_at.desc()))
+        ).scalars().first()
+        assert latest.message == "这段为什么需要 cleanup？"
+        assert latest.intent == "ask_selection"
+        assert latest.client_context["read_progress"] == 88
+        assert latest.estimated_total_tokens > 0
+
+        usage = (
+            await s.execute(select(PetUsageEvent).order_by(PetUsageEvent.created_at.desc()))
+        ).scalars().first()
+        assert usage.mode == "free_chat"
+        assert usage.source == "zhipu"
+        assert usage.estimated_total_tokens == latest.estimated_total_tokens
+
+        profile = await s.get(PetVisitorProfile, latest.visitor_hash)
+        assert profile is not None
+        assert profile.interaction_count >= 1
+
+        await s.delete(latest)
+        await s.delete(usage)
+        await s.delete(profile)
+        await s.commit()
+
+
+async def test_repeated_selection_can_hit_cache_without_second_gateway_call(
+    client, captured_streams, fake_post_id,
+):
+    payload = {
+        "post_id": fake_post_id,
+        "selection": "useEffect(() => {}, [])",
+        "mode": "selection_explain",
+    }
+    await _read_stream(client, payload)
+    events = await _read_stream(client, payload)
+    assert len(captured_streams) == 1
+    assert any(e.get("type") == "cache_hit" for e in events)
+    assert any(e.get("type") == "done" and e.get("source") == "cache" for e in events)
+
+
 async def test_stream_fallback_archive_matches_visible_fallback(
     client, monkeypatch,
 ):
     from sqlalchemy import select
+
     from app.db import AsyncSessionLocal
     from app.models import PetMessage
     from app.services import pet_gateway
@@ -139,6 +222,7 @@ async def test_rate_limited_does_not_pollute_history(
     """A rate-limited canned reply must NOT enter Redis ctx so the
     next successful summon doesn't see 'pets 累了' in messages."""
     from sqlalchemy import update
+
     from app.db import AsyncSessionLocal
     from app.models import SiteMeta
     from app.schemas.pet import PetConfig

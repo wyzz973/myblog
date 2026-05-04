@@ -25,16 +25,26 @@ export function detectMode({ inArticle, selection }) {
  * - On article without selection: { post_id, mode: 'summary_react' }
  * - On article with selection >= 5 chars: { post_id, selection, mode: 'selection_explain' | 'selection_qa' }
  */
-export function buildSummonPayload(maxChars = 500) {
+export function buildSummonPayload(options = 500) {
+  const opts = typeof options === 'number' ? { maxSelectionChars: options } : (options || {});
+  const maxChars = opts.maxSelectionChars ?? opts.maxChars ?? 500;
+  const maxMessageChars = opts.maxMessageChars ?? 500;
   const m = window.location.pathname.match(POST_RE);
   const inArticle = m !== null;
   const sel = (window.getSelection?.()?.toString() || '').trim();
   const hasSelection = sel.length >= 5;
-  const mode = detectMode({ inArticle, selection: hasSelection ? sel : '' });
-  if (!inArticle) return { mode };
+  const detectedMode = detectMode({ inArticle, selection: hasSelection ? sel : '' });
+  const message = (opts.message || '').trim().slice(0, maxMessageChars);
+  const mode = opts.mode || (message ? 'free_chat' : detectedMode);
+  const payload = { mode };
+  if (message) payload.message = message;
+  if (opts.intent) payload.intent = opts.intent;
+  if (opts.clientContext) payload.client_context = opts.clientContext;
+  if (!inArticle) return payload;
   const post_id = decodeURIComponent(m[1]);
+  payload.post_id = post_id;
   if (hasSelection) {
-    return { post_id, selection: sel.slice(0, maxChars), mode };
+    payload.selection = sel.slice(0, maxChars);
   }
-  return { post_id, mode };
+  return payload;
 }

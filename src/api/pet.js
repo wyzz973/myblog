@@ -87,6 +87,9 @@ export const apiPet = {
       { method: 'DELETE' },
     );
   },
+  getUsage() {
+    return request('/pet/usage');
+  },
 };
 
 export default apiPet;

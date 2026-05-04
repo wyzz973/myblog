@@ -492,6 +492,76 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .clawd-pet:hover .pet-panel-btn { opacity: 1; }
 .pet-panel-btn:hover { color: var(--fg); transform: rotate(60deg); }
+.pet-chat-toggle {
+  position: absolute;
+  right: -18px;
+  top: 8px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid currentColor;
+  background: var(--bg-2);
+  border-radius: 50%;
+  font: 700 12px/1 'JetBrains Mono', monospace;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+}
+.pet-chat {
+  position: absolute;
+  right: 105%;
+  bottom: 32px;
+  width: 260px;
+  max-width: min(260px, calc(100vw - 32px));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--c);
+  border-radius: 8px;
+  background: var(--bg-2);
+  box-shadow: 0 14px 34px rgba(0,0,0,0.52);
+  animation: clawdPop 0.16s ease-out;
+}
+.pet-chat input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--line);
+  background: var(--bg-3);
+  color: var(--fg);
+  border-radius: 5px;
+  padding: 7px 8px;
+  font: 12px 'JetBrains Mono', monospace;
+}
+.pet-chat button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg-3);
+  color: var(--fg-3);
+  cursor: pointer;
+  font: 12px 'JetBrains Mono', monospace;
+}
+.pet-chat button:hover:not(:disabled) { color: var(--fg); border-color: var(--c); }
+.pet-chat button:disabled { opacity: 0.45; cursor: default; }
+.pet-proactive {
+  position: absolute;
+  right: 104%;
+  bottom: 28px;
+  width: max-content;
+  max-width: min(220px, calc(100vw - 32px));
+  border: 1px solid var(--c);
+  background: var(--bg-2);
+  color: var(--c);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: 12px 'JetBrains Mono', monospace;
+  cursor: pointer;
+  box-shadow: 0 14px 34px rgba(0,0,0,0.52);
+  animation: clawdPop 0.16s ease-out;
+  white-space: normal;
+}
 .pet-panel {
   position: fixed;
   right: 20px;
@@ -2284,6 +2354,33 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   font-family: 'JetBrains Mono', monospace;
   white-space: pre-wrap; word-break: break-word;
 }
+.admin-pet .conv-msg-user {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-3);
+  color: var(--fg-2);
+  font-size: 12px;
+}
+.admin-pet .conv-msg-user strong { color: var(--accent); font-size: 10px; text-transform: uppercase; }
+.admin-pet .conv-msg-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.admin-pet .conv-msg-meta span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: var(--fg-3);
+  background: var(--bg-3);
+  font-size: 10px;
+}
 .admin-pet .conv-msg-reply { font-size: 13px; color: var(--fg); white-space: pre-wrap; }
 .admin-pet .conv-msg-debug { margin-top: 8px; }
 .admin-pet .conv-msg-debug summary { color: var(--fg-4); font-size: 11px; cursor: pointer; }
@@ -2291,6 +2388,28 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   background: var(--bg-3); border: 1px solid var(--line);
   padding: 6px 8px; font-size: 11px; overflow-x: auto;
   border-radius: 3px; margin: 4px 0;
+}
+.admin-pet .pet-usage-table {
+  display: grid;
+  gap: 6px;
+}
+.admin-pet .pet-usage-head,
+.admin-pet .pet-usage-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 1fr 80px 100px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.admin-pet .pet-usage-head {
+  color: var(--fg-4);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  background: var(--bg-3);
 }
 
 /* ==== Responsive layout ================================================= */
@@ -2741,6 +2860,12 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
   .clawd-bubble {
     max-width: min(220px, calc(100vw - 28px));
+  }
+
+  .pet-chat,
+  .pet-proactive {
+    right: 58px;
+    bottom: 26px;
   }
 
   .pet-panel {
