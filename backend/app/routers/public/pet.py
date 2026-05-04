@@ -567,7 +567,8 @@ async def public_pet_summon_stream(
     cache_key = pet_cache.cache_key(
         mode=mode, post_id=post_id, selection=selection, message=req.message
     )
-    if mode in ("summary_react", "selection_explain", "selection_qa", "code_assist", "article_finished"):
+    cacheable_modes = {"selection_explain", "selection_qa", "code_assist"}
+    if mode in cacheable_modes:
         try:
             cached_reply = await pet_cache.get(redis, cache_key)
         except Exception as e:  # noqa: BLE001
@@ -686,7 +687,7 @@ async def public_pet_summon_stream(
                 except Exception as e:  # noqa: BLE001
                     log.warning("pet_summon_stream.ctx_append_failed", error=repr(e))
                 try:
-                    if pet_cache.cacheable(
+                    if mode in cacheable_modes and pet_cache.cacheable(
                         source=terminal_source, reply=full_reply,
                         selection=selection, message=req.message,
                     ):

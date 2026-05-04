@@ -175,6 +175,16 @@ async def test_repeated_selection_can_hit_cache_without_second_gateway_call(
     assert any(e.get("type") == "done" and e.get("source") == "cache" for e in events)
 
 
+async def test_repeated_summary_react_does_not_hit_cache(
+    client, captured_streams, fake_post_id,
+):
+    payload = {"post_id": fake_post_id, "mode": "summary_react"}
+    await _read_stream(client, payload)
+    events = await _read_stream(client, payload)
+    assert len(captured_streams) == 2
+    assert not any(e.get("type") == "cache_hit" for e in events)
+
+
 async def test_stream_fallback_archive_matches_visible_fallback(
     client, monkeypatch,
 ):
