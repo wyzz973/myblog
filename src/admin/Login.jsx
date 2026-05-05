@@ -43,7 +43,7 @@ export default function Login() {
       }
       navigate(redirectTo, { replace: true });
     } catch (err) {
-      setError(err?.detail || err?.message || 'Login failed');
+      setError(err?.detail || err?.message || '登录失败');
     } finally {
       setSubmitting(false);
     }
@@ -93,15 +93,15 @@ export default function Login() {
         <form style={styles.card} onSubmit={onSubmitCreds} noValidate>
           <div style={styles.brand}>
             <span style={styles.brandDot} />
-            <span style={styles.brandText}>myblog · admin</span>
+            <span style={styles.brandText}>myblog · 管理后台</span>
           </div>
-          <h1 style={styles.title}>Sign in</h1>
+          <h1 style={styles.title}>登录</h1>
           <p style={styles.subtitle}>
-            Enter your administrator credentials to continue.
+            请输入管理员账号和密码继续。
           </p>
 
           <label style={styles.label}>
-            <span style={styles.labelText}>email</span>
+            <span style={styles.labelText}>邮箱</span>
             <input
               type="email"
               value={email}
@@ -113,7 +113,7 @@ export default function Login() {
             />
           </label>
           <label style={styles.label}>
-            <span style={styles.labelText}>password</span>
+            <span style={styles.labelText}>密码</span>
             <input
               type="password"
               value={password}
@@ -128,11 +128,11 @@ export default function Login() {
           {error && <div style={styles.error}>! {error}</div>}
 
           <button type="submit" disabled={submitting} style={styles.btn}>
-            {submitting ? 'signing in…' : 'sign in →'}
+            {submitting ? '登录中...' : '登录'}
           </button>
 
           <div style={styles.footer}>
-            <a href="/" style={styles.footerLink}>← back to public site</a>
+            <a href="/" style={styles.footerLink}>返回公开站点</a>
           </div>
         </form>
       ) : (

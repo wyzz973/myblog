@@ -41,7 +41,9 @@ function fillCreds() {
   fireEvent.change(screen.getByPlaceholderText('••••••••'), {
     target: { value: 'pw12345678' },
   });
-  fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+  // Login.jsx submit button is the only button on the creds step.
+  // Match by role only — works whether the label is "sign in" or "登录".
+  fireEvent.click(screen.getByRole('button', { name: /登录|sign in/i }));
 }
 
 beforeEach(() => {
