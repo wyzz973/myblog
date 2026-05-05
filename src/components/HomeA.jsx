@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useSite, useProjects, useContrib } from '../api/hooks.js';
+import { useSite, useProjects, useContrib, useContacts } from '../api/hooks.js';
+import ContactRow from './ContactRow.jsx';
 import { copyToClipboard } from './CopyText.jsx';
 
 function HeroA() {
@@ -290,6 +291,7 @@ export default function HomeA({ posts, tags, activeTag, setTag, focusIdx, onOpen
   const { data: site } = useSite();
   const { data: projects } = useProjects();
   const { data: contribResp } = useContrib(52);
+  const { data: contactsList } = useContacts();
 
   const SITE = site || { commits52w: 0, email: '', github: '', name: '' };
   const PROJECTS = projects || [];
@@ -368,63 +370,7 @@ export default function HomeA({ posts, tags, activeTag, setTag, focusIdx, onOpen
           <span className="label"><span className="n">05 /</span> /contact</span>
           <span className="count">reach out</span>
         </div>
-        <div className="contact-row">
-          <button
-            type="button"
-            className="contact-item"
-            onClick={async (e) => {
-              const btn = e.currentTarget;
-              await copyToClipboard(SITE.email);
-              const v = btn.querySelector('.contact-v');
-              if (v) {
-                const orig = v.textContent;
-                v.textContent = '已复制 ✓';
-                setTimeout(() => { v.textContent = orig; }, 1400);
-              }
-            }}
-            title="点击复制邮箱"
-          >
-            <span className="contact-k">email</span>
-            <span className="contact-v">{SITE.email}</span>
-          </button>
-          <a
-            href={`https://github.com/${SITE.github}`}
-            className="contact-item"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span className="contact-k">github</span>
-            <span className="contact-v">@{SITE.github}</span>
-          </a>
-          <a
-            href="https://xhslink.com/m/4la2YRNQF1u"
-            className="contact-item"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="我在小红书收获了 1139 次赞与收藏"
-          >
-            <span className="contact-k">小红书</span>
-            <span className="contact-v">主页 ↗</span>
-          </a>
-          <button
-            type="button"
-            className="contact-item"
-            onClick={async (e) => {
-              const btn = e.currentTarget;
-              await copyToClipboard('604691290');
-              const v = btn.querySelector('.contact-v');
-              if (v) {
-                const orig = v.textContent;
-                v.textContent = '已复制 ✓';
-                setTimeout(() => { v.textContent = orig; }, 1400);
-              }
-            }}
-            title="点击复制抖音号"
-          >
-            <span className="contact-k">抖音</span>
-            <span className="contact-v">604691290</span>
-          </button>
-        </div>
+        <ContactRow contacts={contactsList} site={SITE} />
       </div>
     </>
   );
