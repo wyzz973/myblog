@@ -924,7 +924,7 @@ Implementation note: new `media.references(s, media_id)` service scans `posts.bo
 
 ### Task 25 — Analytics: custom date range + CSV export + per-post page
 
-**Status:** pending
+**Status:** in-progress (25a CSV export done; 25b custom range + 25c per-post page pending)
 **Priority:** medium
 **Frontend evidence:** `Reader.jsx` hit beacon — every page view feeds analytics.
 **Owner problem:** 7/30/90 chips can't compare May to April; cannot export.
@@ -949,7 +949,16 @@ Implementation note: new `media.references(s, media_id)` service scans `posts.bo
 **Snapshot location:** `/tmp/admin-rebuild/task-25/range.png`, `/tmp/admin-rebuild/task-25/per-post.png`
 **Commit message:** `feat(admin/analytics): date range, csv export, per-post drilldown`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** 25a only — `7a80f03` (`feat(admin/analytics): per-post CSV export endpoint + UI button (Task 25a)`).
+
+#### Task 25a — per-post CSV export (DONE)
+
+- **Backend tests:** `backend/.venv/bin/python -m pytest tests/test_admin_analytics.py -k csv` → 3/3 (401 unauth, header-only when empty, body includes seeded row with quoted/escaped title containing `,` and `"`).
+- **Vitest:** Combined `npx vitest run` → 191/191 (no regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-25a/verify.py` → API probe asserts 200 + `text/csv` + `Content-Disposition: attachment; filename="analytics-posts-YYYYMMDD-7d.csv"` + correct header line; unauthenticated probe → 401; browser path logs in → /admin/analytics → click `[data-testid=analytics-export-csv]` → `page.expect_download` captures the download with `analytics-posts-...csv` filename and body starts with `post_id,title,hits`.
+- **Snapshots:** `/tmp/admin-rebuild/task-25a/{after-export.png,downloaded.csv}`.
+
+Implementation note: `GET /api/admin/analytics/posts.csv?days=N` returns a UTF-8-BOM-prefixed CSV (`﻿` Excel preamble) with columns `post_id,title,hits`, sourced from the existing `analytics_svc.per_post(days, limit=1000)`. The Content-Disposition filename embeds the UTC date stamp + window so multiple exports don't collide. Frontend `apiAnalytics.downloadPostsCsv(range)` does an authenticated fetch (the bearer token can't ride a plain `<a>` link), wraps the response as a Blob, creates an in-memory object URL, and triggers a synthetic `<a download>` click — works in vanilla browsers without any extra deps. The Analytics page gains an `<ExportCsvButton range={range} />` next to the range chips with `data-testid=analytics-export-csv`. csv.writer escapes quotes-in-titles (`"Hello, ""world"""`); test assertions use `.replace("\r\n", "\n")` because csv.writer's default line terminator is CRLF. One latent fixture bug surfaced: the existing `test_analytics_posts_returns_titled_rows` uses local `date.today() - 1` for "yesterday" while the service filter uses UTC — racy when the runner is in a tz ahead of UTC. The new CSV test imports `datetime.now(UTC).date()` directly to avoid the race.
 
 ---
 
@@ -1158,3 +1167,4 @@ Append-only. Every entry below means a real commit shipped.
 | 27a | Integrations test-without-save endpoint | `8418544` | `pytest tests/test_admin_integrations.py` 26/26 | `python /tmp/admin-rebuild/task-27a/verify.py` PASSED | 2026-05-06 |
 | 27b | Integrations 测试连接 button + multi-provider cards | `c4cf3f1` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-27b/verify.py` PASSED | 2026-05-06 |
 | 27c | Provider priority order UI | `307670e` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-27c/verify.py` PASSED | 2026-05-06 |
+| 25a | Per-post analytics CSV export | `7a80f03` | `pytest tests/test_admin_analytics.py -k csv` 3/3 | `python /tmp/admin-rebuild/task-25a/verify.py` PASSED | 2026-05-06 |
