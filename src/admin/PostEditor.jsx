@@ -8,6 +8,7 @@ import {
 } from './frontmatter.js';
 import MediaPicker from './MediaPicker.jsx';
 import { buildImageMarkdown, insertAt } from './markdownInsert.js';
+import { clearDraft, draftIsNewerThan, loadDraft, saveDraft } from './draftStore.js';
 
 const NEW_POST_TEMPLATE = `---
 id: my-new-post
@@ -44,6 +45,18 @@ export default function PostEditor({ id, onClose, onSaved }) {
   const textareaRef = useRef(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  // Autosave + recovery state.
+  // `draftCandidate` is non-null only on initial load when a stale
+  // localStorage draft was newer than the server copy — the UI shows a
+  // banner with 恢复 / 丢弃 buttons. After the user picks one, we
+  // clear it and proceed normally.
+  const [draftCandidate, setDraftCandidate] = useState(null);
+  const [draftSavedAt, setDraftSavedAt] = useState(null);
+  const autosaveRef = useRef(null);
+  const dirtyRef = useRef(false);
+
+  const draftKey = isNew ? '__new__' : id;
+
   function insertImage(item) {
     const md = buildImageMarkdown(item);
     if (!md) return;
@@ -51,6 +64,7 @@ export default function PostEditor({ id, onClose, onSaved }) {
     const start = ta?.selectionStart ?? markdown.length;
     const end = ta?.selectionEnd ?? markdown.length;
     const { value, cursor } = insertAt(markdown, start, end, md);
+    dirtyRef.current = true;
     setMarkdown(value);
     setPickerOpen(false);
     // Restore caret just past the inserted directive on next paint.
@@ -72,7 +86,15 @@ export default function PostEditor({ id, onClose, onSaved }) {
   }
 
   useEffect(() => {
-    if (isNew) return;
+    if (isNew) {
+      // For a brand-new post, surface a banner if a previous "__new__"
+      // draft was left behind by an earlier session.
+      const draft = loadDraft('__new__');
+      if (draft && draft.markdown !== NEW_POST_TEMPLATE) {
+        setDraftCandidate(draft);
+      }
+      return;
+    }
     let mounted = true;
     setLoading(true);
     postsApi
@@ -105,8 +127,22 @@ export default function PostEditor({ id, onClose, onSaved }) {
         Object.keys(fm).forEach((k) => {
           if (fm[k] == null) delete fm[k];
         });
-        setMarkdown(serializeFrontmatter(fm, [], p.body_md ?? ''));
+        const initial = serializeFrontmatter(fm, [], p.body_md ?? '');
+        setMarkdown(initial);
         setLoadError(null);
+        // Recovery check: did a previous session leave behind a draft
+        // that's newer than the server's last write? If so, surface it
+        // — the user picks 恢复 (replace markdown with draft) or 丢弃
+        // (clear localStorage and stay with server).
+        const draft = loadDraft(id);
+        const serverTs = p.updated_at || p.date || null;
+        if (
+          draft
+          && draft.markdown !== initial
+          && draftIsNewerThan(draft, serverTs)
+        ) {
+          setDraftCandidate(draft);
+        }
       })
       .catch((err) => {
         if (!mounted) return;
@@ -119,6 +155,35 @@ export default function PostEditor({ id, onClose, onSaved }) {
       mounted = false;
     };
   }, [id, isNew]);
+
+  // Autosave loop: write the current markdown to localStorage every ~5s
+  // when the editor is dirty. Reset on successful save.
+  useEffect(() => {
+    if (loading) return undefined;
+    if (autosaveRef.current) clearTimeout(autosaveRef.current);
+    autosaveRef.current = setTimeout(() => {
+      if (!dirtyRef.current) return;
+      const ts = Date.now();
+      saveDraft(draftKey, markdown, ts);
+      setDraftSavedAt(ts);
+    }, 5000);
+    return () => {
+      if (autosaveRef.current) clearTimeout(autosaveRef.current);
+    };
+  }, [markdown, loading, draftKey]);
+
+  function recoverDraft() {
+    if (!draftCandidate) return;
+    setMarkdown(draftCandidate.markdown);
+    setDraftCandidate(null);
+    setDraftSavedAt(draftCandidate.savedAt);
+  }
+
+  function discardDraft() {
+    clearDraft(draftKey);
+    setDraftCandidate(null);
+    setDraftSavedAt(null);
+  }
 
   // Debounced live preview.
   useEffect(() => {
@@ -150,6 +215,7 @@ export default function PostEditor({ id, onClose, onSaved }) {
   const fm = useMemo(() => parseFrontmatter(markdown).fm, [markdown]);
 
   function updateField(name, value) {
+    dirtyRef.current = true;
     setMarkdown((prev) => setFmField(prev, name, value));
   }
 
@@ -183,6 +249,11 @@ export default function PostEditor({ id, onClose, onSaved }) {
       } else {
         await postsApi.patch(originalId, markdown);
       }
+      // Successful save → flush the autosave snapshot. Subsequent edits
+      // will start a fresh draft.
+      clearDraft(draftKey);
+      dirtyRef.current = false;
+      setDraftSavedAt(null);
       onSaved?.();
     } catch (err) {
       setSaveError(err?.detail || err?.message || 'save failed');
@@ -222,6 +293,37 @@ export default function PostEditor({ id, onClose, onSaved }) {
 
       {loadError && <div style={styles.error}>! {loadError}</div>}
       {saveError && <div style={styles.error}>! {saveError}</div>}
+
+      {draftCandidate && (
+        <div style={styles.draftBanner} data-testid="draft-banner">
+          <span style={styles.draftBannerText}>
+            发现未保存的草稿（{fmtAgo(draftCandidate.savedAt)}）。
+          </span>
+          <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            onClick={recoverDraft}
+            style={styles.draftBtnPrimary}
+            data-testid="draft-recover"
+          >
+            恢复
+          </button>
+          <button
+            type="button"
+            onClick={discardDraft}
+            style={styles.draftBtnGhost}
+            data-testid="draft-discard"
+          >
+            丢弃
+          </button>
+        </div>
+      )}
+
+      {draftSavedAt && !draftCandidate && (
+        <div style={styles.draftStatus} data-testid="draft-status">
+          已自动保存 · {fmtAgo(draftSavedAt)}
+        </div>
+      )}
 
       <div style={styles.fieldsStrip} data-testid="post-fields-strip">
         <label style={styles.fieldGroup}>
@@ -302,7 +404,10 @@ export default function PostEditor({ id, onClose, onSaved }) {
           <textarea
             ref={textareaRef}
             value={markdown}
-            onChange={(e) => setMarkdown(e.target.value)}
+            onChange={(e) => {
+              dirtyRef.current = true;
+              setMarkdown(e.target.value);
+            }}
             onKeyDown={onTextareaKeyDown}
             spellCheck={false}
             style={styles.textarea}
@@ -359,6 +464,17 @@ export default function PostEditor({ id, onClose, onSaved }) {
       />
     </div>
   );
+}
+
+function fmtAgo(ts) {
+  if (!ts) return '刚刚';
+  const ms = Date.now() - ts;
+  if (ms < 0 || ms < 60_000) return '刚刚';
+  const m = Math.floor(ms / 60_000);
+  if (m < 60) return `${m} 分钟前`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} 小时前`;
+  return `${Math.floor(h / 24)} 天前`;
 }
 
 function ToggleField({ name, checked, onChange }) {
@@ -527,6 +643,46 @@ const styles = {
     fontSize: 12,
     fontFamily: 'inherit',
     cursor: 'pointer',
+  },
+  draftBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '8px 12px',
+    border: '1px solid color-mix(in oklab, var(--accent) 40%, transparent)',
+    background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
+    borderRadius: 4,
+    marginBottom: 12,
+    fontSize: 11,
+    color: 'var(--fg)',
+  },
+  draftBannerText: { color: 'var(--fg-2)' },
+  draftBtnPrimary: {
+    background: 'var(--accent)',
+    color: '#0a0b0d',
+    border: 0,
+    padding: '4px 12px',
+    borderRadius: 3,
+    fontFamily: 'inherit',
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  draftBtnGhost: {
+    background: 'transparent',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-3)',
+    padding: '4px 12px',
+    borderRadius: 3,
+    fontFamily: 'inherit',
+    fontSize: 11,
+    cursor: 'pointer',
+  },
+  draftStatus: {
+    fontSize: 10,
+    color: 'var(--fg-4)',
+    marginBottom: 10,
+    fontStyle: 'italic',
   },
   fieldsStrip: {
     display: 'flex',
