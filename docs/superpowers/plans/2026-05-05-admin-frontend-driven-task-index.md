@@ -424,7 +424,7 @@ Implementation note: contact tile decision is href-shape based — items with ht
 
 ### Task 10 — Comments moderation: per-post filter + bulk approve/reject
 
-**Status:** pending
+**Status:** completed
 **Priority:** medium
 **Frontend evidence:** `Reader.jsx` future public comments + admin oversight. O1.
 **Owner problem:** during a spike (e.g., spam wave on one post) owner cannot scope the queue; must approve one-by-one.
@@ -445,7 +445,13 @@ Implementation note: contact tile decision is href-shape based — items with ht
 **Snapshot location:** `/tmp/admin-rebuild/task-10/bulk-approve.png`
 **Commit message:** `feat(admin/comments): per-post filter and bulk moderation`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `87a8875` (`feat(admin/comments): per-post filter and bulk moderation`).
+
+- **Tests:** `npx vitest run src/admin/Comments.test.jsx` → 5/5 (post filter passes post_id, select-all + bulk approve calls bulk('approve', ids), single-row bulk passes only that id, cancel in confirm aborts, clearing filter restores no post_id). Combined regression `npx vitest run` → 85/85 (no Task 1-9 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-10/verify.py` → seed 3 pending comments via the public submit endpoint → login → /admin/comments → enter post-id filter → assert seeded rows render → click select-all → bulk action bar visible → 批量通过 → auto-accept confirm → re-fetch via API → all 3 rows flipped to approved → cleanup deletes seeded comments. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-10/{filtered,after-bulk}.png`.
+
+Implementation note: backend gained a single-statement `bulk_set_status` / `bulk_delete` so a 200-row batch is one DB roundtrip; the bulk endpoint writes one event_log row carrying the affected count + the changed status, so the activity feed shows the wave instead of 200 individual rows. UI bulk bar is sticky-style and only renders when at least one row is selected.
 
 ---
 
@@ -1023,3 +1029,4 @@ Append-only. Every entry below means a real commit shipped.
 | 7 | Pet templates: 12 modes | `993465e` | `vitest run src/admin/pet/PetTemplates.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-7/verify.py` PASSED | 2026-05-06 |
 | 8 | Reader likes wired to server + admin column | `fcab65e` | `vitest run src/api/client.test.js` 3/3 | `python /tmp/admin-rebuild/task-8/verify.py` PASSED | 2026-05-06 |
 | 9 | HomeA contacts from API + fallback | `c8f48e1` | `vitest run src/components/contact-row.test.jsx` 7/7 | `python /tmp/admin-rebuild/task-9/verify.py` PASSED | 2026-05-06 |
+| 10 | Comments per-post filter + bulk moderation | `87a8875` | `vitest run src/admin/Comments.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-10/verify.py` PASSED | 2026-05-06 |
