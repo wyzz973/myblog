@@ -1095,7 +1095,7 @@ Implementation note: simple ↑/↓ arrow buttons instead of HTML5 drag-and-drop
 
 ### Task 30 — Bulk markdown post upload UI
 
-**Status:** pending
+**Status:** completed
 **Priority:** low
 **Frontend evidence:** site growth.
 **Owner problem:** importing N drafts from a folder requires N round-trips.
@@ -1113,7 +1113,13 @@ Implementation note: simple ↑/↓ arrow buttons instead of HTML5 drag-and-drop
 **Snapshot location:** `/tmp/admin-rebuild/task-30/bulk.png`
 **Commit message:** `feat(admin/posts): bulk markdown upload UI`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `c865b85` (`feat(admin/posts): bulk markdown upload UI (Task 30)`).
+
+- **Tests:** Vitest 191/191 (no dedicated unit test for the modal — flow covered by Playwright path).
+- **Playwright:** `/tmp/admin-rebuild/task-30b/verify.py` PASSED → login → /admin/posts → click `[data-testid=posts-bulk-upload]` → modal opens → `set_input_files` with one valid + one malformed `.md` → click `[data-testid=bulk-upload-submit]` → assert `[data-testid=bulk-upload-summary]` shows "共 2 个 · 成功 1 · 失败 1" → assert per-file rows have `data-status="ok"` and `data-status="err"` → cleanup deletes the seeded post.
+- **Snapshots:** `/tmp/admin-rebuild/task-30b/after-upload.png`.
+
+Implementation note: `postsApi.bulkUpload(files, {overwrite})` posts a multipart batch via FormData and explicitly omits the `Content-Type` header so the browser picks the boundary; treats 201 (all ok) / 207 (partial) / 422 (all failed) as non-throw responses since they all carry the structured per-file results. The `BulkUploadModal` supports both drag-drop and file picker (`accept=".md,.markdown"`), filters non-md files locally, caps at 20 (matching the backend limit), and renders per-file rows with `data-status="pending|ok|err"` so tests can assert without scraping text. The 完成 button on the footer flips to "完成" once a successful upload happens, calling `onDone()` to refresh the parent Posts list. The `overwrite` toggle wires through to the existing backend query param.
 
 ---
 
@@ -1201,6 +1207,7 @@ Append-only. Every entry below means a real commit shipped.
 | 33 | PostDetail exposes lifecycle flags | `5ded359` | `pytest tests/test_admin_posts.py` 11/11 | live `curl` probe shows status/featured/private/comments_enabled/scheduled_at | 2026-05-06 |
 | 34 | queue inline runner lazy-load registry | `6929ab9` | `pytest -k 'queue or worker or arq_inline'` 13/13 | n/a (worker plumbing) | 2026-05-06 |
 | 35 | Localize remaining admin pages + mobile responsive | `017e930` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-35/verify.py` PASSED (14 pages) | 2026-05-06 |
+| 30 | Bulk markdown post upload UI | `c865b85` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-30b/verify.py` PASSED | 2026-05-06 |
 
 ---
 
