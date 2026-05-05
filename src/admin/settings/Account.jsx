@@ -6,6 +6,7 @@ export default function Account() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <TfaSection />
       <MagicLinkSection />
+      <EmailSection />
       <PasswordSection />
     </div>
   );
@@ -298,6 +299,90 @@ function MagicLinkSection() {
 }
 
 // --- Password ---------------------------------------------------------------
+
+// Task 28b: rotate the admin login email. Direct write (no magic-link
+// confirmation in this revision); on success we ask the owner to log in
+// again because the JWT still claims the old email — the access token
+// keeps working for now but new logins use the new address.
+function EmailSection() {
+  const [current, setCurrent] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [doneEmail, setDoneEmail] = useState(null);
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    setError(null);
+    setDoneEmail(null);
+    setBusy(true);
+    try {
+      const res = await apiAccount.changeEmail(current, newEmail);
+      setCurrent('');
+      setNewEmail('');
+      setDoneEmail(res?.email || newEmail);
+    } catch (err) {
+      setError(err?.detail || err?.message || '修改失败');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card title="登录邮箱" subtitle="修改用于后台登录的邮箱地址">
+      <form
+        onSubmit={onSubmit}
+        style={{ display: 'grid', gap: 10, maxWidth: 380 }}
+        data-testid="email-change-form"
+      >
+        <label style={styles.label}>
+          <span style={styles.labelText}>当前密码</span>
+          <input
+            type="password"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            autoComplete="current-password"
+            required
+            style={styles.input}
+            data-testid="email-change-current"
+          />
+        </label>
+        <label style={styles.label}>
+          <span style={styles.labelText}>新邮箱</span>
+          <input
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            required
+            style={styles.input}
+            placeholder="new@example.com"
+            data-testid="email-change-new"
+          />
+        </label>
+        <div>
+          <button
+            type="submit"
+            style={styles.btn}
+            disabled={busy}
+            data-testid="email-change-submit"
+          >
+            {busy ? '保存中...' : '修改邮箱'}
+          </button>
+        </div>
+        {doneEmail && (
+          <div style={styles.success} data-testid="email-change-done">
+            邮箱已改为 {doneEmail} — 下次登录请用新地址。
+          </div>
+        )}
+        {error && (
+          <div style={styles.error} data-testid="email-change-error">
+            ! {error}
+          </div>
+        )}
+      </form>
+    </Card>
+  );
+}
 
 function PasswordSection() {
   const [current, setCurrent] = useState('');

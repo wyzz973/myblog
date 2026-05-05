@@ -79,6 +79,19 @@ export const apiAccount = {
       }),
     });
   },
+  // Task 28a/b: rotate the admin email. POST { current_password, new_email }
+  // → { email }. Backend writes the new email + emits an event log row.
+  // Caller should re-login (the JWT still holds the old email claim;
+  // /admin/dashboard etc. work but every fresh login sees the new email).
+  changeEmail(currentPassword, newEmail) {
+    return req('/account/email', {
+      method: 'POST',
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_email: newEmail,
+      }),
+    });
+  },
 };
 
 export default apiAccount;
