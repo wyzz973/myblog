@@ -313,6 +313,16 @@ export const SPECIES = Object.fromEntries(
   Object.entries(SPECIES_BASE).map(([key, species]) => [key, withProfile(key, species)]),
 );
 
+export const SPECIES_BEHAVIOR = {
+  cat: { proactiveLevel: 1, idleFrequency: 'low', localLines: ['显然，可以。', '这段值得再看一眼。'] },
+  rabbit: { proactiveLevel: 5, idleFrequency: 'high', localLines: ['啊！要我看看吗？', '哦哦哦我发现一点！'] },
+  robot: { proactiveLevel: 2, idleFrequency: 'normal', localLines: ['[ACK] context ready.', '[BEEP] 需要输入。'] },
+  turtle: { proactiveLevel: 1, idleFrequency: 'low', localLines: ['慢慢看，别急。', '老朽先记下此处。'] },
+  fox: { proactiveLevel: 4, idleFrequency: 'normal', localLines: ['小狐嗅到玄机啦～', '要不要追一下这里？'] },
+  bee: { proactiveLevel: 4, idleFrequency: 'normal', localLines: ['任务：需要我拆解吗？', '嗡，下一步很清楚。'] },
+  default: { proactiveLevel: 3, idleFrequency: 'normal', localLines: ['要我看看这里吗？', '我在这儿。'] },
+};
+
 export function byRarity() {
   const out = {};
   for (const r of RARITY_ORDER) out[r] = [];

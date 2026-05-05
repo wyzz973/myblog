@@ -149,6 +149,7 @@ describe('AsciiPet', () => {
 
     await act(async () => {
       vi.advanceTimersByTime(IDLE_MONOLOGUE_MS + 1200);
+      vi.advanceTimersByTime(IDLE_MONOLOGUE_MS);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -158,5 +159,119 @@ describe('AsciiPet', () => {
     expect(summonCall[0]).toBe('/api/pet/summon/stream');
     expect(JSON.parse(summonCall[1].body)).toEqual({ mode: 'idle_monologue' });
     expect(screen.getByText('idle meow')).toBeInTheDocument();
+  });
+
+  it('opens chat input, sends message with context, and closes on Escape', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        enabled: true,
+        assigned_species: 'cat',
+        species: 'cat',
+        hat: 'none',
+        tint: '#7aa7ff',
+        visitor_can_change: false,
+      }),
+    });
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({
+          read: vi.fn()
+            .mockResolvedValueOnce({
+              value: new TextEncoder().encode('data: {"type":"fallback","text":"chat ok","source":"fallback"}\n\n'),
+              done: false,
+            })
+            .mockResolvedValueOnce({ value: undefined, done: true }),
+        }),
+      },
+    });
+    window.__petScene = () => ({ page_type: 'post', read_progress: 42 });
+
+    render(<AsciiPet />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/pet/config'));
+
+    fireEvent.click(screen.getByTitle('chat with pet'));
+    const input = screen.getByLabelText('message pet');
+    fireEvent.change(input, { target: { value: '这段怎么理解？' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    const body = JSON.parse(fetch.mock.calls[1][1].body);
+    expect(body.mode).toBe('free_chat');
+    expect(body.message).toBe('这段怎么理解？');
+    expect(body.client_context.read_progress).toBe(42);
+    expect(screen.getByText('chat ok')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle('chat with pet'));
+    expect(screen.getByLabelText('message pet')).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByLabelText('message pet'), { key: 'Escape' });
+    expect(screen.queryByLabelText('message pet')).not.toBeInTheDocument();
+  });
+
+  it('closes chat input from the x button without entering quiet mode', async () => {
+    render(<AsciiPet />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/pet/config'));
+
+    fireEvent.click(screen.getByTitle('chat with pet'));
+    const input = screen.getByLabelText('message pet');
+    fireEvent.change(input, { target: { value: 'draft' } });
+    fireEvent.click(screen.getByTitle('close chat'));
+
+    expect(screen.queryByLabelText('message pet')).not.toBeInTheDocument();
+    expect(screen.queryByText('安静 30 分钟。')).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows local proactive article-finished prompt and sends article_finished only after click', async () => {
+    vi.useFakeTimers();
+    window.__petScene = () => ({
+      page_type: 'post',
+      post_id: 'pet-test',
+      read_progress: 99,
+      recent_action: 'reached_end',
+    });
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        enabled: true,
+        assigned_species: 'cat',
+        species: 'cat',
+        hat: 'none',
+        tint: '#7aa7ff',
+        visitor_can_change: false,
+      }),
+    });
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({
+          read: vi.fn()
+            .mockResolvedValueOnce({
+              value: new TextEncoder().encode('data: {"type":"fallback","text":"done read","source":"fallback"}\n\n'),
+              done: false,
+            })
+            .mockResolvedValueOnce({ value: undefined, done: true }),
+        }),
+      },
+    });
+
+    render(<AsciiPet />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      vi.advanceTimersByTime(1600);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('要我总结一下吗？')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      fireEvent.click(screen.getByText('要我总结一下吗？'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetch.mock.calls[1][1].body).mode).toBe('article_finished');
+    vi.useRealTimers();
   });
 });

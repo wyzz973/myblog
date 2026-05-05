@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, Index, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,10 +33,18 @@ class PetMessage(Base):
     tag_slug: Mapped[str | None] = mapped_column(String(40))
     summary: Mapped[str | None] = mapped_column(Text)
     selection: Mapped[str | None] = mapped_column(Text)
+    message: Mapped[str | None] = mapped_column(Text)
+    intent: Mapped[str | None] = mapped_column(String(48))
+    client_context: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
     prior_turns: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     reply: Mapped[str] = mapped_column(Text, nullable=False)
     source: Mapped[str] = mapped_column(String(32), nullable=False)
+    estimated_input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    estimated_output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    estimated_total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cache_hit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    fallback_level: Mapped[str] = mapped_column(String(16), nullable=False, default="none")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )

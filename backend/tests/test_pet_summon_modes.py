@@ -81,6 +81,61 @@ async def test_selection_qa_default_when_selection_no_mode(client, captured_call
     assert body["mode"] == "selection_qa"
 
 
+async def test_free_chat_inferred_when_message_without_mode(client, captured_calls, fake_post_id):
+    r = await client.post("/api/pet/summon", json={
+        "post_id": fake_post_id,
+        "message": "这篇文章最关键的风险是什么？",
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["mode"] == "free_chat"
+    assert "这篇文章最关键的风险是什么" in captured_calls[0]["user"]
+
+
+async def test_short_follow_up_inferred_from_message(client, captured_calls, fake_post_id):
+    r = await client.post("/api/pet/summon", json={
+        "post_id": fake_post_id,
+        "message": "继续",
+    })
+    assert r.status_code == 200
+    assert r.json()["mode"] == "follow_up"
+
+
+async def test_code_assist_explicit_mode_accepts_client_context(client, captured_calls, fake_post_id):
+    r = await client.post("/api/pet/summon", json={
+        "post_id": fake_post_id,
+        "selection": "useEffect(() => {}, [])",
+        "mode": "code_assist",
+        "client_context": {
+            "page_type": "post",
+            "visible_block_type": "code",
+            "selection_kind": "code",
+            "dwell_seconds": 25,
+        },
+    })
+    assert r.status_code == 200
+    assert r.json()["mode"] == "code_assist"
+    assert "Help with a code-oriented moment" in captured_calls[0]["system"]
+
+
+async def test_free_chat_can_be_disabled_without_provider_call(client, captured_calls):
+    from sqlalchemy import update
+
+    from app.db import AsyncSessionLocal
+    from app.models import SiteMeta
+    from app.schemas.pet import PetConfig
+
+    cfg = PetConfig(enable_free_chat=False)
+    async with AsyncSessionLocal() as s:
+        await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(pet_config=cfg.model_dump()))
+        await s.commit()
+
+    r = await client.post("/api/pet/summon", json={"message": "hello"})
+    assert r.status_code == 200
+    assert r.json()["source"] == "disabled"
+    assert captured_calls == []
+
+
 async def test_mode_validation_rejects_garbage(client, captured_calls):
     r = await client.post("/api/pet/summon", json={"mode": "wat"})
     assert r.status_code == 422
@@ -90,6 +145,7 @@ async def test_disabled_article_context_forces_greet_mode(client, captured_calls
                                                           fake_post_id):
     """When enable_article_context=False, ignore post_id/selection, force greet."""
     from sqlalchemy import update
+
     from app.db import AsyncSessionLocal
     from app.models import SiteMeta
     from app.schemas.pet import PetConfig

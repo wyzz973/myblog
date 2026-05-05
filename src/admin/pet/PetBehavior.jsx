@@ -35,6 +35,21 @@ export default function PetBehavior({ config, patch }) {
                onChange={(e) => patch({ enable_article_context: e.target.checked })} />
         Article context awareness
       </label>
+      <label>
+        <input type="checkbox" checked={config.enable_free_chat !== false}
+               onChange={(e) => patch({ enable_free_chat: e.target.checked })} />
+        Free chat
+      </label>
+      <label>
+        <input type="checkbox" checked={config.enable_proactive !== false}
+               onChange={(e) => patch({ enable_proactive: e.target.checked })} />
+        Proactive prompts
+      </label>
+      <label>
+        <input type="checkbox" checked={config.enable_long_term_memory !== false}
+               onChange={(e) => patch({ enable_long_term_memory: e.target.checked })} />
+        Anonymous long-term memory
+      </label>
 
       <fieldset>
         <legend>Providers (fallback chain)</legend>
@@ -74,6 +89,42 @@ export default function PetBehavior({ config, patch }) {
                    onChange={(e) => patch({ unlimited: e.target.checked })} />
             unlimited (skip 3-layer, only enforce hard_ceiling)
           </label>
+        </details>
+      </fieldset>
+
+      <fieldset>
+        <legend>Mode budgets</legend>
+        <details>
+          <summary>Advanced per-mode limits</summary>
+          {Object.keys(config.per_mode_output_budget || {}).map((mode) => (
+            <div key={mode} style={{ display: 'grid', gridTemplateColumns: '130px 1fr 1fr 1fr', gap: 8, alignItems: 'center' }}>
+              <span className="hint">{mode}</span>
+              <label>daily <input type="number" min="0" max="10000"
+                value={config.per_mode_daily_limit?.[mode] ?? 0}
+                onChange={(e) => patch({
+                  per_mode_daily_limit: {
+                    ...(config.per_mode_daily_limit || {}),
+                    [mode]: Number(e.target.value),
+                  },
+                })} /></label>
+              <label>input <input type="number" min="100" max="4000"
+                value={config.per_mode_input_budget?.[mode] ?? 1000}
+                onChange={(e) => patch({
+                  per_mode_input_budget: {
+                    ...(config.per_mode_input_budget || {}),
+                    [mode]: Number(e.target.value),
+                  },
+                })} /></label>
+              <label>output <input type="number" min="10" max="500"
+                value={config.per_mode_output_budget?.[mode] ?? 100}
+                onChange={(e) => patch({
+                  per_mode_output_budget: {
+                    ...(config.per_mode_output_budget || {}),
+                    [mode]: Number(e.target.value),
+                  },
+                })} /></label>
+            </div>
+          ))}
         </details>
       </fieldset>
 

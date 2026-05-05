@@ -66,6 +66,38 @@ export default function App() {
     document.title = reading?.title ? `${reading.title} — myblog` : 'myblog';
   }, [reading?.title]);
 
+  useEffect(() => {
+    if (reading) return;
+    const focusedPost = posts[focusIdx] || posts[0] || null;
+    const visiblePosts = posts.slice(0, 8).map((p) => {
+      const subtitle = p.subtitle ? ` — ${p.subtitle}` : '';
+      return `${p.title}${subtitle} [${p.tag || 'untagged'}]`;
+    });
+    const activeTagMeta = (tagsData || []).find((t) => t.id === activeTag);
+    const activeTagLabel = activeTag === 'all'
+      ? 'all'
+      : (activeTagMeta?.label || activeTag);
+    window.__petScene = () => ({
+      page_type: 'home',
+      path: window.location.pathname,
+      title: document.title,
+      active_tag: activeTagLabel,
+      tag: activeTagLabel,
+      post_count: posts.length,
+      focused_post_title: focusedPost?.title,
+      focused_post_tag: focusedPost?.tag,
+      focused_post_subtitle: focusedPost?.subtitle,
+      active_heading: focusedPost?.title,
+      visible_posts: visiblePosts,
+      home_digest: visiblePosts.length
+        ? `Home index filtered by ${activeTagLabel}; focused: ${focusedPost?.title || 'none'}; candidates: ${visiblePosts.join(' | ')}`
+        : `Home index filtered by ${activeTagLabel}; posts are still loading or empty.`,
+      recent_action: 'browsing_home_index',
+      locale: navigator.language,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+  }, [reading, posts, focusIdx, activeTag, tagsData]);
+
   // Sync the browser tab favicon to the configured GitHub avatar — auto-
   // updates whenever the user changes their avatar on github.com. The
   // handle is also cached so main.jsx can prime the favicon BEFORE React

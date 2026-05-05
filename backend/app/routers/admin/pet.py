@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import current_admin, require_scope
-from app.models import Account, PetMessage, SiteMeta
+from app.models import Account, PetMessage, PetUsageEvent, PetVisitorProfile, SiteMeta
 from app.redis import get_redis
 from app.schemas.pet import PetConfig, PetModeTemplates, PetPersonas
 from app.services import pet_context
@@ -196,10 +196,18 @@ async def get_conversation_detail(
             "tag_slug": r.tag_slug,
             "summary": r.summary,
             "selection": r.selection,
+            "message": r.message,
+            "intent": r.intent,
+            "client_context": r.client_context,
             "system_prompt": r.system_prompt,
             "prior_turns": r.prior_turns,
             "reply": r.reply,
             "source": r.source,
+            "estimated_input_tokens": r.estimated_input_tokens,
+            "estimated_output_tokens": r.estimated_output_tokens,
+            "estimated_total_tokens": r.estimated_total_tokens,
+            "cache_hit": r.cache_hit,
+            "fallback_level": r.fallback_level,
             "created_at": r.created_at.isoformat(),
         })
     next_cursor = items[-1]["id"] if len(rows) > limit and items else None
@@ -213,6 +221,7 @@ async def get_conversation_detail(
 )
 async def delete_conversation(
     visitor_hash: str,
+    delete_profile: bool = Query(default=True),
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
@@ -222,6 +231,10 @@ async def delete_conversation(
     await s.execute(
         delete(PetMessage).where(PetMessage.visitor_hash == visitor_hash)
     )
+    if delete_profile:
+        await s.execute(
+            delete(PetVisitorProfile).where(PetVisitorProfile.visitor_hash == visitor_hash)
+        )
     await s.commit()
     try:
         await pet_context.clear(redis, visitor_hash)
@@ -230,3 +243,35 @@ async def delete_conversation(
         log.warning("admin.delete_conversation.ctx_clear_failed",
                     visitor_hash=visitor_hash, error=repr(e))
     return Response(status_code=http_status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/pet/usage")
+async def get_pet_usage(
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    rows = (
+        await s.execute(
+            select(
+                func.date(PetUsageEvent.created_at).label("day"),
+                PetUsageEvent.mode,
+                PetUsageEvent.source,
+                func.count(PetUsageEvent.id).label("calls"),
+                func.sum(PetUsageEvent.estimated_total_tokens).label("tokens"),
+            )
+            .group_by("day", PetUsageEvent.mode, PetUsageEvent.source)
+            .order_by(desc("day"), PetUsageEvent.mode, PetUsageEvent.source)
+            .limit(300)
+        )
+    ).all()
+    items = [
+        {
+            "day": str(row.day),
+            "mode": row.mode,
+            "source": row.source,
+            "calls": int(row.calls or 0),
+            "estimated_total_tokens": int(row.tokens or 0),
+        }
+        for row in rows
+    ]
+    return {"items": items}

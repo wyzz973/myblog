@@ -1,5 +1,5 @@
-import pytest
 import fakeredis.aioredis
+import pytest
 
 from app.services.pet_context import (
     DEFAULT_MAX_TURNS,

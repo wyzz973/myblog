@@ -72,6 +72,28 @@ export default function PetConversationDetail() {
                 <code>{m.selection}</code>
               </div>
             )}
+            {m.message && (
+              <div className="conv-msg-user">
+                <strong>visitor</strong>
+                <span>{m.message}</span>
+              </div>
+            )}
+            {(m.intent || m.client_context || m.estimated_total_tokens != null) && (
+              <div className="conv-msg-meta">
+                {m.intent && <span>intent: {m.intent}</span>}
+                {m.cache_hit && <span>cache hit</span>}
+                {m.fallback_level && <span>fallback: {m.fallback_level}</span>}
+                {m.estimated_total_tokens != null && (
+                  <span>tokens: {m.estimated_total_tokens}</span>
+                )}
+                {m.client_context?.read_progress != null && (
+                  <span>progress: {m.client_context.read_progress}%</span>
+                )}
+                {m.client_context?.active_heading && (
+                  <span>heading: {m.client_context.active_heading}</span>
+                )}
+              </div>
+            )}
             <div className="conv-msg-reply" data-testid="reply-text">
               {m.reply}
             </div>

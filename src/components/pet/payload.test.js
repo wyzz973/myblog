@@ -66,6 +66,29 @@ describe('buildSummonPayload', () => {
     expect(buildSummonPayload()).toEqual({ mode: 'greet' });
   });
 
+  it('uses recommend_next on home when page content context is available', () => {
+    setPath('/');
+    const payload = buildSummonPayload({
+      clientContext: {
+        page_type: 'home',
+        active_tag: 'devtools',
+        focused_post_title: 'VPS Setup',
+        visible_posts: ['VPS Setup — cheap server [infra]'],
+        post_count: 4,
+      },
+    });
+    expect(payload).toEqual({
+      mode: 'recommend_next',
+      client_context: {
+        page_type: 'home',
+        active_tag: 'devtools',
+        focused_post_title: 'VPS Setup',
+        visible_posts: ['VPS Setup — cheap server [infra]'],
+        post_count: 4,
+      },
+    });
+  });
+
   it('returns summary_react when on article with no selection', () => {
     setPath('/p/hello-world');
     expect(buildSummonPayload()).toEqual({ post_id: 'hello-world', mode: 'summary_react' });
@@ -95,5 +118,39 @@ describe('buildSummonPayload', () => {
     document.body.innerHTML = '<p id="t">hi</p>';
     selectNode(document.getElementById('t'));
     expect(buildSummonPayload()).toEqual({ post_id: 'post', mode: 'summary_react' });
+  });
+
+  it('uses free_chat mode when message is provided on home', () => {
+    setPath('/');
+    expect(buildSummonPayload({ message: 'hello pet' })).toEqual({
+      mode: 'free_chat',
+      message: 'hello pet',
+    });
+  });
+
+  it('keeps post, selection, intent, and client context with message', () => {
+    setPath('/p/post');
+    document.body.innerHTML = '<pre><code id="c">const cleanup = true</code></pre>';
+    selectNode(document.getElementById('c'));
+    const payload = buildSummonPayload({
+      message: 'why cleanup?',
+      intent: 'ask_selection',
+      clientContext: { page_type: 'post', read_progress: 50, ignored: 'client-only' },
+    });
+    expect(payload).toMatchObject({
+      post_id: 'post',
+      mode: 'free_chat',
+      message: 'why cleanup?',
+      intent: 'ask_selection',
+      client_context: { page_type: 'post', read_progress: 50, ignored: 'client-only' },
+    });
+    expect(payload.selection).toContain('cleanup');
+  });
+
+  it('allows explicit smart modes to override message default', () => {
+    setPath('/p/post');
+    const payload = buildSummonPayload({ message: 'done', mode: 'article_finished' });
+    expect(payload.mode).toBe('article_finished');
+    expect(payload.message).toBe('done');
   });
 });
