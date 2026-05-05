@@ -1117,6 +1117,34 @@ Implementation note: simple ↑/↓ arrow buttons instead of HTML5 drag-and-drop
 
 ---
 
+### Task 31 — Tags reference scan + 409 delete refusal (parallel to Task 23 for media)
+
+**Status:** completed
+**Priority:** medium
+**Frontend evidence:** /admin/tags — owner can currently click delete on any tag, including ones with posts attached.
+**Owner problem:** Tag.id has `ON DELETE RESTRICT` from Post.tag_id, so the DB rejects the row but the API was still returning 204 — silent failure where the tag stayed but no error surfaced.
+**Existing capability:** Tags CRUD with no reference enforcement.
+**Gap:** no `post_count` on listing; no 409 on delete.
+**Admin module:** 02 内容 / 标签
+**Backend touch:**
+  - `TagOut.post_count: int` field
+  - `GET /api/admin/tags` LEFT JOIN posts and groups by tag.id to populate `post_count`
+  - `DELETE /api/admin/tags/{id}` returns 409 with detail `tag has N post(s); reassign or delete them first` when `post_count > 0`
+**Frontend API client:** existing
+**UI / interaction:** future enhancement — disable delete button on tags with `post_count > 0` (deferred; backend protection alone closes the silent-failure gap).
+**Automated tests:** pytest
+**Playwright acceptance path:** API-only probe; covered below.
+**Snapshot location:** none (backend-only).
+**Commit message:** `feat(admin/tags): refuse delete when posts reference + post_count on list (Task 30)` (commit message uses "Task 30" because the numbering collision with the existing Task 30 spec was caught only after the commit — feature is recorded here as Task 31).
+**Definition of done:** standard checklist
+**Completed:** `f0eb20c`.
+
+- **Backend tests:** `backend/.venv/bin/python -m pytest tests/test_admin_taxonomy.py` → 15/15 (3 new for Task 31: `post_count` field on every row, DELETE 409 when posts reference the tag with helpful detail message + tag still in listing afterward + cleanup detaches post and verifies subsequent DELETE returns 204; existing 12 still pass).
+- **Live probe:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-30/verify.py` PASSED → list returns post_count → seed tag → POST a post under it via `/api/admin/posts` (frontmatter `tag: t30-live`) → list shows post_count=1 on the seeded tag → DELETE returns 409 with detail "tag has 1 post(s); reassign or delete them first" → after deleting the post, DELETE returns 204.
+- **Snapshots:** none (backend-only).
+
+Implementation note: the listing endpoint switches from a plain `select(Tag)` to a `LEFT JOIN posts ON post.tag_id = tag.id GROUP BY tag.id` with a `func.count(Post.id)` so the count comes from a single query (no N+1). The DELETE endpoint pre-checks via `select(func.count).where(Post.tag_id == tag.id)` and raises HTTPException(409, ...). Mirrors the Task 23 pattern for media but in DB-FK shape (`ON DELETE RESTRICT` already exists, so the API would have failed at commit time anyway — the new pre-check just produces a cleaner 409 with a helpful message instead of a 500 from the FK violation).
+
 ## Deferred / not in this index (still tracked)
 
 These are real gaps but lower priority than Task 30 — picked up after the matrix above is empty, or if a higher-priority bug surfaces.
@@ -1168,3 +1196,4 @@ Append-only. Every entry below means a real commit shipped.
 | 27b | Integrations 测试连接 button + multi-provider cards | `c4cf3f1` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-27b/verify.py` PASSED | 2026-05-06 |
 | 27c | Provider priority order UI | `307670e` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-27c/verify.py` PASSED | 2026-05-06 |
 | 25a | Per-post analytics CSV export | `7a80f03` | `pytest tests/test_admin_analytics.py -k csv` 3/3 | `python /tmp/admin-rebuild/task-25a/verify.py` PASSED | 2026-05-06 |
+| 31 | Tags reference scan + 409 delete refusal | `f0eb20c` | `pytest tests/test_admin_taxonomy.py` 15/15 | `python /tmp/admin-rebuild/task-30/verify.py` PASSED | 2026-05-06 |
