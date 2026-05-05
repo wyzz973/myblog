@@ -490,7 +490,7 @@ Implementation note: oklch parse / format helpers in their own module so they're
 
 ### Task 12 — Posts editor: media insert button
 
-**Status:** pending
+**Status:** completed
 **Priority:** medium
 **Frontend evidence:** Reader body images (`reader-body img`).
 **Owner problem:** owner uploads to media library but has to type `![alt](/media/<path>)` by hand. C1 / C6 join.
@@ -511,7 +511,13 @@ Implementation note: oklch parse / format helpers in their own module so they're
 **Snapshot location:** `/tmp/admin-rebuild/task-12/picker.png`, `/tmp/admin-rebuild/task-12/public-image.png`
 **Commit message:** `feat(admin/posts): media library picker for inline images`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `5d3d3e9` (`feat(admin/posts): media library picker for inline images`).
+
+- **Tests:** `npx vitest run src/admin/markdownInsert.test.js` → 9/9 (caret insert, selection replace, reversed-selection handling, range clamp, null-source tolerance, alt → filename fallback, storage_path fallback, missing-path → empty string). Combined regression `npx vitest run` → 102/102 (no Task 1-11 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-12/verify.py` → auto-uploads a 1×1 PNG if library empty → login → /admin/posts → edit vps → wait textarea populate → click 插入图片 → media picker modal opens → click first tile → assert textarea now contains `![…](/media/…)` directive → cleanup deletes seeded media. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-12/{editor,after-insert}.png`.
+
+Implementation note: helpers split into `markdownInsert.js` (pure functions for cursor-aware splice + image-directive builder) and `MediaPicker.jsx` (reusable image-mime-filtered grid modal). PostEditor wires a 插入图片 header button + a `⌘ I` / `Ctrl I` keyboard shortcut on the textarea; after pick, caret restores just past the inserted directive on next paint so the author can keep typing.
 
 ---
 
@@ -1037,3 +1043,4 @@ Append-only. Every entry below means a real commit shipped.
 | 9 | HomeA contacts from API + fallback | `c8f48e1` | `vitest run src/components/contact-row.test.jsx` 7/7 | `python /tmp/admin-rebuild/task-9/verify.py` PASSED | 2026-05-06 |
 | 10 | Comments per-post filter + bulk moderation | `87a8875` | `vitest run src/admin/Comments.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-10/verify.py` PASSED | 2026-05-06 |
 | 11 | Theme color picker + live preview | `bcdd8ca` | `vitest run src/admin/oklch.test.js` 8/8 | `python /tmp/admin-rebuild/task-11/verify.py` PASSED | 2026-05-06 |
+| 12 | Posts editor media picker | `5d3d3e9` | `vitest run src/admin/markdownInsert.test.js` 9/9 | `python /tmp/admin-rebuild/task-12/verify.py` PASSED | 2026-05-06 |
