@@ -981,7 +981,7 @@ Implementation note: new `media.references(s, media_id)` service scans `posts.bo
 
 ### Task 27 — Integrations: test-without-save + provider priority UI
 
-**Status:** pending
+**Status:** in-progress (27a backend done, 27b UI pending)
 **Priority:** medium
 **Frontend evidence:** Pet integrations cost monitoring — provider order matters.
 **Owner problem:** "test connection" only fires on save (mutates state). Provider priority is a comma-string buried in Pet → Behavior.
@@ -1001,7 +1001,16 @@ Implementation note: new `media.references(s, media_id)` service scans `posts.bo
 **Snapshot location:** `/tmp/admin-rebuild/task-27/test-result.png`, `/tmp/admin-rebuild/task-27/order.png`
 **Commit message:** `feat(admin/integrations): test-without-save and provider priority drag-reorder`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** 27a only — `8418544` (`feat(admin/integrations): test-without-save endpoint (Task 27a)`).
+
+#### Task 27a — backend test-without-save endpoint (DONE)
+
+- **Backend tests:** `backend/.venv/bin/python -m pytest tests/test_admin_integrations.py` → 26/26 (6 new for 27a: anthropic ok-when-ping-true, anthropic err-when-ping-false, openai-compat smoke via `monkeypatch.setattr(openai_compat, "chat", fake_chat)`, unknown provider 404, missing api_key surfaces helpful error, requires auth → 401; all assert no row was persisted).
+- **Vitest:** Combined `npx vitest run` → 191/191 (no regression).
+- **Live probe:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-27a/verify.py` → login → POST /integrations/anthropic/test with junk → ok=false → POST /integrations/zhipu/test with junk → ok=false → POST /integrations/notreal/test → 404 → POST anthropic/test {} → ok=false with "api_key required" → unauthenticated probe → 401 → GET /integrations/anthropic before vs after is identical (zero side-effect).
+- **Snapshots:** none (backend-only).
+
+Implementation note: single generic `POST /integrations/{name}/test` endpoint dispatches per-provider. anthropic/github use their existing `ping` adapters; openai-compat providers (zhipu/qwen/doubao/deepseek) use the existing `_smoke` helper. The endpoint always returns 200 with `{ok, error}` for known providers (so the UI can render inline feedback) and 404 only for unknown names. Errors are truncated to 200 chars to keep responses small. The frontend API client gains `apiIntegrations.test(name, body)`. Task 27b (UI: 测试连接 button next to 保存 + drag-reorder provider list) remains pending.
 
 ---
 
@@ -1128,3 +1137,4 @@ Append-only. Every entry below means a real commit shipped.
 | — | Login.jsx i18n + test alignment (maintenance) | `7d1b29f` | `vitest run src/admin/Login.test.jsx` 5/5 | n/a (no UX change) | 2026-05-06 |
 | 22a | Now editor markdown preview toggle | `56ab725` | `vitest run src/admin/nowMarkdown.test.js` 9/9 | `python /tmp/admin-rebuild/task-22a/verify.py` PASSED | 2026-05-06 |
 | 22b | HomeA /now public panel | `4cf1753` | `vitest run src/components/NowPanel.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-22b/verify.py` PASSED | 2026-05-06 |
+| 27a | Integrations test-without-save endpoint | `8418544` | `pytest tests/test_admin_integrations.py` 26/26 | `python /tmp/admin-rebuild/task-27a/verify.py` PASSED | 2026-05-06 |
