@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiNow } from '../api/now.js';
 import { useConfirm, useToast } from './ui/UIProvider.jsx';
 import SectionHead from './ui/SectionHead.jsx';
+import { renderNowMarkdown } from './nowMarkdown.js';
 
 // Admin timeline of "now" entries.
 // Single is_current at any time — backend auto-flips others off when one
@@ -13,6 +14,12 @@ export default function Now() {
   const [error, setError] = useState(null);
   const confirm = useConfirm();
   const toast = useToast();
+  // per-row preview open/closed flag. Rendering is local + sync via
+  // renderNowMarkdown — no API roundtrip needed for short entries.
+  const [previewOpen, setPreviewOpen] = useState({});
+  function togglePreview(id) {
+    setPreviewOpen((p) => ({ ...p, [id]: !p[id] }));
+  }
 
   const [draft, setDraft] = useState(emptyDraft());
   const [creating, setCreating] = useState(false);
@@ -237,6 +244,20 @@ export default function Now() {
                     </button>
                     <button
                       type="button"
+                      style={
+                        previewOpen[row.id]
+                          ? styles.primaryBtnSmall
+                          : styles.btnSmallDisabled
+                      }
+                      onClick={() => togglePreview(row.id)}
+                      disabled={busy}
+                      data-testid={`now-preview-${row.id}`}
+                      data-active={previewOpen[row.id] ? 'true' : undefined}
+                    >
+                      预览
+                    </button>
+                    <button
+                      type="button"
                       style={styles.dangerBtnSmall}
                       onClick={() => deleteRow(row)}
                       disabled={busy}
@@ -245,14 +266,30 @@ export default function Now() {
                     </button>
                   </div>
                 </div>
-                <textarea
-                  style={styles.bodyEditor}
-                  value={merged.body_md}
-                  onChange={(e) =>
-                    bufferEdit(row.id, 'body_md', e.target.value)
-                  }
-                  maxLength={5000}
-                />
+                {previewOpen[row.id] ? (
+                  <div
+                    style={styles.previewBox}
+                    data-testid={`now-preview-body-${row.id}`}
+                  >
+                    <div
+                      className="reader-md"
+                      dangerouslySetInnerHTML={{
+                        __html:
+                          renderNowMarkdown(merged.body_md) ||
+                          '<p style="color:var(--fg-4)">（空）</p>',
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <textarea
+                    style={styles.bodyEditor}
+                    value={merged.body_md}
+                    onChange={(e) =>
+                      bufferEdit(row.id, 'body_md', e.target.value)
+                    }
+                    maxLength={5000}
+                  />
+                )}
                 <div style={styles.metaInline}>
                   <label style={styles.metaItem}>
                     <span style={styles.metaLabel}>listening</span>
@@ -473,6 +510,24 @@ const styles = {
     display: 'flex',
     gap: 8,
     alignItems: 'center',
+  },
+  previewBox: {
+    background: 'var(--bg)',
+    border: '1px dashed var(--line-2)',
+    padding: '8px 12px',
+    fontSize: 13,
+    borderRadius: 4,
+    minHeight: 60,
+    color: 'var(--fg-2)',
+    lineHeight: 1.6,
+  },
+  previewMuted: { color: 'var(--fg-4)', fontSize: 12 },
+  previewError: {
+    color: 'var(--danger, #c44)',
+    fontSize: 12,
+    border: '1px solid var(--danger, #c44)',
+    padding: '6px 10px',
+    borderRadius: 4,
   },
   bodyEditor: {
     background: 'var(--bg)',
