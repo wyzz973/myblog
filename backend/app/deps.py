@@ -77,7 +77,9 @@ def require_scope(scope: Literal["read", "write"]):
             return  # session JWT — full access
         if scope == "write" and token_scope != "write":
             raise HTTPException(status_code=403, detail="api token has read scope only")
-        # write → touch happens here, after authorisation succeeds
+        # Bump last_used_at + usage_count on the scope-passing path. Note:
+        # endpoints without require_scope (pure-read paths like /dashboard)
+        # do NOT tick the counter; only scope-checked uses do.
         token_id = getattr(request.state, "api_token_id", None)
         if token_id is not None:
             await api_tokens_svc.touch_last_used(s, token_id=token_id)

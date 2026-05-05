@@ -15,6 +15,10 @@ class ApiToken(Base):
     scope: Mapped[str] = mapped_column(String(8), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Incremented on every authenticated request that uses this token.
+    # Combined with last_used_at it lets the owner spot tokens that are
+    # silently still in use vs. ones that were issued but never used.
+    usage_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False

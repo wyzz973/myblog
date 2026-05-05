@@ -28,6 +28,7 @@ async def list_tokens(
             name=r.name,
             scope=r.scope,
             last_used_at=r.last_used_at,
+            usage_count=int(r.usage_count or 0),
             revoked_at=r.revoked_at,
             created_at=r.created_at,
         )

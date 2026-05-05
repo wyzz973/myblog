@@ -101,11 +101,12 @@ export default function ApiTokens() {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  <th style={styles.th}>name</th>
-                  <th style={styles.th}>scope</th>
-                  <th style={styles.th}>created</th>
-                  <th style={styles.th}>last used</th>
-                  <th style={styles.th}>status</th>
+                  <th style={styles.th}>名称</th>
+                  <th style={styles.th}>权限</th>
+                  <th style={styles.th}>创建时间</th>
+                  <th style={styles.th}>最近使用</th>
+                  <th style={{ ...styles.th, textAlign: 'right' }}>调用次数</th>
+                  <th style={styles.th}>状态</th>
                   <th style={styles.th} />
                 </tr>
               </thead>
@@ -122,11 +123,17 @@ export default function ApiTokens() {
                       </td>
                       <td style={styles.td}>{fmtDate(t.created_at)}</td>
                       <td style={styles.td}>{t.last_used_at ? fmtDate(t.last_used_at) : '—'}</td>
+                      <td
+                        style={{ ...styles.td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+                        data-testid={`api-token-usage-${t.id}`}
+                      >
+                        {Number(t.usage_count || 0).toLocaleString()}
+                      </td>
                       <td style={styles.td}>
                         {revoked ? (
-                          <span style={{ color: 'var(--fg-4)' }}>revoked</span>
+                          <span style={{ color: 'var(--fg-4)' }}>已吊销</span>
                         ) : (
-                          <span style={{ color: 'var(--accent)' }}>active</span>
+                          <span style={{ color: 'var(--accent)' }}>活动</span>
                         )}
                       </td>
                       <td style={{ ...styles.td, textAlign: 'right' }}>

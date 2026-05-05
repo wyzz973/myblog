@@ -87,5 +87,6 @@ class ApiTokenListItem(_Strict):
     name: str
     scope: str
     last_used_at: datetime | None = None
+    usage_count: int = 0
     revoked_at: datetime | None = None
     created_at: datetime

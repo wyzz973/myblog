@@ -61,8 +61,19 @@ async def verify(s: AsyncSession, raw: str) -> ApiToken | None:
 
 
 async def touch_last_used(s: AsyncSession, *, token_id: int) -> None:
+    """Stamp last_used_at AND increment usage_count atomically.
+
+    Uses SQL `usage_count = usage_count + 1` so concurrent requests
+    against the same token don't lose updates (which a read-modify-write
+    in Python would).
+    """
     await s.execute(
-        update(ApiToken).where(ApiToken.id == token_id).values(last_used_at=datetime.now(UTC))
+        update(ApiToken)
+        .where(ApiToken.id == token_id)
+        .values(
+            last_used_at=datetime.now(UTC),
+            usage_count=ApiToken.usage_count + 1,
+        )
     )
     await s.commit()
 

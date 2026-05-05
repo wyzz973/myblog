@@ -169,3 +169,80 @@ async def test_session_only_endpoint_rejects_token(client, admin_token, cleanup_
     async with AsyncSessionLocal() as s:
         row = (await s.execute(select(ApiToken).where(ApiToken.id == tid))).scalar_one()
         assert row.last_used_at is None
+
+
+# --- Task 29: usage_count counter on api_tokens ---
+
+
+async def test_list_includes_usage_count(client, admin_token, cleanup_tokens):
+    create = await client.post(
+        "/api/admin/api-tokens",
+        json={"name": "t29", "scope": "read"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert create.status_code == 200
+    listing = await client.get(
+        "/api/admin/api-tokens",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    body = listing.json()
+    assert all("usage_count" in t for t in body), body
+    # New token has never been used.
+    fresh = next(t for t in body if t["name"] == "t29")
+    assert fresh["usage_count"] == 0
+
+
+async def test_usage_count_increments_on_scope_passing_request(
+    client, admin_token, cleanup_tokens,
+):
+    """Counter ticks on each scope-passing token use. Probed via PATCH
+    /api/admin/posts (write-scope) since that's where the touch fires
+    today. The post doesn't have to exist — the auth + scope check fires
+    before the post lookup."""
+    create = await client.post(
+        "/api/admin/api-tokens",
+        json={"name": "t29-counted", "scope": "write"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    raw = create.json()["token"]
+    md = "---\nid: x\nn: '999'\ntitle: t\ntag: devtools\ndate: 2026-01-01\n---\n\nbody\n"
+    for _ in range(3):
+        r = await client.patch(
+            "/api/admin/posts/does-not-exist-t29",
+            json={"markdown": md},
+            headers={"Authorization": f"Bearer {raw}"},
+        )
+        assert r.status_code in (404, 422), r.text
+
+    listing = (await client.get(
+        "/api/admin/api-tokens",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )).json()
+    row = next(t for t in listing if t["name"] == "t29-counted")
+    assert row["usage_count"] == 3, listing
+    assert row["last_used_at"] is not None
+
+
+async def test_usage_count_not_bumped_on_invalid_token(
+    client, admin_token, cleanup_tokens,
+):
+    create = await client.post(
+        "/api/admin/api-tokens",
+        json={"name": "t29-rejected", "scope": "write"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    raw = create.json()["token"]
+    bad = raw[:-1] + ("A" if raw[-1] != "A" else "B")
+    md = "---\nid: x\nn: '999'\ntitle: t\ntag: devtools\ndate: 2026-01-01\n---\n\nbody\n"
+    r = await client.patch(
+        "/api/admin/posts/does-not-exist-t29",
+        json={"markdown": md},
+        headers={"Authorization": f"Bearer {bad}"},
+    )
+    assert r.status_code == 401
+    listing = (await client.get(
+        "/api/admin/api-tokens",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )).json()
+    row = next(t for t in listing if t["name"] == "t29-rejected")
+    assert row["usage_count"] == 0
