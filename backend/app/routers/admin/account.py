@@ -5,6 +5,7 @@ from app.db import get_session
 from app.deps import current_session_admin
 from app.models import Account
 from app.schemas.auth import (
+    EmailChangeRequest,
     MagicLinkToggleRequest,
     PasswordChangeRequest,
     TfaDisableRequest,
@@ -87,6 +88,31 @@ async def change_password(
     await write_event(s, type="account.password.changed", actor=admin.email)
     await s.commit()
     return Response(status_code=204)
+
+
+# Task 28a: rotate the admin email. Session-only (api tokens explicitly
+# rejected via current_session_admin) and password-gated. Single-account
+# site so a unique-collision check is unnecessary today, but we still
+# normalize to lowercase to avoid case-only "changes" flying through.
+@router.post("/account/email")
+async def change_email(
+    req: EmailChangeRequest,
+    admin: Account = Depends(current_session_admin),
+    s: AsyncSession = Depends(get_session),
+) -> dict:
+    if not verify_password(admin.password_hash, req.current_password):
+        raise HTTPException(400, "current password is incorrect")
+    new_email = req.new_email.strip().lower()
+    if new_email == admin.email.lower():
+        raise HTTPException(400, "new email must differ from current")
+    old_email = admin.email
+    admin.email = new_email
+    await write_event(
+        s, type="account.email.changed", actor=old_email,
+        meta={"old": old_email, "new": new_email},
+    )
+    await s.commit()
+    return {"email": admin.email}
 
 
 @router.patch("/account/magic-link")

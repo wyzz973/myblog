@@ -70,6 +70,14 @@ class PasswordChangeRequest(_Strict):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class EmailChangeRequest(_Strict):
+    """Task 28a: rotate the admin email. Single-account site so we just
+    overwrite — no magic-link confirmation step in this revision (28b
+    would add it). Owner provides the current password as a knock test."""
+    current_password: str = Field(min_length=1, max_length=128)
+    new_email: EmailStr
+
+
 class ApiTokenCreateRequest(_Strict):
     name: str = Field(min_length=1, max_length=64)
     scope: Literal["read", "write"]
