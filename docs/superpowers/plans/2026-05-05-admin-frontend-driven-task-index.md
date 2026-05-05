@@ -820,7 +820,7 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 
 ### Task 22 — Now: markdown preview + public surface decision
 
-**Status:** pending
+**Status:** in-progress (22a complete, 22b pending)
 **Priority:** medium
 **Frontend evidence:** TopBar `/now` link — currently anchors at contributions head; no rendered `now` body. C5.
 **Owner problem:** an entire feature (now entries) has no public render. Owner edits into a void.
@@ -839,7 +839,15 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 **Snapshot location:** `/tmp/admin-rebuild/task-22/admin-preview.png`, `/tmp/admin-rebuild/task-22/public-now.png`
 **Commit message:** `feat(now): markdown preview in admin and public render on home`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** 22a only — `56ab725` (`feat(admin/now): markdown preview toggle in editor (Task 22a)`). 22b (public /now panel on HomeA) is still pending.
+
+#### Task 22a — admin preview toggle (DONE)
+
+- **Tests:** `npx vitest run src/admin/nowMarkdown.test.js` → 9/9 (paragraphs, **bold**, *italic*, `code`, list with `- ` prefix, blank-line paragraph break, HTML escaping, bare http linkifier, list-then-paragraph). Combined `npx vitest run` → 186/186 (no Task 1-23 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-22a/verify.py` → login → /admin/now → post entry with `**bold**` + 2-item list → click 预览 → assert div.reader-md contains `<strong>` → click again → assert textarea returns → cleanup deletes row.
+- **Snapshots:** `/tmp/admin-rebuild/task-22a/now-preview.png`.
+
+Implementation note: the post `render-preview` endpoint requires a full valid post frontmatter (id pattern + n field), which would require a stub-and-strip dance for short Now blurbs. Instead we ship `src/admin/nowMarkdown.js` — a 60-LOC inline renderer that handles the markdown subset that actually appears in Now entries (paragraphs, bold, italic, inline code, bullet lists, bare http links). Output is HTML-escape-first to prevent injection. The toggle button uses `data-testid=now-preview-{id}` and `data-active="true"` so the keyboard layer (Task 17) can still operate on the row even while preview is shown. Public surface (Task 22b) still needs the /now panel on HomeA.
 
 ---
 
@@ -1108,3 +1116,5 @@ Append-only. Every entry below means a real commit shipped.
 | 19 | Unified ConfirmModal + Toast | `e86e322` | `vitest run src/admin/ui/ src/admin/Comments.test.jsx src/admin/pet/PetConversationDetail.test.jsx` 16/16 | `python /tmp/admin-rebuild/task-19/verify.py` PASSED | 2026-05-06 |
 | 20 | SectionHead + Kbd visual primitives | `0c61615` | `vitest run src/admin/ui/SectionHead.test.jsx` 6/6 | `python /tmp/admin-rebuild/task-20/verify.py` PASSED | 2026-05-06 |
 | 23 | Media reference scan + 409 delete refusal | `974063b` | `pytest tests/test_admin_media.py` 21/21 | `python /tmp/admin-rebuild/task-23/verify.py` PASSED | 2026-05-06 |
+| — | Login.jsx i18n + test alignment (maintenance) | `7d1b29f` | `vitest run src/admin/Login.test.jsx` 5/5 | n/a (no UX change) | 2026-05-06 |
+| 22a | Now editor markdown preview toggle | `56ab725` | `vitest run src/admin/nowMarkdown.test.js` 9/9 | `python /tmp/admin-rebuild/task-22a/verify.py` PASSED | 2026-05-06 |
