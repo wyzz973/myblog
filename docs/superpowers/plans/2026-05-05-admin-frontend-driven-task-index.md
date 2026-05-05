@@ -1089,7 +1089,7 @@ Implementation note: simple ↑/↓ arrow buttons instead of HTML5 drag-and-drop
 
 ### Task 28 — Account: email change
 
-**Status:** pending
+**Status:** in-progress (28a backend endpoint done; magic-link confirm + UI pending)
 **Priority:** medium
 **Frontend evidence:** Profile page reads-only email; account login uses email.
 **Owner problem:** owner cannot rotate the admin email.
@@ -1110,7 +1110,15 @@ Implementation note: simple ↑/↓ arrow buttons instead of HTML5 drag-and-drop
 **Snapshot location:** `/tmp/admin-rebuild/task-28/changed.png`
 **Commit message:** `feat(admin/account): change email with magic-link confirmation`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** 28a only — `da9dbfb` (`feat(admin/account): change email endpoint with password gate (Task 28a)`).
+
+#### Task 28a — backend endpoint (DONE)
+
+- **Backend tests:** `backend/.venv/bin/python -m pytest tests/test_admin_email_change.py` → 7/7 (auth required, happy path + login flips, wrong password 400, same email 400, invalid address 422, event log row written, api-token rejected with 401 because endpoint is session-only). Combined with password tests → 12/12.
+- **Live probe:** `/tmp/admin-rebuild/task-28a/verify.py` PASSED → wrong password 400 → same email 400 → invalid email 422 → rotate to `wyzz973+t28a@gmail.com` → login with new email 200 + new token → login with old email 401 → restore via the same endpoint to original email.
+- **Commit:** `da9dbfb`.
+
+Implementation note: `EmailChangeRequest{current_password, new_email: EmailStr}` schema; the endpoint sits at `POST /api/admin/account/email` and depends on `current_session_admin` so api-tokens (read or write scope) cannot rotate the email. Verifies the password via `verify_password(stored_hash, current_password)`, normalizes `new_email` to lowercase, refuses if it equals the current email (avoids "case-only changes"). Writes `account.email.changed` to event_log with `{old, new}` meta so the activity feed shows the rotation. Single-account site so we don't check uniqueness today (accounts.email has a UNIQUE constraint anyway). 28b (magic-link confirmation flow + Account.jsx UI form) is deferred — the endpoint alone closes the "I literally can't change the admin email" gap.
 
 ---
 
@@ -1267,6 +1275,7 @@ Append-only. Every entry below means a real commit shipped.
 | 26b | PetUsage per-mode pie chart | `506c8a0` | `vitest run src/admin/pet/petUsageChart.test.js` 16/16 | `python /tmp/admin-rebuild/task-26b/verify.py` PASSED | 2026-05-06 |
 | 24a | GitHub repo listing endpoint + cache | `ab2ca0d` | `pytest tests/test_admin_integrations.py` 30/30 | n/a (mocked GraphQL; live calls would hit real GitHub) | 2026-05-06 |
 | 24b | GitHub import modal on Projects | `42e0781` | `vitest run` 212/212 | `python /tmp/admin-rebuild/task-24b/verify.py` PASSED | 2026-05-06 |
+| 28a | Account email change endpoint | `da9dbfb` | `pytest tests/test_admin_email_change.py` 7/7 | `python /tmp/admin-rebuild/task-28a/verify.py` PASSED | 2026-05-06 |
 
 ---
 
