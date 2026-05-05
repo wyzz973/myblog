@@ -820,7 +820,7 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 
 ### Task 22 — Now: markdown preview + public surface decision
 
-**Status:** in-progress (22a complete, 22b pending)
+**Status:** completed (22a + 22b)
 **Priority:** medium
 **Frontend evidence:** TopBar `/now` link — currently anchors at contributions head; no rendered `now` body. C5.
 **Owner problem:** an entire feature (now entries) has no public render. Owner edits into a void.
@@ -847,7 +847,16 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 - **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-22a/verify.py` → login → /admin/now → post entry with `**bold**` + 2-item list → click 预览 → assert div.reader-md contains `<strong>` → click again → assert textarea returns → cleanup deletes row.
 - **Snapshots:** `/tmp/admin-rebuild/task-22a/now-preview.png`.
 
-Implementation note: the post `render-preview` endpoint requires a full valid post frontmatter (id pattern + n field), which would require a stub-and-strip dance for short Now blurbs. Instead we ship `src/admin/nowMarkdown.js` — a 60-LOC inline renderer that handles the markdown subset that actually appears in Now entries (paragraphs, bold, italic, inline code, bullet lists, bare http links). Output is HTML-escape-first to prevent injection. The toggle button uses `data-testid=now-preview-{id}` and `data-active="true"` so the keyboard layer (Task 17) can still operate on the row even while preview is shown. Public surface (Task 22b) still needs the /now panel on HomeA.
+Implementation note: the post `render-preview` endpoint requires a full valid post frontmatter (id pattern + n field), which would require a stub-and-strip dance for short Now blurbs. Instead we ship `src/admin/nowMarkdown.js` — a 60-LOC inline renderer that handles the markdown subset that actually appears in Now entries (paragraphs, bold, italic, inline code, bullet lists, bare http links). Output is HTML-escape-first to prevent injection. The toggle button uses `data-testid=now-preview-{id}` and `data-active="true"` so the keyboard layer (Task 17) can still operate on the row even while preview is shown.
+
+#### Task 22b — public /now panel on HomeA (DONE)
+
+- **Tests:** `npx vitest run src/components/NowPanel.test.jsx` → 5/5 (renders nothing while loading / on error / when current is null; renders body markdown + listening + reading; omits meta strip when both are empty). Combined `npx vitest run` → 191/191 (no Task 1-23 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-22b/verify.py` → seed admin Now entry with `**marker**` body + listening + reading → visit / → assert `[data-testid=now-panel]` mounted → assert `<strong>marker</strong>` rendered in `.now-body` → assert listening "lofi mix" + reading "Rust book" surfaced → assert DOM order `#contributions → [data-testid=now-panel] → #writing` → cleanup deletes the entry.
+- **Snapshots:** `/tmp/admin-rebuild/task-22b/homea-now-panel.png` (full-page).
+- **Commit:** `4cf1753` (`feat(now): public /now panel on HomeA between contributions and posts`).
+
+Implementation note: new `api.now()` + `useNow()` hook expose the existing `/api/now` endpoint to the public site. `NowPanel` reuses the admin's `nowMarkdown.js` renderer so admin preview and public render produce identical HTML — one source of truth. The HomeA topbar's `/now` anchor previously pointed at the contributions section (cosmetic id misnomer); contributions now uses `id="contributions"` and the topbar `#now` anchor lands on the actual NowPanel. The panel renders nothing while loading / on error / when `current` is null, so a fresh site without any Now entry stays clean. Listening / reading meta strip is omitted when both fields are empty.
 
 ---
 
@@ -1118,3 +1127,4 @@ Append-only. Every entry below means a real commit shipped.
 | 23 | Media reference scan + 409 delete refusal | `974063b` | `pytest tests/test_admin_media.py` 21/21 | `python /tmp/admin-rebuild/task-23/verify.py` PASSED | 2026-05-06 |
 | — | Login.jsx i18n + test alignment (maintenance) | `7d1b29f` | `vitest run src/admin/Login.test.jsx` 5/5 | n/a (no UX change) | 2026-05-06 |
 | 22a | Now editor markdown preview toggle | `56ab725` | `vitest run src/admin/nowMarkdown.test.js` 9/9 | `python /tmp/admin-rebuild/task-22a/verify.py` PASSED | 2026-05-06 |
+| 22b | HomeA /now public panel | `4cf1753` | `vitest run src/components/NowPanel.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-22b/verify.py` PASSED | 2026-05-06 |
