@@ -657,7 +657,7 @@ Implementation note: pure helpers in `src/admin/commandPaletteItems.js` (build /
 
 ### Task 17 — Global keyboard shortcuts (j/k, Enter, ?, g <key>)
 
-**Status:** pending
+**Status:** completed
 **Priority:** medium
 **Frontend evidence:** PRD §6.2 — match public's keyboard-first model.
 **Owner problem:** mouse-only navigation is slow.
@@ -680,7 +680,13 @@ Implementation note: pure helpers in `src/admin/commandPaletteItems.js` (build /
 **Snapshot location:** `/tmp/admin-rebuild/task-17/help-dialog.png`
 **Commit message:** `feat(admin/kbd): j/k navigation, ? help, g <x> jumps`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `f688b6e` (`feat(admin/kbd): j/k navigation, ? help, g <x> jumps`).
+
+- **Tests:** `npx vitest run src/admin/keyboardShortcuts.test.js` → 11/11 (JUMP_MAP, SHORTCUT_GROUPS coverage, resolveJump case-insensitive, shouldIgnoreEvent for modifier / textarea / input / contentEditable / palette-open / data-shortcut-suppress). Combined regression `npx vitest run` → 150/150 (no Task 1-16 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-17/verify.py` → login → `g p` jumps to /admin/posts → first row auto-focuses → `j` moves to row 1 (of 5) → `k` returns to row 0 → Enter opens editor → re-navigate → `n` opens new-post editor → `?` opens help dialog → Esc closes → `g a` jumps to /admin/activity-log → typing in search input is NOT hijacked (shortcuts properly suppressed). All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-17/help-dialog.png`, `/activity-after-jump.png`.
+
+Implementation note: pure helpers in `src/admin/keyboardShortcuts.js` (`JUMP_MAP`, `SHORTCUT_GROUPS`, `resolveJump`, `shouldIgnoreEvent`) keep the React layer thin. `useGlobalShortcuts` owns the `?` and `g <x>` two-key sequence (1.5s pending window) and delegates suppression to `shouldIgnoreEvent`, which DOM-probes for `[data-testid=admin-palette]` and any `[data-shortcut-suppress=true]` surface so the help dialog and future modals can opt in. Posts page adds `j/k/Enter/e/n` via a local listener that auto-detaches whenever the editor is open. Row-level focus is rendered via `data-focused="true"` + an accent left-border, with `scrollIntoView` on focus change.
 
 ---
 
@@ -1072,3 +1078,4 @@ Append-only. Every entry below means a real commit shipped.
 | 14 | Inbox page (运营中枢) | `040356e` | `vitest run src/admin/Inbox.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-14/verify.py` PASSED | 2026-05-06 |
 | 15 | Posts editor autosave drafts | `d54d90f` | `vitest run src/admin/draftStore.test.js` 9/9 | `python /tmp/admin-rebuild/task-15/verify.py` PASSED | 2026-05-06 |
 | 16 | Admin ⌘K command palette | `28cae37` | `vitest run src/admin/CommandPalette.test.jsx src/admin/commandPaletteItems.test.js` 18/18 | `python /tmp/admin-rebuild/task-16/verify.py` PASSED | 2026-05-06 |
+| 17 | Global keyboard shortcuts (?, g x, j/k) | `f688b6e` | `vitest run src/admin/keyboardShortcuts.test.js` 11/11 | `python /tmp/admin-rebuild/task-17/verify.py` PASSED | 2026-05-06 |
