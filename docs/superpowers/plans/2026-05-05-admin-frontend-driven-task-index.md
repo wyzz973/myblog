@@ -389,7 +389,7 @@ Implementation note: backend gained a batch `likes.get_counts(post_ids)` so the 
 
 ### Task 9 — Contacts list wired into HomeA (replace 小红书/抖音 hardcode)
 
-**Status:** pending
+**Status:** completed
 **Priority:** high
 **Frontend evidence:** `HomeA.jsx:400-426` literal entries; `apiContacts` defined and unused on public.
 **Owner problem:** owner can't change contact channels without editing source code; today's "管理 contacts" page is a dead-end. C8.
@@ -412,7 +412,13 @@ Implementation note: backend gained a batch `likes.get_counts(post_ids)` so the 
 **Snapshot location:** `/tmp/admin-rebuild/task-9/admin-contacts.png`, `/tmp/admin-rebuild/task-9/public-contacts.png`
 **Commit message:** `feat(home): render contacts from API and replace hardcoded socials`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `c8f48e1` (`feat(home): render contacts from API and replace hardcoded socials`).
+
+- **Tests:** `npx vitest run src/components/contact-row.test.jsx` → 7/7 (fallback builder picks up email/github, skips missing fields, ContactRow maps each API item to a tile, http items render as anchors with target=_blank, items without protocol render as click-to-copy buttons, empty contacts list falls back, completely empty site renders nothing). Combined regression `npx vitest run src/components/contact-row.test.jsx src/api/client.test.js src/admin/pet/PetTemplates.test.jsx src/admin/SiteIdentity.test.jsx src/admin/ActivityLog.test.jsx src/admin/Layout.test.jsx src/admin/frontmatter.test.js src/api/admin.test.js src/admin/Login.test.jsx` → 52/52 (no Task 1-8 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-9/verify.py` → seed 小红书 (https) + 抖音 (no href) via API → public `/` shows both tiles (小红书 as `<a target=_blank>`, 抖音 as click-to-copy `<button>`) → delete seeded contacts → reload → tiles gone, fallback renders email + github from site. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-9/{public-with-seeded,public-fallback}.png`.
+
+Implementation note: contact tile decision is href-shape based — items with http(s) / mailto / tel / absolute-path render as anchors, others as click-to-copy buttons. This pattern lets owners add unstructured handles (a 抖音 ID, a discord username) without inventing fake URL schemes. ContactRow lives in its own module so the unit tests don't drag in HomeA's heavy hook surface.
 
 ---
 
@@ -1016,3 +1022,4 @@ Append-only. Every entry below means a real commit shipped.
 | 6 | Site identity merged workflow | `7d404a5` | `vitest run src/admin/SiteIdentity.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-6/verify.py` PASSED | 2026-05-06 |
 | 7 | Pet templates: 12 modes | `993465e` | `vitest run src/admin/pet/PetTemplates.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-7/verify.py` PASSED | 2026-05-06 |
 | 8 | Reader likes wired to server + admin column | `fcab65e` | `vitest run src/api/client.test.js` 3/3 | `python /tmp/admin-rebuild/task-8/verify.py` PASSED | 2026-05-06 |
+| 9 | HomeA contacts from API + fallback | `c8f48e1` | `vitest run src/components/contact-row.test.jsx` 7/7 | `python /tmp/admin-rebuild/task-9/verify.py` PASSED | 2026-05-06 |
