@@ -924,7 +924,7 @@ Implementation note: new `media.references(s, media_id)` service scans `posts.bo
 
 ### Task 25 — Analytics: custom date range + CSV export + per-post page
 
-**Status:** in-progress (25a CSV export done; 25b custom range + 25c per-post page pending)
+**Status:** in-progress (25a CSV + 25b since-date done; 25c per-post page + 25b-arbitrary-end pending)
 **Priority:** medium
 **Frontend evidence:** `Reader.jsx` hit beacon — every page view feeds analytics.
 **Owner problem:** 7/30/90 chips can't compare May to April; cannot export.
@@ -959,6 +959,15 @@ Implementation note: new `media.references(s, media_id)` service scans `posts.bo
 - **Snapshots:** `/tmp/admin-rebuild/task-25a/{after-export.png,downloaded.csv}`.
 
 Implementation note: `GET /api/admin/analytics/posts.csv?days=N` returns a UTF-8-BOM-prefixed CSV (`﻿` Excel preamble) with columns `post_id,title,hits`, sourced from the existing `analytics_svc.per_post(days, limit=1000)`. The Content-Disposition filename embeds the UTC date stamp + window so multiple exports don't collide. Frontend `apiAnalytics.downloadPostsCsv(range)` does an authenticated fetch (the bearer token can't ride a plain `<a>` link), wraps the response as a Blob, creates an in-memory object URL, and triggers a synthetic `<a download>` click — works in vanilla browsers without any extra deps. The Analytics page gains an `<ExportCsvButton range={range} />` next to the range chips with `data-testid=analytics-export-csv`. csv.writer escapes quotes-in-titles (`"Hello, ""world"""`); test assertions use `.replace("\r\n", "\n")` because csv.writer's default line terminator is CRLF. One latent fixture bug surfaced: the existing `test_analytics_posts_returns_titled_rows` uses local `date.today() - 1` for "yesterday" while the service filter uses UTC — racy when the runner is in a tz ahead of UTC. The new CSV test imports `datetime.now(UTC).date()` directly to avoid the race.
+
+#### Task 25b — custom since-date picker (DONE)
+
+- **Tests:** `npx vitest run src/api/analytics.test.js` → 5/5 (parses `since:YYYY-MM-DD` to days, clamps 1..365, falls back to 30 on garbage / future / malformed). Combined `npx vitest run` → 203/203 (no regression).
+- **Playwright:** `/tmp/admin-rebuild/task-25b/verify.py` PASSED → login → /admin/analytics → since-date picker starts empty → `date_input.fill('YYYY-MM-DD')` for 14-days-ago → wait for performance entry showing the analytics call with `days=15` (= 14 + 1 inclusive) → assert `[data-testid=analytics-since-date][data-active=true]` → 3 request(s) carried `days=15` (bundle + posts + tags) → click 30 天 chip → input clears + `data-active` removed.
+- **Snapshots:** `/tmp/admin-rebuild/task-25b/since-active.png`.
+- **Commit:** `a7e7e0a` (`feat(admin/analytics): custom since-date picker (Task 25b)`).
+
+Implementation note: rather than extend the backend service signatures (which would touch `timeseries / per_post / per_tag / top_paths / _merge_jsonb_top` — 5 functions, all currently `days`-parameterized), 25b reuses the existing `days` API by deriving days at the client. `rangeToDays('since:2026-04-21')` computes `(today_utc − start_date) + 1` and clamps to `[1, 365]`. The Analytics page encodes the active range as `since:YYYY-MM-DD` so the same prop drives the bundle/posts/tags fetches AND the CSV download. Picking "today" gives 1 day; clearing the input falls back to the default 30d preset. Arbitrary end-date support (i.e. `[start, end]` where end ≠ today) is left for Task 25c since the existing service is "ending now" by construction; that would require changing service signatures across the board.
 
 ---
 
@@ -1217,6 +1226,7 @@ Append-only. Every entry below means a real commit shipped.
 | 35 | Localize remaining admin pages + mobile responsive | `017e930` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-35/verify.py` PASSED (14 pages) | 2026-05-06 |
 | 30 | Bulk markdown post upload UI | `c865b85` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-30b/verify.py` PASSED | 2026-05-06 |
 | 26a | PetUsage daily stacked bar chart | `81ab961` | `vitest run src/admin/pet/petUsageChart.test.js` 7/7 | `python /tmp/admin-rebuild/task-26a/verify.py` PASSED | 2026-05-06 |
+| 25b | Analytics custom since-date picker | `a7e7e0a` | `vitest run src/api/analytics.test.js` 5/5 | `python /tmp/admin-rebuild/task-25b/verify.py` PASSED | 2026-05-06 |
 
 ---
 
