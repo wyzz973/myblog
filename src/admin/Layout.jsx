@@ -1,25 +1,87 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
 
-const NAV = [
-  { to: '/admin/dashboard', label: 'Dashboard' },
-  { to: '/admin/analytics', label: 'Analytics' },
-  { to: '/admin/posts', label: 'Posts' },
-  { to: '/admin/media', label: 'Media' },
-  { to: '/admin/comments', label: 'Comments' },
-  { to: '/admin/tags', label: 'Tags' },
-  { to: '/admin/site', label: 'Site' },
-  { to: '/admin/profile', label: 'Profile' },
-  { to: '/admin/contacts', label: 'Contacts' },
-  { to: '/admin/projects', label: 'Projects' },
-  { to: '/admin/now', label: 'Now' },
-  { to: '/admin/pet', label: 'Pet' },
-  { to: '/admin/settings', label: 'Settings' },
+// Six workflow groups, mirroring the public site's `01 / 02 / 03` numbered
+// section motif (HomeA.jsx). Routes are unchanged in this rebuild step;
+// future tasks split / merge specific pages (e.g. Profile + Site → 站点身份,
+// Settings sub-tabs → top-level entries).
+const NAV_GROUPS = [
+  {
+    n: '01',
+    label: '运营中枢',
+    items: [{ to: '/admin/dashboard', label: '仪表盘' }],
+  },
+  {
+    n: '02',
+    label: '内容',
+    items: [
+      { to: '/admin/posts', label: '文章' },
+      { to: '/admin/tags', label: '标签' },
+      { to: '/admin/media', label: '媒体' },
+      { to: '/admin/now', label: '近况' },
+      { to: '/admin/projects', label: '项目' },
+    ],
+  },
+  {
+    n: '03',
+    label: '观察',
+    items: [
+      { to: '/admin/analytics', label: '数据分析' },
+      { to: '/admin/comments', label: '评论' },
+    ],
+  },
+  {
+    n: '04',
+    label: '首页与品牌',
+    items: [
+      { to: '/admin/profile', label: '作者资料' },
+      { to: '/admin/site', label: '站点' },
+      { to: '/admin/contacts', label: '联系方式' },
+    ],
+  },
+  {
+    n: '05',
+    label: '宠物',
+    items: [{ to: '/admin/pet', label: '宠物助手' }],
+  },
+  {
+    n: '06',
+    label: '系统',
+    items: [{ to: '/admin/settings', label: '设置' }],
+  },
 ];
+
+// Flat lookup so the topbar can render a breadcrumb without re-walking the
+// nav tree on every render.
+const ROUTE_INDEX = (() => {
+  const idx = {};
+  for (const g of NAV_GROUPS) {
+    for (const it of g.items) {
+      idx[it.to] = { n: g.n, group: g.label, label: it.label };
+    }
+  }
+  return idx;
+})();
+
+function findCrumb(pathname) {
+  if (!pathname) return null;
+  // Exact match first; fall back to the longest registered prefix so
+  // /admin/posts/__new__ still resolves to the 文章 entry.
+  if (ROUTE_INDEX[pathname]) return ROUTE_INDEX[pathname];
+  let best = null;
+  for (const route of Object.keys(ROUTE_INDEX)) {
+    if (pathname === route || pathname.startsWith(route + '/')) {
+      if (!best || route.length > best.length) best = route;
+    }
+  }
+  return best ? ROUTE_INDEX[best] : null;
+}
 
 export default function Layout() {
   const { email, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const crumb = findCrumb(location.pathname);
 
   function onLogout() {
     logout();
@@ -33,37 +95,57 @@ export default function Layout() {
           <span className="admin-brand-dot" style={styles.brandDot} />
           <div>
             <div style={styles.brandTitle}>myblog</div>
-            <div style={styles.brandSub}>admin console</div>
+            <div style={styles.brandSub}>管理后台</div>
           </div>
         </div>
-        <nav className="admin-nav" style={styles.nav}>
-          {NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className="admin-nav-item"
-              style={({ isActive }) => ({
-                ...styles.navItem,
-                ...(isActive ? styles.navItemActive : null),
-              })}
-            >
-              <span>{item.label}</span>
-            </NavLink>
+        <nav className="admin-nav" style={styles.nav} aria-label="admin navigation">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.n} style={styles.navGroup} data-testid={`nav-group-${group.n}`}>
+              <div style={styles.navGroupHead}>
+                <span style={styles.navGroupNum}>{group.n}</span>
+                <span style={styles.navGroupLabel}>{group.label}</span>
+              </div>
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className="admin-nav-item"
+                  style={({ isActive }) => ({
+                    ...styles.navItem,
+                    ...(isActive ? styles.navItemActive : null),
+                  })}
+                >
+                  <span>{item.label}</span>
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
       </aside>
 
       <div className="admin-main" style={styles.main}>
         <header className="admin-topbar" style={styles.topbar}>
-          <div className="admin-crumbs" style={styles.crumbs}>
+          <div className="admin-crumbs" style={styles.crumbs} data-testid="breadcrumb">
             <span style={styles.dim}>~</span>
             <span style={styles.sep}>/</span>
             <span>admin</span>
+            {crumb && (
+              <>
+                <span style={styles.sep}>/</span>
+                <span style={styles.crumbGroup}>
+                  <span style={styles.crumbGroupNum}>{crumb.n}</span>
+                  <span style={styles.crumbGroupSep}>·</span>
+                  <span>{crumb.group}</span>
+                </span>
+                <span style={styles.sep}>/</span>
+                <span style={styles.crumbLeaf}>{crumb.label}</span>
+              </>
+            )}
           </div>
           <div className="admin-user-box" style={styles.userBox}>
             <span className="admin-user-email" style={styles.userEmail}>{email || 'unknown'}</span>
             <button type="button" onClick={onLogout} style={styles.logout}>
-              logout
+              退出
             </button>
           </div>
         </header>
@@ -112,22 +194,39 @@ const styles = {
   },
   brandTitle: { fontSize: 13, fontWeight: 600, color: 'var(--fg)' },
   brandSub: { fontSize: 10, color: 'var(--fg-3)', letterSpacing: '0.06em' },
-  nav: { display: 'flex', flexDirection: 'column', gap: 2 },
+  nav: { display: 'flex', flexDirection: 'column', gap: 12 },
+  navGroup: { display: 'flex', flexDirection: 'column', gap: 2 },
+  navGroupHead: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 6,
+    padding: '4px 10px 6px',
+    fontSize: 9,
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    color: 'var(--fg-4)',
+  },
+  navGroupNum: {
+    color: 'var(--accent)',
+    fontWeight: 600,
+  },
+  navGroupLabel: {},
   navItem: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '8px 10px',
+    padding: '7px 10px 7px 12px',
     fontSize: 12,
     color: 'var(--fg-2)',
     borderRadius: 4,
     textDecoration: 'none',
-    border: '1px solid transparent',
+    borderLeft: '2px solid transparent',
   },
   navItemActive: {
     background: 'color-mix(in oklab, var(--accent) 14%, transparent)',
-    border: '1px solid color-mix(in oklab, var(--accent) 40%, transparent)',
     color: 'var(--fg)',
+    fontWeight: 600,
+    borderLeft: '2px solid var(--accent)',
   },
   main: {
     display: 'flex',
@@ -148,6 +247,19 @@ const styles = {
     fontSize: 12,
   },
   crumbs: { display: 'flex', alignItems: 'center', gap: 6, color: 'var(--fg-2)' },
+  crumbGroup: {
+    display: 'inline-flex',
+    alignItems: 'baseline',
+    gap: 4,
+    color: 'var(--fg-3)',
+  },
+  crumbGroupNum: {
+    color: 'var(--accent)',
+    fontSize: 10,
+    letterSpacing: '0.08em',
+  },
+  crumbGroupSep: { color: 'var(--fg-4)' },
+  crumbLeaf: { color: 'var(--fg)' },
   dim: { color: 'var(--fg-4)' },
   sep: { color: 'var(--fg-4)' },
   userBox: { display: 'flex', alignItems: 'center', gap: 12 },
