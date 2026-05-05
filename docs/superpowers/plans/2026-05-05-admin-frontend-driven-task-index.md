@@ -1087,7 +1087,7 @@ Implementation note: simple ↑/↓ arrow buttons instead of HTML5 drag-and-drop
 
 ### Task 29 — API tokens: usage history
 
-**Status:** pending
+**Status:** in-progress (29 usage_count counter done; per-request log table deferred)
 **Priority:** low
 **Frontend evidence:** owner cost monitoring.
 **Owner problem:** `last_used_at` only — cannot answer "is anyone still using token X?"
@@ -1106,7 +1106,14 @@ Implementation note: simple ↑/↓ arrow buttons instead of HTML5 drag-and-drop
 **Snapshot location:** `/tmp/admin-rebuild/task-29/usage.png`
 **Commit message:** `feat(admin/api-tokens): per-token usage history`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** Counter (Task 29 main) — `cae0a56` (`feat(admin/api-tokens): add usage_count column + UI (Task 29)`). Per-request log table is deferred.
+
+- **Backend tests:** `backend/.venv/bin/python -m pytest tests/test_api_tokens.py` → 12/12 (3 new for Task 29: list returns usage_count + new tokens have 0; counter increments on each scope-passing request via PATCH /api/admin/posts; counter doesn't bump on tampered token → 401).
+- **Vitest:** Combined `npx vitest run` → 203/203 (no regression).
+- **Playwright:** `/tmp/admin-rebuild/task-29/verify.py` PASSED → create write-scope token → make 2 PATCH /api/admin/posts/<unknown> calls (each passes auth + scope, then 404s) → list shows usage_count=2 + last_used_at populated → /admin/settings UI shows `[data-testid=api-token-usage-{id}]` text "2".
+- **Snapshots:** `/tmp/admin-rebuild/task-29/tokens-table.png`.
+
+Implementation note: alembic migration `0014_api_token_usage_count` adds an integer column with `server_default '0'` so existing rows immediately have a valid value. The service `touch_last_used` updates `usage_count = usage_count + 1` in SQL (atomic against concurrent calls — read-modify-write in Python would lose updates). The touch fires inside `require_scope()` which means it covers all write-scope token uses today; pure-read endpoints (e.g. /dashboard) don't currently call require_scope and so don't tick the counter — a known limitation surfaced in the implementation note for future cleanup. Tampered tokens still produce 401 BEFORE touch, so `usage_count` stays accurate. Schema field added with default 0 for backwards compatibility. Admin UI gains a "调用次数" column with right-aligned tabular numerics; data-testid `api-token-usage-{id}` so tests can read the value without scraping. Per-request log table (`api_token_usage` with path / ts / status) sketched in the original spec is deferred — usage_count alone answers the "still in use?" question that prompted Task 29.
 
 ---
 
@@ -1227,6 +1234,7 @@ Append-only. Every entry below means a real commit shipped.
 | 30 | Bulk markdown post upload UI | `c865b85` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-30b/verify.py` PASSED | 2026-05-06 |
 | 26a | PetUsage daily stacked bar chart | `81ab961` | `vitest run src/admin/pet/petUsageChart.test.js` 7/7 | `python /tmp/admin-rebuild/task-26a/verify.py` PASSED | 2026-05-06 |
 | 25b | Analytics custom since-date picker | `a7e7e0a` | `vitest run src/api/analytics.test.js` 5/5 | `python /tmp/admin-rebuild/task-25b/verify.py` PASSED | 2026-05-06 |
+| 29 | API tokens usage_count counter + UI | `cae0a56` | `pytest tests/test_api_tokens.py` 12/12 | `python /tmp/admin-rebuild/task-29/verify.py` PASSED | 2026-05-06 |
 
 ---
 
