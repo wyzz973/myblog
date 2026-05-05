@@ -964,7 +964,7 @@ Implementation note: `GET /api/admin/analytics/posts.csv?days=N` returns a UTF-8
 
 ### Task 26 — Pet usage charts
 
-**Status:** pending
+**Status:** in-progress (26a daily stacked bar done; per-mode pie + cost line still pending)
 **Priority:** low
 **Frontend evidence:** `AsciiPet.jsx` summon stream → token costs accumulate.
 **Owner problem:** flat day×mode×source table tells nothing about trends.
@@ -984,7 +984,15 @@ Implementation note: `GET /api/admin/analytics/posts.csv?days=N` returns a UTF-8
 **Snapshot location:** `/tmp/admin-rebuild/task-26/charts.png`
 **Commit message:** `feat(admin/pet): charts on usage page`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** 26a only — `81ab961` (`feat(admin/pet): daily stacked bar chart on usage page (Task 26a)`).
+
+#### Task 26a — daily stacked bar chart (DONE)
+
+- **Tests:** `npx vitest run src/admin/pet/petUsageChart.test.js` → 7/7 (groupByDay aggregation + sort + null-safe; buildBars produces ordered segments + max-day fills inner height + correct totals; legend lists only present sources in canonical order). Combined `npx vitest run` → 198/198 (no regression).
+- **Playwright:** `/tmp/admin-rebuild/task-26a/verify.py` PASSED → login → /admin/pet?tab=usage → wait for `[data-testid=pet-usage-chart]` OR `[data-testid=pet-usage-chart-empty]` → on chart, assert ≥1 `[data-testid^=pet-usage-bar-]` + ≥1 `[data-testid^=pet-usage-legend-]` entry. Live DB had 5 bar segments + 3 legend entries (provider / cache_hit / other).
+- **Snapshots:** `/tmp/admin-rebuild/task-26a/chart.png`.
+
+Implementation note: pure helpers in `src/admin/pet/petUsageChart.js` (`groupByDay`, `buildBars`, `legendFromData`, `SOURCE_COLORS`, `SOURCE_LABELS`) keep all the SVG geometry math out of React. SOURCE_ORDER fixes the stack order (provider → cache_hit → fallback → rate_limited → other) so colors stay stable across reloads. Unknown sources land in the "other" bucket. `<UsageChart>` in `PetUsage.jsx` renders inline SVG + a top legend with colored swatches. Each `<rect>` carries `data-testid=pet-usage-bar-{day}-{source}` and a `<title>` tooltip showing day + source label + call count. Per-mode pie + cost line (the other two charts in the original spec) remain pending as 26b.
 
 ---
 
@@ -1208,6 +1216,7 @@ Append-only. Every entry below means a real commit shipped.
 | 34 | queue inline runner lazy-load registry | `6929ab9` | `pytest -k 'queue or worker or arq_inline'` 13/13 | n/a (worker plumbing) | 2026-05-06 |
 | 35 | Localize remaining admin pages + mobile responsive | `017e930` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-35/verify.py` PASSED (14 pages) | 2026-05-06 |
 | 30 | Bulk markdown post upload UI | `c865b85` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-30b/verify.py` PASSED | 2026-05-06 |
+| 26a | PetUsage daily stacked bar chart | `81ab961` | `vitest run src/admin/pet/petUsageChart.test.js` 7/7 | `python /tmp/admin-rebuild/task-26a/verify.py` PASSED | 2026-05-06 |
 
 ---
 
