@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { postsApi } from '../api/posts.js';
 import PostEditor from './PostEditor.jsx';
+import { shouldIgnoreEvent } from './keyboardShortcuts.js';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'all' },
@@ -23,6 +24,8 @@ export default function Posts() {
   const [reloadTick, setReloadTick] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1); // 1-based
+  const [focusedIdx, setFocusedIdx] = useState(-1);
+  const rowRefs = useRef([]);
 
   const reload = useCallback(() => setReloadTick((t) => t + 1), []);
 
@@ -76,6 +79,48 @@ export default function Posts() {
     (n) => setPage(Math.min(Math.max(1, n), totalPages)),
     [totalPages],
   );
+
+  // Reset row focus whenever the visible item set changes.
+  useEffect(() => {
+    setFocusedIdx(items.length > 0 ? 0 : -1);
+  }, [items]);
+
+  // j/k row navigation, Enter / e edit, n new. Listener detaches while
+  // editing (PostEditor is rendered instead) or while a global suppress
+  // surface (palette / modal / help) is mounted — `shouldIgnoreEvent`
+  // covers both via its DOM probe.
+  useEffect(() => {
+    if (editing !== null) return undefined;
+    function onKey(e) {
+      if (shouldIgnoreEvent(e)) return;
+      if (e.key === 'j') {
+        e.preventDefault();
+        setFocusedIdx((i) => Math.min((items.length || 1) - 1, i + 1));
+      } else if (e.key === 'k') {
+        e.preventDefault();
+        setFocusedIdx((i) => Math.max(0, i - 1));
+      } else if (e.key === 'Enter' || e.key === 'e') {
+        const row = items[focusedIdx];
+        if (!row) return;
+        e.preventDefault();
+        setEditing(row.id);
+      } else if (e.key === 'n') {
+        e.preventDefault();
+        setEditing('__new__');
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editing, items, focusedIdx]);
+
+  // Scroll the focused row into view if the user moved past the
+  // viewport via j/k.
+  useEffect(() => {
+    const el = rowRefs.current[focusedIdx];
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    }
+  }, [focusedIdx]);
 
   async function onDelete(id) {
     // eslint-disable-next-line no-alert
@@ -170,8 +215,18 @@ export default function Posts() {
                   </td>
                 </tr>
               )}
-              {items.map((p) => (
-                <tr key={p.id} style={styles.tr}>
+              {items.map((p, idx) => (
+                <tr
+                  key={p.id}
+                  ref={(el) => { rowRefs.current[idx] = el; }}
+                  data-testid={`post-row-${idx}`}
+                  data-focused={idx === focusedIdx ? 'true' : undefined}
+                  style={{
+                    ...styles.tr,
+                    ...(idx === focusedIdx ? styles.trFocused : null),
+                  }}
+                  onMouseEnter={() => setFocusedIdx(idx)}
+                >
                   <td style={styles.tdN}>{p.n || '—'}</td>
                   <td style={styles.tdTitle}>
                     <div style={styles.title}>{p.title}</div>
@@ -337,6 +392,10 @@ const styles = {
   },
   tr: {
     borderBottom: '1px solid var(--line)',
+  },
+  trFocused: {
+    background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
+    boxShadow: 'inset 3px 0 0 var(--accent)',
   },
   td: {
     padding: '10px 12px',

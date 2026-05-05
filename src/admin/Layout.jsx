@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
 import CommandPalette from './CommandPalette.jsx';
+import ShortcutsHelp from './ShortcutsHelp.jsx';
+import useGlobalShortcuts from './useGlobalShortcuts.js';
 import { postsApi } from '../api/posts.js';
 import { getToken } from '../api/admin.js';
 
@@ -95,6 +97,9 @@ export default function Layout() {
   const location = useLocation();
   const crumb = findCrumb(location.pathname);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const showHelp = useCallback(() => setHelpOpen(true), []);
+  useGlobalShortcuts({ navigate, onShowHelp: showHelp });
 
   function onLogout() {
     logout();
@@ -158,6 +163,7 @@ export default function Layout() {
         runners={runners}
         loadPosts={loadPosts}
       />
+      <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
       <aside className="admin-sidebar" style={styles.sidebar}>
         <div className="admin-brand" style={styles.brand}>
           <span className="admin-brand-dot" style={styles.brandDot} />
