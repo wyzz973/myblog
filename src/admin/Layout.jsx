@@ -219,7 +219,7 @@ export default function Layout() {
             )}
           </div>
           <div className="admin-user-box" style={styles.userBox}>
-            <span className="admin-user-email" style={styles.userEmail}>{email || 'unknown'}</span>
+            <span className="admin-user-email" style={styles.userEmail}>{email || '未知账号'}</span>
             <button type="button" onClick={onLogout} style={styles.logout}>
               退出
             </button>

@@ -29,7 +29,7 @@ describe('PetConversations', () => {
     );
     await waitFor(() => screen.getByText(/abc/));
     expect(screen.getByText('cat')).toBeInTheDocument();
-    expect(screen.getByText(/3 msgs/)).toBeInTheDocument();
+    expect(screen.getByText(/3 条消息/)).toBeInTheDocument();
     expect(screen.getByText(/hello world/)).toBeInTheDocument();
   });
 });

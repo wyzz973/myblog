@@ -10,20 +10,20 @@ export default function PetUsage() {
     let mounted = true;
     apiPet.getUsage()
       .then((res) => mounted && (setItems(res.items || []), setError(null)))
-      .catch((e) => mounted && setError(e?.detail || e?.message || 'failed to load usage'))
+      .catch((e) => mounted && setError(e?.detail || e?.message || '加载用量失败'))
       .finally(() => mounted && setLoading(false));
     return () => { mounted = false; };
   }, []);
 
-  if (loading) return <div className="hint pad">loading…</div>;
+  if (loading) return <div className="hint pad">加载中...</div>;
   if (error) return <div className="err pad">{error}</div>;
 
   return (
     <div className="form pad">
-      <h2 style={{ margin: 0, fontSize: 14 }}>Usage</h2>
+      <h2 style={{ margin: 0, fontSize: 14 }}>用量统计</h2>
       <div className="pet-usage-table">
         <div className="pet-usage-head">
-          <span>day</span><span>mode</span><span>source</span><span>calls</span><span>tokens</span>
+          <span>日期</span><span>模式</span><span>来源</span><span>调用</span><span>Token</span>
         </div>
         {items.map((row, i) => (
           <div className="pet-usage-row" key={`${row.day}-${row.mode}-${row.source}-${i}`}>
@@ -34,7 +34,7 @@ export default function PetUsage() {
             <span>{row.estimated_total_tokens}</span>
           </div>
         ))}
-        {items.length === 0 && <div className="hint">no usage yet</div>}
+        {items.length === 0 && <div className="hint">暂无用量记录</div>}
       </div>
     </div>
   );

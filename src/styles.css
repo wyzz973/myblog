@@ -2643,6 +2643,21 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   .admin-content {
     padding: 18px 16px 40px !important;
   }
+
+  .admin-form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .admin-table-wrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-search {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
 }
 
 @media (max-width: 720px) {

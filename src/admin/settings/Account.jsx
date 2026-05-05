@@ -36,7 +36,7 @@ function TfaSection() {
       setSetup(res);
       setPhase('setup-pending');
     } catch (err) {
-      setError(err?.detail || err?.message || 'setup failed');
+      setError(err?.detail || err?.message || '设置失败');
     } finally {
       setBusy(false);
     }
@@ -53,7 +53,7 @@ function TfaSection() {
       setCode('');
       setSetup(null);
     } catch (err) {
-      setError(err?.detail || err?.message || 'enable failed');
+      setError(err?.detail || err?.message || '启用失败');
     } finally {
       setBusy(false);
     }
@@ -69,7 +69,7 @@ function TfaSection() {
       setRecovery(null);
       setDisableCode('');
     } catch (err) {
-      setError(err?.detail || err?.message || 'disable failed');
+      setError(err?.detail || err?.message || '停用失败');
     } finally {
       setBusy(false);
     }
@@ -84,19 +84,19 @@ function TfaSection() {
       setRecovery(res?.recovery_codes || []);
       setRegenCode('');
     } catch (err) {
-      setError(err?.detail || err?.message || 'regenerate failed');
+      setError(err?.detail || err?.message || '重新生成失败');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Card title="Two-factor authentication" subtitle="TOTP via authenticator app">
+    <Card title="两步验证" subtitle="使用认证器应用生成 TOTP 验证码">
       {phase === 'idle' && (
         <div style={styles.row}>
-          <span style={styles.muted}>2FA is not active for this account.</span>
+          <span style={styles.muted}>当前账号未启用两步验证。</span>
           <button type="button" onClick={onSetup} disabled={busy} style={styles.btnPrimary}>
-            {busy ? 'starting…' : 'set up 2FA'}
+            {busy ? '启动中...' : '设置两步验证'}
           </button>
         </div>
       )}
@@ -113,12 +113,12 @@ function TfaSection() {
           </div>
           <div style={styles.tfaSetupRight}>
             <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>
-              Scan the QR with your authenticator, or enter the secret manually:
+              使用认证器扫描二维码，或手动输入下面的密钥：
             </div>
             <code style={styles.secretBox}>{setup.secret}</code>
             <form onSubmit={onEnable} style={styles.form} noValidate>
               <label style={styles.label}>
-                <span style={styles.labelText}>6-digit code</span>
+                <span style={styles.labelText}>6 位验证码</span>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -134,7 +134,7 @@ function TfaSection() {
               {error && <div style={styles.error}>! {error}</div>}
               <div style={styles.actions}>
                 <button type="submit" disabled={busy || code.length !== 6} style={styles.btnPrimary}>
-                  {busy ? 'verifying…' : 'verify + enable'}
+                  {busy ? '验证中...' : '验证并启用'}
                 </button>
                 <button
                   type="button"
@@ -146,7 +146,7 @@ function TfaSection() {
                   }}
                   style={styles.btnSecondary}
                 >
-                  cancel
+                  取消
                 </button>
               </div>
             </form>
@@ -158,13 +158,13 @@ function TfaSection() {
         <div style={styles.col}>
           <div style={styles.statusOk}>
             <span style={{ ...styles.statusDot, background: 'var(--accent)' }} />
-            2FA is enabled.
+            两步验证已启用。
           </div>
 
           {recovery && recovery.length > 0 && (
             <div style={styles.recoveryBox}>
               <div style={styles.warn}>
-                ! Save these recovery codes now — each can only be used once.
+                请立即保存这些恢复码，每个恢复码只能使用一次。
               </div>
               <div style={styles.recoveryGrid}>
                 {recovery.map((c) => (
@@ -176,16 +176,16 @@ function TfaSection() {
                 onClick={() => setRecovery(null)}
                 style={styles.btnSecondary}
               >
-                hide
+                隐藏
               </button>
             </div>
           )}
 
           <div style={styles.subSection}>
-            <div style={styles.subTitle}>Regenerate recovery codes</div>
+            <div style={styles.subTitle}>重新生成恢复码</div>
             <form onSubmit={onRegenerate} style={styles.form} noValidate>
               <label style={styles.label}>
-                <span style={styles.labelText}>current 6-digit code</span>
+                <span style={styles.labelText}>当前 6 位验证码</span>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -203,17 +203,17 @@ function TfaSection() {
                   disabled={busy || regenCode.length !== 6}
                   style={styles.btnSecondary}
                 >
-                  {busy ? 'working…' : 'regenerate'}
+                  {busy ? '处理中...' : '重新生成'}
                 </button>
               </div>
             </form>
           </div>
 
           <div style={styles.subSection}>
-            <div style={{ ...styles.subTitle, color: 'var(--danger)' }}>Disable 2FA</div>
+            <div style={{ ...styles.subTitle, color: 'var(--danger)' }}>停用两步验证</div>
             <form onSubmit={onDisable} style={styles.form} noValidate>
               <label style={styles.label}>
-                <span style={styles.labelText}>current 6-digit code</span>
+                <span style={styles.labelText}>当前 6 位验证码</span>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -231,7 +231,7 @@ function TfaSection() {
                   disabled={busy || disableCode.length !== 6}
                   style={styles.btnDanger}
                 >
-                  {busy ? 'disabling…' : 'disable 2FA'}
+                  {busy ? '停用中...' : '停用两步验证'}
                 </button>
               </div>
             </form>
@@ -257,21 +257,21 @@ function MagicLinkSection() {
       const res = await apiAccount.setMagicLink(next);
       setEnabled(Boolean(res?.magic_link_enabled));
     } catch (err) {
-      setError(err?.detail || err?.message || 'toggle failed');
+      setError(err?.detail || err?.message || '切换失败');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Card title="Magic-link login" subtitle="Email a one-time login link">
+    <Card title="邮件登录链接" subtitle="发送一次性登录链接到邮箱">
       <div style={styles.row}>
         <span style={styles.muted}>
           {enabled === null
-            ? 'Toggle to update preference. Server-side state is the source of truth.'
+            ? '点击按钮更新偏好，后端状态为最终准则。'
             : enabled
-            ? 'Magic-link login is enabled.'
-            : 'Magic-link login is disabled.'}
+            ? '邮件登录链接已启用。'
+            : '邮件登录链接已停用。'}
         </span>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
@@ -280,7 +280,7 @@ function MagicLinkSection() {
             onClick={() => onToggle(true)}
             style={enabled === true ? styles.btnPrimary : styles.btnSecondary}
           >
-            enable
+            启用
           </button>
           <button
             type="button"
@@ -288,7 +288,7 @@ function MagicLinkSection() {
             onClick={() => onToggle(false)}
             style={enabled === false ? styles.btnPrimary : styles.btnSecondary}
           >
-            disable
+            停用
           </button>
         </div>
       </div>
@@ -312,15 +312,15 @@ function PasswordSection() {
     setError(null);
     setDone(false);
     if (next.length < 8) {
-      setError('new password must be at least 8 characters');
+      setError('新密码至少需要 8 个字符');
       return;
     }
     if (next !== confirm) {
-      setError('new password and confirmation do not match');
+      setError('新密码和确认密码不一致');
       return;
     }
     if (next === current) {
-      setError('new password must differ from current');
+      setError('新密码不能与当前密码相同');
       return;
     }
     setBusy(true);
@@ -331,17 +331,17 @@ function PasswordSection() {
       setConfirm('');
       setDone(true);
     } catch (err) {
-      setError(err?.detail || err?.message || 'failed');
+      setError(err?.detail || err?.message || '修改失败');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Card title="Password" subtitle="Change account password">
+    <Card title="密码" subtitle="修改当前账号密码">
       <form onSubmit={onSubmit} style={{ display: 'grid', gap: 10, maxWidth: 380 }}>
         <label style={styles.label}>
-          <span style={styles.labelText}>current password</span>
+          <span style={styles.labelText}>当前密码</span>
           <input
             type="password"
             value={current}
@@ -352,7 +352,7 @@ function PasswordSection() {
           />
         </label>
         <label style={styles.label}>
-          <span style={styles.labelText}>new password</span>
+          <span style={styles.labelText}>新密码</span>
           <input
             type="password"
             value={next}
@@ -364,7 +364,7 @@ function PasswordSection() {
           />
         </label>
         <label style={styles.label}>
-          <span style={styles.labelText}>confirm new password</span>
+          <span style={styles.labelText}>确认新密码</span>
           <input
             type="password"
             value={confirm}
@@ -377,10 +377,10 @@ function PasswordSection() {
         </label>
         <div>
           <button type="submit" style={styles.btn} disabled={busy}>
-            {busy ? 'saving…' : 'change password'}
+            {busy ? '保存中...' : '修改密码'}
           </button>
         </div>
-        {done && <div style={styles.success}>password changed</div>}
+        {done && <div style={styles.success}>密码已修改</div>}
         {error && <div style={styles.error}>! {error}</div>}
       </form>
     </Card>

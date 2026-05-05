@@ -216,21 +216,21 @@ export default function Posts() {
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={styles.th}>n</th>
-                <th style={styles.th}>title</th>
-                <th style={styles.th}>tag</th>
-                <th style={styles.th}>date</th>
-                <th style={styles.th}>lang</th>
-                <th style={styles.th}>read</th>
-                <th style={{ ...styles.th, textAlign: 'right' }}>likes</th>
-                <th style={{ ...styles.th, textAlign: 'right' }}>actions</th>
+                <th style={styles.th}>序号</th>
+                <th style={styles.th}>标题</th>
+                <th style={styles.th}>标签</th>
+                <th style={styles.th}>日期</th>
+                <th style={styles.th}>语言</th>
+                <th style={styles.th}>阅读</th>
+                <th style={{ ...styles.th, textAlign: 'right' }}>点赞</th>
+                <th style={{ ...styles.th, textAlign: 'right' }}>操作</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && !loading && (
                 <tr>
                   <td colSpan={8} style={styles.empty}>
-                    no posts
+                    暂无文章
                   </td>
                 </tr>
               )}
@@ -272,14 +272,14 @@ export default function Posts() {
                       style={styles.btnGhost}
                       onClick={() => setEditing(p.id)}
                     >
-                      edit
+                      编辑
                     </button>
                     <button
                       type="button"
                       style={styles.btnDanger}
                       onClick={() => onDelete(p.id)}
                     >
-                      delete
+                      删除
                     </button>
                   </td>
                 </tr>

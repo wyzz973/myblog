@@ -5,10 +5,10 @@ import Account from './settings/Account.jsx';
 import DangerZone from './settings/DangerZone.jsx';
 
 const TABS = [
-  { id: 'integrations', label: 'Integrations', Cmp: Integrations },
-  { id: 'api-tokens', label: 'API Tokens', Cmp: ApiTokens },
-  { id: 'account', label: 'Account', Cmp: Account },
-  { id: 'danger', label: 'Danger Zone', Cmp: DangerZone },
+  { id: 'integrations', label: '集成配置', Cmp: Integrations },
+  { id: 'api-tokens', label: 'API 令牌', Cmp: ApiTokens },
+  { id: 'account', label: '账号安全', Cmp: Account },
+  { id: 'danger', label: '危险操作', Cmp: DangerZone },
 ];
 
 export default function Settings() {
@@ -17,8 +17,8 @@ export default function Settings() {
   return (
     <div>
       <header style={styles.header}>
-        <h1 style={styles.h1}>Settings</h1>
-        <p style={styles.lead}>Site integrations, tokens, account, and destructive actions.</p>
+        <h1 style={styles.h1}>系统设置</h1>
+        <p style={styles.lead}>管理第三方集成、访问令牌、账号安全和高风险操作。</p>
       </header>
 
       <div style={styles.tabStrip} role="tablist">
@@ -86,8 +86,8 @@ const styles = {
   tabDanger: { color: 'var(--danger)' },
   tabDangerActive: {
     color: 'var(--danger)',
-    borderColor: 'var(--danger)',
-    borderBottomColor: 'var(--bg-2)',
+    border: '1px solid var(--danger)',
+    borderBottom: '1px solid var(--bg-2)',
   },
   body: {},
 };

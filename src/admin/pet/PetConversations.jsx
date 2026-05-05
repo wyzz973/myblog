@@ -5,12 +5,12 @@ import { apiPet } from '../../api/pet.js';
 function ago(iso) {
   const t = Date.now() - new Date(iso).getTime();
   const m = Math.floor(t / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
+  if (m < 1) return '刚刚';
+  if (m < 60) return `${m} 分钟前`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return `${h} 小时前`;
   const d = Math.floor(h / 24);
-  return `${d}d ago`;
+  return `${d} 天前`;
 }
 
 export default function PetConversations() {
@@ -33,7 +33,7 @@ export default function PetConversations() {
       setHasMore(!!r.next_cursor);
       setError(null);
     } catch (e) {
-      setError(e?.detail || e?.message || 'failed to load');
+      setError(e?.detail || e?.message || '加载失败');
     } finally {
       setLoading(false);
     }
@@ -47,23 +47,22 @@ export default function PetConversations() {
   return (
     <div className="form pad">
       <p className="hint">
-        All pet conversations grouped by visitor. Click a row to see the full
-        message timeline.
+        按访客聚合宠物助手对话，点击任一行查看完整消息时间线。
       </p>
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <label>
-          species:&nbsp;
+          物种：&nbsp;
           <input
             type="text"
             value={species}
-            placeholder="(any)"
+            placeholder="任意"
             onChange={(e) => setSpecies(e.target.value)}
             style={{ width: 120 }}
           />
         </label>
       </div>
       {error && <div className="err">{error}</div>}
-      {loading && items.length === 0 && <div className="hint">loading…</div>}
+      {loading && items.length === 0 && <div className="hint">加载中...</div>}
       <div>
         {items.map((it) => (
           <Link
@@ -74,7 +73,7 @@ export default function PetConversations() {
             <div className="conv-row-head">
               <span className="conv-vh">{it.visitor_hash.slice(0, 12)}…</span>
               <span className="conv-species">{it.species}</span>
-              <span className="conv-count">{it.message_count} msgs</span>
+              <span className="conv-count">{it.message_count} 条消息</span>
               <span className="conv-when">{ago(it.last_msg_at)}</span>
             </div>
             <div className="conv-preview">{it.last_reply_preview}</div>
@@ -83,7 +82,7 @@ export default function PetConversations() {
       </div>
       {hasMore && (
         <button type="button" onClick={() => loadPage(false)} disabled={loading}>
-          {loading ? 'loading…' : 'load more'}
+          {loading ? '加载中...' : '加载更多'}
         </button>
       )}
     </div>

@@ -6,12 +6,12 @@ import { mediaUrl } from '../api/media.js';
 // /profile endpoint manages the *author* identity (display name, bio,
 // avatar). It is distinct from /session (the admin account info).
 const TEXT_FIELDS = [
-  { key: 'name', label: 'name', placeholder: '汪洋' },
-  { key: 'name_en', label: 'name (en)', placeholder: 'Wang Yang' },
-  { key: 'role', label: 'role', placeholder: 'software engineer' },
-  { key: 'location', label: 'location', placeholder: 'Beijing, CN' },
-  { key: 'pronouns', label: 'pronouns', placeholder: 'they/them' },
-  { key: 'typing_line', label: 'typing line', placeholder: 'building things…' },
+  { key: 'name', label: '姓名', placeholder: '汪洋' },
+  { key: 'name_en', label: '英文名', placeholder: 'Wang Yang' },
+  { key: 'role', label: '角色', placeholder: 'software engineer' },
+  { key: 'location', label: '所在地', placeholder: 'Beijing, CN' },
+  { key: 'pronouns', label: '称谓', placeholder: 'they/them' },
+  { key: 'typing_line', label: '打字机文案', placeholder: 'building things...' },
 ];
 
 export default function Profile() {
@@ -43,7 +43,7 @@ export default function Profile() {
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err?.detail || err?.message || 'failed to load');
+        setError(err?.detail || err?.message || '加载失败');
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -107,31 +107,30 @@ export default function Profile() {
         ...updated,
         stack_chips: Array.isArray(updated?.stack_chips) ? updated.stack_chips : [],
       });
-      setToast('saved');
+      setToast('已保存');
     } catch (err) {
-      setToast(`error: ${err?.detail || err.message}`);
+      setToast(`错误：${err?.detail || err.message}`);
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) return <div style={styles.muted}>loading profile…</div>;
-  if (error) return <div style={styles.error}>error: {error}</div>;
-  if (!draft) return <div style={styles.muted}>no data</div>;
+  if (loading) return <div style={styles.muted}>正在加载作者资料...</div>;
+  if (error) return <div style={styles.error}>错误：{error}</div>;
+  if (!draft) return <div style={styles.muted}>暂无数据</div>;
 
   return (
     <div>
       <header style={styles.header}>
-        <h1 style={styles.h1}>Profile</h1>
+        <h1 style={styles.h1}>作者资料</h1>
         <p style={styles.lead}>
-          Your public author identity — what readers see. Account email and
-          security live in <code>Settings</code>.
+          管理读者可见的公开作者身份。账号邮箱和安全设置请在“系统设置”中维护。
         </p>
       </header>
 
       <form onSubmit={save} style={styles.panel}>
         <div style={styles.panelHead}>
-          <span style={styles.panelTitle}>author profile</span>
+          <span style={styles.panelTitle}>作者资料</span>
           <span style={styles.panelHint}>PUT /profile</span>
         </div>
         <div style={styles.panelBody}>
@@ -143,7 +142,7 @@ export default function Profile() {
                 style={styles.btn}
                 onClick={() => setPickerOpen(true)}
               >
-                choose from media…
+                从媒体库选择...
               </button>
               {draft.avatar_id != null && (
                 <button
@@ -151,11 +150,11 @@ export default function Profile() {
                   style={styles.btnGhostDanger}
                   onClick={() => setDraft((d) => ({ ...d, avatar_id: null, avatar_path: null }))}
                 >
-                  remove avatar
+                  移除头像
                 </button>
               )}
               <div style={styles.avatarPath}>
-                {draft.avatar_path || <span style={styles.dim}>no avatar</span>}
+                {draft.avatar_path || <span style={styles.dim}>未设置头像</span>}
               </div>
             </div>
           </div>
@@ -176,13 +175,13 @@ export default function Profile() {
           </div>
 
           <label style={styles.labelFull}>
-            <span style={styles.labelText}>bio</span>
+            <span style={styles.labelText}>简介</span>
             <textarea
               rows={5}
               value={draft.bio ?? ''}
               onChange={(e) => setField('bio', e.target.value)}
               style={styles.textarea}
-              placeholder="A short paragraph about yourself."
+              placeholder="用一小段文字介绍自己。"
             />
           </label>
 
@@ -197,7 +196,7 @@ export default function Profile() {
             style={styles.btnPrimary}
             disabled={saving || !dirty}
           >
-            {saving ? 'saving…' : 'save'}
+            {saving ? '保存中...' : '保存'}
           </button>
           <button
             type="button"
@@ -205,31 +204,30 @@ export default function Profile() {
             onClick={reset}
             disabled={saving || !dirty}
           >
-            reset
+            重置
           </button>
         </div>
       </form>
 
       <section style={styles.panel}>
         <div style={styles.panelHead}>
-          <span style={styles.panelTitle}>account</span>
+          <span style={styles.panelTitle}>账号</span>
           <span style={styles.panelHint}>GET /session · read-only</span>
         </div>
         <div style={styles.panelBody}>
-          <Row label="email" value={session?.email ?? '—'} />
+          <Row label="邮箱" value={session?.email ?? '—'} />
           <Row
-            label="2-factor"
+            label="两步验证"
             value={
               session
                 ? session.tfa_enabled
-                  ? 'enabled'
-                  : 'disabled'
+                  ? '已启用'
+                  : '未启用'
                 : '—'
             }
           />
           <p style={styles.note}>
-            Account email and password changes are managed from the Settings
-            screen.
+            账号邮箱和密码变更请在“系统设置”中管理。
           </p>
         </div>
       </section>
@@ -252,12 +250,12 @@ export default function Profile() {
 
 function AvatarPreview({ path }) {
   if (!path) {
-    return <div style={styles.avatarBox}><span style={styles.dim}>no avatar</span></div>;
+    return <div style={styles.avatarBox}><span style={styles.dim}>未设置头像</span></div>;
   }
   const url = /^https?:\/\//i.test(path) ? path : mediaUrl(path);
   return (
     <div style={styles.avatarBox}>
-      <img src={url} alt="avatar preview" style={styles.avatarImg} />
+      <img src={url} alt="头像预览" style={styles.avatarImg} />
     </div>
   );
 }
@@ -282,7 +280,7 @@ function StackChipsEditor({ value, onChange }) {
 
   return (
     <div style={styles.labelFull}>
-      <span style={styles.labelText}>stack chips</span>
+      <span style={styles.labelText}>技术标签</span>
       <div style={styles.chipsWrap}>
         {value.map((chip, i) => (
           <span key={`${chip}-${i}`} style={styles.chip}>
@@ -291,14 +289,14 @@ function StackChipsEditor({ value, onChange }) {
               type="button"
               onClick={() => remove(i)}
               style={styles.chipX}
-              aria-label={`remove ${chip}`}
+              aria-label={`移除 ${chip}`}
             >
               ×
             </button>
           </span>
         ))}
         {value.length === 0 && (
-          <span style={styles.dim}>no chips yet</span>
+          <span style={styles.dim}>暂无标签</span>
         )}
       </div>
       <div style={styles.chipAddRow}>
@@ -312,11 +310,11 @@ function StackChipsEditor({ value, onChange }) {
               add();
             }
           }}
-          placeholder="e.g. typescript"
+          placeholder="例如 typescript"
           style={{ ...styles.input, flex: 1 }}
         />
         <button type="button" onClick={add} style={styles.btn}>
-          add chip
+          添加标签
         </button>
       </div>
     </div>
@@ -338,7 +336,7 @@ function AvatarPicker({ current, onClose, onPick }) {
         );
         setItems(images);
       })
-      .catch((err) => mounted && setError(err?.detail || err?.message || 'failed to load'));
+      .catch((err) => mounted && setError(err?.detail || err?.message || '加载失败'));
     return () => {
       mounted = false;
     };
@@ -348,19 +346,19 @@ function AvatarPicker({ current, onClose, onPick }) {
     <div style={styles.modalShell} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalHead}>
-          <span style={styles.modalTitle}>choose an avatar</span>
+          <span style={styles.modalTitle}>选择头像</span>
           <button type="button" onClick={onClose} style={styles.iconBtn}>
-            close ✕
+            关闭 ✕
           </button>
         </div>
         <div style={styles.modalBody}>
           {items === null && !error && (
-            <div style={styles.muted}>loading images…</div>
+            <div style={styles.muted}>正在加载图片...</div>
           )}
-          {error && <div style={styles.error}>error: {error}</div>}
+          {error && <div style={styles.error}>错误：{error}</div>}
           {items && items.length === 0 && (
             <div style={styles.muted}>
-              no images in the library yet — upload one in <code>Media</code>.
+              媒体库还没有图片，请先到“媒体库”上传一张。
             </div>
           )}
           {items && items.length > 0 && (
@@ -388,7 +386,7 @@ function AvatarPicker({ current, onClose, onPick }) {
         <div style={styles.modalFoot}>
           <span style={{ flex: 1 }} />
           <button type="button" style={styles.btn} onClick={onClose}>
-            cancel
+            取消
           </button>
         </div>
       </div>
@@ -671,7 +669,7 @@ const styles = {
     aspectRatio: '1 / 1',
   },
   pickerTileActive: {
-    borderColor: 'var(--accent)',
+    border: '1px solid var(--accent)',
     boxShadow: '0 0 0 1px var(--accent) inset',
   },
   pickerImg: { width: '100%', height: '100%', objectFit: 'cover' },

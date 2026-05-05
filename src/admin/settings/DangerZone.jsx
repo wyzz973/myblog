@@ -12,7 +12,7 @@ export default function DangerZone() {
       setStatus(s);
       setStatusErr(null);
     } catch (err) {
-      setStatusErr(err?.detail || err?.message || 'failed to load status');
+      setStatusErr(err?.detail || err?.message || '加载状态失败');
     } finally {
       setStatusLoading(false);
     }
@@ -27,17 +27,16 @@ export default function DangerZone() {
       <header style={styles.banner}>
         <span style={styles.bannerDot} />
         <div>
-          <div style={styles.bannerTitle}>Danger Zone</div>
+          <div style={styles.bannerTitle}>危险操作</div>
           <div style={styles.bannerSub}>
-            Destructive actions. Most operations require your account password and
-            are rate-limited (1/hour by IP).
+            高风险操作。大部分操作需要输入账号密码，并按 IP 限制每小时 1 次。
           </div>
         </div>
       </header>
 
-      {statusLoading && <div style={styles.muted}>loading status…</div>}
+      {statusLoading && <div style={styles.muted}>正在加载状态...</div>}
       {statusErr && !statusLoading && (
-        <div style={styles.error}>error: {statusErr}</div>
+        <div style={styles.error}>错误：{statusErr}</div>
       )}
 
       <ExportSection />
@@ -70,7 +69,7 @@ function ExportSection() {
       setJobs(list);
       setError(null);
     } catch (err) {
-      setError(err?.detail || err?.message || 'failed to load');
+      setError(err?.detail || err?.message || '加载失败');
     } finally {
       setLoading(false);
     }
@@ -118,7 +117,7 @@ function ExportSection() {
       await refresh();
       if (res?.job_id) startPoll(res.job_id);
     } catch (err) {
-      setError(err?.detail || err?.message || 'export failed');
+      setError(err?.detail || err?.message || '导出失败');
     } finally {
       setRequesting(false);
     }
@@ -136,15 +135,15 @@ function ExportSection() {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
-      setError(err?.detail || err?.message || 'download failed');
+      setError(err?.detail || err?.message || '下载失败');
     }
   }
 
   return (
-    <Section title="Export site" subtitle="Build a zip snapshot of all data">
+    <Section title="导出站点" subtitle="生成包含全部数据的 zip 快照">
       <form onSubmit={onRequest} style={styles.form} noValidate>
         <label style={styles.label}>
-          <span style={styles.labelText}>account password</span>
+          <span style={styles.labelText}>账号密码</span>
           <input
             type="password"
             value={password}
@@ -161,26 +160,26 @@ function ExportSection() {
             disabled={requesting || !password}
             style={styles.btnDanger}
           >
-            {requesting ? 'requesting…' : 'request export'}
+            {requesting ? '请求中...' : '请求导出'}
           </button>
         </div>
         {error && <div style={styles.error}>! {error}</div>}
       </form>
 
-      <div style={styles.subTitle}>Recent jobs</div>
-      {loading && <div style={styles.muted}>loading…</div>}
+      <div style={styles.subTitle}>最近任务</div>
+      {loading && <div style={styles.muted}>加载中...</div>}
       {!loading && (!jobs || jobs.length === 0) && (
-        <div style={styles.muted}>no exports yet.</div>
+        <div style={styles.muted}>暂无导出任务。</div>
       )}
       {!loading && jobs && jobs.length > 0 && (
         <table style={styles.table}>
           <thead>
             <tr>
               <th style={styles.th}>id</th>
-              <th style={styles.th}>status</th>
-              <th style={styles.th}>requested</th>
-              <th style={styles.th}>completed</th>
-              <th style={styles.th}>size</th>
+              <th style={styles.th}>状态</th>
+              <th style={styles.th}>请求时间</th>
+              <th style={styles.th}>完成时间</th>
+              <th style={styles.th}>大小</th>
               <th style={styles.th} />
             </tr>
           </thead>
@@ -203,12 +202,12 @@ function ExportSection() {
                       onClick={() => onDownload(j.id)}
                       style={styles.btnSecondary}
                     >
-                      download
+                      下载
                     </button>
                   )}
                   {j.status === 'failed' && j.error && (
                     <span style={{ color: 'var(--danger)', fontSize: 11 }} title={j.error}>
-                      failed
+                      失败
                     </span>
                   )}
                 </td>
@@ -241,7 +240,7 @@ function ImportSection() {
       setFile(null);
       setPassword('');
     } catch (err) {
-      setError(err?.detail || err?.message || 'import failed');
+      setError(err?.detail || err?.message || '导入失败');
     } finally {
       setBusy(false);
     }
@@ -254,10 +253,10 @@ function ImportSection() {
   }
 
   return (
-    <Section title="Import site" subtitle="Restore from a zip export — REPLACES current data">
+    <Section title="导入站点" subtitle="从 zip 导出恢复，会替换当前数据">
       <form onSubmit={onSubmit} style={styles.form} noValidate>
         <label style={styles.label}>
-          <span style={styles.labelText}>export zip</span>
+          <span style={styles.labelText}>导出 zip 文件</span>
           <input
             type="file"
             accept=".zip,application/zip"
@@ -267,7 +266,7 @@ function ImportSection() {
           />
         </label>
         <label style={styles.label}>
-          <span style={styles.labelText}>account password</span>
+          <span style={styles.labelText}>账号密码</span>
           <input
             type="password"
             value={password}
@@ -284,23 +283,23 @@ function ImportSection() {
             disabled={busy || !file || !password}
             style={styles.btnDanger}
           >
-            {busy ? 'importing…' : 'import zip'}
+            {busy ? '导入中...' : '导入 zip'}
           </button>
         </div>
         {error && <div style={styles.error}>! {error}</div>}
         {result && (
           <div style={styles.notice}>
-            Import complete — {result.tables_imported} tables, {result.posts_imported} posts,{' '}
-            {result.media_imported} media items.
+            导入完成：{result.tables_imported} 张表、{result.posts_imported} 篇文章、{' '}
+            {result.media_imported} 个媒体文件。
           </div>
         )}
       </form>
 
       {confirmOpen && (
         <ConfirmModal
-          title="Confirm import"
-          body="This will replace ALL existing site data with the contents of the zip. This cannot be undone. Proceed?"
-          confirmLabel="yes, replace site"
+          title="确认导入"
+          body="这会用 zip 内容替换当前全部站点数据，且不可恢复。确定继续？"
+          confirmLabel="确认替换站点"
           onConfirm={actuallyImport}
           onCancel={() => setConfirmOpen(false)}
         />
@@ -332,7 +331,7 @@ function DeleteSection({ status, onChange }) {
       setHandle('');
       await onChange();
     } catch (err) {
-      setError(err?.detail || err?.message || 'delete failed');
+      setError(err?.detail || err?.message || '删除失败');
     } finally {
       setBusy(false);
     }
@@ -351,7 +350,7 @@ function DeleteSection({ status, onChange }) {
       await apiDanger.cancelDelete();
       await onChange();
     } catch (err) {
-      setError(err?.detail || err?.message || 'cancel failed');
+      setError(err?.detail || err?.message || '取消失败');
     } finally {
       setCancelBusy(false);
     }
@@ -360,18 +359,18 @@ function DeleteSection({ status, onChange }) {
   if (pendingAt) {
     return (
       <Section
-        title="Delete site"
-        subtitle="Site deletion is currently scheduled"
+        title="删除站点"
+        subtitle="站点删除已进入排程"
         critical
       >
         <div style={styles.scheduledBox}>
-          <div style={styles.scheduledTitle}>! Site deletion scheduled</div>
+          <div style={styles.scheduledTitle}>站点删除已排程</div>
           <div style={styles.scheduledMeta}>
-            scheduled at: <span style={{ color: 'var(--fg)' }}>{fmtDate(pendingAt)}</span>
+            排程时间：<span style={{ color: 'var(--fg)' }}>{fmtDate(pendingAt)}</span>
           </div>
           {daysRem != null && (
             <div style={styles.scheduledMeta}>
-              days remaining: <span style={{ color: 'var(--accent)' }}>{daysRem}</span>
+              剩余天数：<span style={{ color: 'var(--accent)' }}>{daysRem}</span>
             </div>
           )}
           <div style={styles.actions}>
@@ -381,7 +380,7 @@ function DeleteSection({ status, onChange }) {
               disabled={cancelBusy}
               style={styles.btnPrimary}
             >
-              {cancelBusy ? 'canceling…' : 'cancel deletion'}
+              {cancelBusy ? '取消中...' : '取消删除'}
             </button>
           </div>
           {error && <div style={styles.error}>! {error}</div>}
@@ -392,13 +391,13 @@ function DeleteSection({ status, onChange }) {
 
   return (
     <Section
-      title="Delete site"
-      subtitle="Schedules permanent deletion after a 7-day grace period"
+      title="删除站点"
+      subtitle="排程 7 天宽限期后的永久删除"
       critical
     >
       <form onSubmit={onSubmit} style={styles.form} noValidate>
         <label style={styles.label}>
-          <span style={styles.labelText}>account password</span>
+          <span style={styles.labelText}>账号密码</span>
           <input
             type="password"
             value={password}
@@ -410,7 +409,7 @@ function DeleteSection({ status, onChange }) {
           />
         </label>
         <label style={styles.label}>
-          <span style={styles.labelText}>type your site handle to confirm</span>
+          <span style={styles.labelText}>输入站点标识以确认</span>
           <input
             type="text"
             value={handle}
@@ -426,7 +425,7 @@ function DeleteSection({ status, onChange }) {
             disabled={busy || !password || !handle.trim()}
             style={styles.btnDanger}
           >
-            {busy ? 'scheduling…' : 'schedule deletion'}
+            {busy ? '排程中...' : '排程删除'}
           </button>
         </div>
         {error && <div style={styles.error}>! {error}</div>}
@@ -434,9 +433,9 @@ function DeleteSection({ status, onChange }) {
 
       {confirmOpen && (
         <ConfirmModal
-          title="Confirm site deletion"
-          body={`Schedule deletion of "${handle}"? You'll have 7 days to cancel before data is permanently removed.`}
-          confirmLabel="yes, schedule deletion"
+          title="确认删除站点"
+          body={`确定排程删除 "${handle}"？数据永久删除前有 7 天可取消。`}
+          confirmLabel="确认排程删除"
           onConfirm={actuallyDelete}
           onCancel={() => setConfirmOpen(false)}
         />
@@ -487,9 +486,19 @@ function StatusPill({ status, polling }) {
         fontWeight: 600,
       }}
     >
-      {status}{polling ? ' …' : ''}
+      {statusLabel(status)}{polling ? ' ...' : ''}
     </span>
   );
+}
+
+function statusLabel(status) {
+  const labels = {
+    pending: '等待中',
+    running: '运行中',
+    done: '已完成',
+    failed: '失败',
+  };
+  return labels[status] || status;
 }
 
 function ConfirmModal({ title, body, confirmLabel, onConfirm, onCancel }) {
@@ -507,7 +516,7 @@ function ConfirmModal({ title, body, confirmLabel, onConfirm, onCancel }) {
               {confirmLabel}
             </button>
             <button type="button" onClick={onCancel} style={styles.btnSecondary}>
-              cancel
+              取消
             </button>
           </div>
         </div>
@@ -567,7 +576,7 @@ const styles = {
     padding: '14px 16px',
   },
   cardCritical: {
-    borderColor: 'color-mix(in oklab, var(--danger) 50%, var(--line))',
+    border: '1px solid color-mix(in oklab, var(--danger) 50%, var(--line))',
   },
   cardHead: {
     display: 'flex',

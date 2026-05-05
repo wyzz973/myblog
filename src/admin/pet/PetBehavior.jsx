@@ -23,36 +23,36 @@ export default function PetBehavior({ config, patch }) {
       <label>
         <input type="checkbox" checked={config.enabled}
                onChange={(e) => patch({ enabled: e.target.checked })} />
-        Enabled
+        启用宠物助手
       </label>
       <label>
         <input type="checkbox" checked={config.visitor_can_change}
                onChange={(e) => patch({ visitor_can_change: e.target.checked })} />
-        Visitor can change species
+        允许访客切换物种
       </label>
       <label>
         <input type="checkbox" checked={config.enable_article_context}
                onChange={(e) => patch({ enable_article_context: e.target.checked })} />
-        Article context awareness
+        启用文章上下文感知
       </label>
       <label>
         <input type="checkbox" checked={config.enable_free_chat !== false}
                onChange={(e) => patch({ enable_free_chat: e.target.checked })} />
-        Free chat
+        启用自由聊天
       </label>
       <label>
         <input type="checkbox" checked={config.enable_proactive !== false}
                onChange={(e) => patch({ enable_proactive: e.target.checked })} />
-        Proactive prompts
+        启用主动提示
       </label>
       <label>
         <input type="checkbox" checked={config.enable_long_term_memory !== false}
                onChange={(e) => patch({ enable_long_term_memory: e.target.checked })} />
-        Anonymous long-term memory
+        启用匿名长期记忆
       </label>
 
       <fieldset>
-        <legend>Providers (fallback chain)</legend>
+        <legend>模型提供商（按顺序兜底）</legend>
         <input type="text" value={(config.providers || []).join(', ')}
                onChange={(e) => patch({
                  providers: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
@@ -61,7 +61,7 @@ export default function PetBehavior({ config, patch }) {
       </fieldset>
 
       <fieldset>
-        <legend>Rate limit</legend>
+        <legend>限流配置</legend>
         {['strict','relaxed','unlimited'].map((p) => (
           <label key={p}>
             <input type="radio" name="preset" checked={preset === p}
@@ -69,9 +69,9 @@ export default function PetBehavior({ config, patch }) {
             {p}
           </label>
         ))}
-        {preset === 'custom' && <span className="hint">(custom)</span>}
+        {preset === 'custom' && <span className="hint">（自定义）</span>}
         <details>
-          <summary>Advanced</summary>
+          <summary>高级配置</summary>
           <label>per_ip_per_min: <input type="number" min="1" max="120"
             value={config.per_ip_per_min}
             onChange={(e) => patch({ per_ip_per_min: Number(e.target.value) })} /></label>
@@ -87,19 +87,19 @@ export default function PetBehavior({ config, patch }) {
           <label>
             <input type="checkbox" checked={!!config.unlimited}
                    onChange={(e) => patch({ unlimited: e.target.checked })} />
-            unlimited (skip 3-layer, only enforce hard_ceiling)
+            不限量（跳过三层限流，只保留硬上限）
           </label>
         </details>
       </fieldset>
 
       <fieldset>
-        <legend>Mode budgets</legend>
+        <legend>模式预算</legend>
         <details>
-          <summary>Advanced per-mode limits</summary>
+          <summary>各模式高级限制</summary>
           {Object.keys(config.per_mode_output_budget || {}).map((mode) => (
             <div key={mode} style={{ display: 'grid', gridTemplateColumns: '130px 1fr 1fr 1fr', gap: 8, alignItems: 'center' }}>
               <span className="hint">{mode}</span>
-              <label>daily <input type="number" min="0" max="10000"
+              <label>每日 <input type="number" min="0" max="10000"
                 value={config.per_mode_daily_limit?.[mode] ?? 0}
                 onChange={(e) => patch({
                   per_mode_daily_limit: {
@@ -107,7 +107,7 @@ export default function PetBehavior({ config, patch }) {
                     [mode]: Number(e.target.value),
                   },
                 })} /></label>
-              <label>input <input type="number" min="100" max="4000"
+              <label>输入 <input type="number" min="100" max="4000"
                 value={config.per_mode_input_budget?.[mode] ?? 1000}
                 onChange={(e) => patch({
                   per_mode_input_budget: {
@@ -115,7 +115,7 @@ export default function PetBehavior({ config, patch }) {
                     [mode]: Number(e.target.value),
                   },
                 })} /></label>
-              <label>output <input type="number" min="10" max="500"
+              <label>输出 <input type="number" min="10" max="500"
                 value={config.per_mode_output_budget?.[mode] ?? 100}
                 onChange={(e) => patch({
                   per_mode_output_budget: {
@@ -129,7 +129,7 @@ export default function PetBehavior({ config, patch }) {
       </fieldset>
 
       <fieldset>
-        <legend>Fallback lines (one per line)</legend>
+        <legend>兜底回复（每行一条）</legend>
         <textarea rows={4}
           value={(config.fallback_lines || []).join('\n')}
           onChange={(e) => patch({
@@ -138,7 +138,7 @@ export default function PetBehavior({ config, patch }) {
       </fieldset>
 
       <fieldset>
-        <legend>Tired lines (rate-limited reply)</legend>
+        <legend>限流回复（每行一条）</legend>
         <textarea rows={4}
           value={(config.tired_lines || []).join('\n')}
           onChange={(e) => patch({

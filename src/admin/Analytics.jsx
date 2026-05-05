@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiAnalytics } from '../api/analytics.js';
 
 const RANGES = [
-  { id: '7d', label: '7d' },
-  { id: '30d', label: '30d' },
-  { id: '90d', label: '90d' },
+  { id: '7d', label: '7 天' },
+  { id: '30d', label: '30 天' },
+  { id: '90d', label: '90 天' },
 ];
 
 export default function Analytics() {
@@ -32,7 +32,7 @@ export default function Analytics() {
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err?.detail || err?.message || 'failed to load');
+        setError(err?.detail || err?.message || '加载失败');
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -46,8 +46,8 @@ export default function Analytics() {
     <div>
       <header style={styles.header}>
         <div>
-          <h1 style={styles.h1}>Analytics</h1>
-          <p style={styles.lead}>Site traffic across the selected window.</p>
+          <h1 style={styles.h1}>数据分析</h1>
+          <p style={styles.lead}>查看所选时间窗口内的访问趋势和内容表现。</p>
         </div>
         <div style={styles.rangeRow}>
           {RANGES.map((r) => {
@@ -70,17 +70,17 @@ export default function Analytics() {
         </div>
       </header>
 
-      {loading && <div style={styles.muted}>loading analytics…</div>}
-      {error && !loading && <div style={styles.error}>error: {error}</div>}
+      {loading && <div style={styles.muted}>正在加载数据...</div>}
+      {error && !loading && <div style={styles.error}>错误：{error}</div>}
 
       {!loading && !error && bundle && (
         <>
-          <Section title="Hits by day">
+          <Section title="每日访问">
             <HitsChart series={bundle.timeseries || []} />
           </Section>
 
           <div style={styles.grid}>
-            <Section title="Top paths">
+            <Section title="热门路径">
               <RankTable
                 rows={(bundle.top_paths || []).map((r) => ({
                   label: r.path,
@@ -88,23 +88,23 @@ export default function Analytics() {
                 }))}
               />
             </Section>
-            <Section title="Top referrers">
+            <Section title="来源排行">
               <RankTable
                 rows={(bundle.top_referrers || []).map((r) => ({
-                  label: r.referrer || '(direct)',
+                  label: r.referrer || '直接访问',
                   count: r.hits,
                 }))}
               />
             </Section>
-            <Section title="Top countries">
+            <Section title="国家 / 地区排行">
               <RankTable
                 rows={(bundle.top_countries || []).map((r) => ({
-                  label: r.country || '(unknown)',
+                  label: r.country || '未知',
                   count: r.hits,
                 }))}
               />
             </Section>
-            <Section title="Top posts">
+            <Section title="热门文章">
               <RankTable
                 rows={(posts || []).map((r) => ({
                   label: r.title || r.post_id,
@@ -112,7 +112,7 @@ export default function Analytics() {
                 }))}
               />
             </Section>
-            <Section title="Top tags">
+            <Section title="热门标签">
               <RankTable
                 rows={(tags || []).map((r) => ({
                   label: r.name || r.slug,
@@ -149,7 +149,7 @@ function HitsChart({ series }) {
   })), [series]);
 
   if (!data.length) {
-    return <div style={styles.muted}>no hits in this range.</div>;
+    return <div style={styles.muted}>这个时间范围内暂无访问。</div>;
   }
   const max = Math.max(1, ...data.map((d) => d.hits));
   const innerW = width - padX * 2;
@@ -163,7 +163,7 @@ function HitsChart({ series }) {
         viewBox={`0 0 ${width} ${height}`}
         style={{ width: '100%', height: 'auto', display: 'block' }}
         role="img"
-        aria-label={`hits by day, ${data.length} days, max ${max}`}
+        aria-label={`每日访问，${data.length} 天，最高 ${max}`}
       >
         <line
           x1={padX}
@@ -199,7 +199,7 @@ function HitsChart({ series }) {
           fontSize="10"
           fontFamily="'JetBrains Mono', ui-monospace, monospace"
         >
-          max {max.toLocaleString()}
+          最高 {max.toLocaleString()}
         </text>
       </svg>
       <div style={styles.chartAxis}>
@@ -212,7 +212,7 @@ function HitsChart({ series }) {
 
 function RankTable({ rows }) {
   if (!rows || rows.length === 0) {
-    return <div style={styles.muted}>no data.</div>;
+    return <div style={styles.muted}>暂无数据。</div>;
   }
   const max = Math.max(1, ...rows.map((r) => r.count));
   return (
@@ -263,7 +263,7 @@ const styles = {
   },
   rangeBtnActive: {
     background: 'color-mix(in oklab, var(--accent) 16%, transparent)',
-    borderColor: 'color-mix(in oklab, var(--accent) 40%, transparent)',
+    border: '1px solid color-mix(in oklab, var(--accent) 40%, transparent)',
     color: 'var(--fg)',
   },
   grid: {

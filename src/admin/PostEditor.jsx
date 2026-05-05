@@ -146,7 +146,7 @@ export default function PostEditor({ id, onClose, onSaved }) {
       })
       .catch((err) => {
         if (!mounted) return;
-        setLoadError(err?.detail || err?.message || 'failed to load');
+        setLoadError(err?.detail || err?.message || '加载失败');
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -202,7 +202,7 @@ export default function PostEditor({ id, onClose, onSaved }) {
           setPreviewError(null);
         })
         .catch((err) => {
-          setPreviewError(err?.detail || err?.message || 'preview failed');
+          setPreviewError(err?.detail || err?.message || '预览失败');
         })
         .finally(() => setPreviewing(false));
     }, 400);
@@ -256,7 +256,7 @@ export default function PostEditor({ id, onClose, onSaved }) {
       setDraftSavedAt(null);
       onSaved?.();
     } catch (err) {
-      setSaveError(err?.detail || err?.message || 'save failed');
+      setSaveError(err?.detail || err?.message || '保存失败');
     } finally {
       setSaving(false);
     }
@@ -269,16 +269,15 @@ export default function PostEditor({ id, onClose, onSaved }) {
       <header style={styles.header}>
         <div>
           <h1 style={styles.h1}>
-            {isNew ? 'New post' : `Edit · ${originalId}`}
+            {isNew ? '新建文章' : `编辑 · ${originalId}`}
           </h1>
           <p style={styles.lead}>
-            Markdown source with YAML frontmatter. Saves through the markdown
-            ingest pipeline.
+            使用带 YAML Frontmatter 的 Markdown 源文，保存时会经过后端导入流程。
           </p>
         </div>
         <div style={styles.headerBtns}>
           <button type="button" style={styles.btnGhost} onClick={onClose}>
-            cancel
+            取消
           </button>
           <button
             type="button"
@@ -286,7 +285,7 @@ export default function PostEditor({ id, onClose, onSaved }) {
             onClick={onSave}
             disabled={saving || loading}
           >
-            {saving ? 'saving…' : isNew ? 'create →' : 'save →'}
+            {saving ? '保存中...' : isNew ? '创建' : '保存'}
           </button>
         </div>
       </header>

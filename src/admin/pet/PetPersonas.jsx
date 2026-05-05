@@ -16,8 +16,7 @@ export default function PetPersonas({ config, patch, saving, onReset }) {
   return (
     <div className="form pad">
       <p className="hint">
-        Each species speaks in its own voice. The persona text is injected
-        into the system prompt before every reply.
+        每个物种都有独立说话风格。人格文本会在每次回复前注入系统提示词。
       </p>
       <div>
         {RARITY_ORDER.map((rarity) => {
@@ -41,7 +40,7 @@ export default function PetPersonas({ config, patch, saving, onReset }) {
         })}
       </div>
       <button type="button" onClick={onReset} disabled={saving} className="danger">
-        Reset all personas to defaults
+        将全部人格重置为默认值
       </button>
     </div>
   );
