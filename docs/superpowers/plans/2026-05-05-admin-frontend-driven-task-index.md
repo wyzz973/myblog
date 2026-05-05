@@ -981,7 +981,7 @@ Implementation note: new `media.references(s, media_id)` service scans `posts.bo
 
 ### Task 27 — Integrations: test-without-save + provider priority UI
 
-**Status:** in-progress (27a + 27b done; 27c provider-priority drag-reorder still pending)
+**Status:** completed (27a + 27b + 27c)
 **Priority:** medium
 **Frontend evidence:** Pet integrations cost monitoring — provider order matters.
 **Owner problem:** "test connection" only fires on save (mutates state). Provider priority is a comma-string buried in Pet → Behavior.
@@ -1019,7 +1019,16 @@ Implementation note: single generic `POST /integrations/{name}/test` endpoint di
 - **Snapshots:** `/tmp/admin-rebuild/task-27b/anthropic-test.png`, `/zhipu-test.png`.
 - **Commit:** `c4cf3f1` (`feat(admin/integrations): test connection button + multi-provider cards (Task 27b)`).
 
-Implementation note: each card (GithubCard / AnthropicCard / ProviderCard for zhipu·qwen·doubao·deepseek) gains a 测试连接 button beside 保存. Per-card `testing` + `testResult` state. The result line appears between the existing notice/error block and the actions row, styled with `styles.notice` (green) for `ok=true` and `styles.error` (red) for `ok=false`; carries `data-testid=test-{name}-result` + `data-ok="true|false"` for stable test selectors. The button itself has `data-testid=test-{name}` and respects the same `disabled` rules as 保存 (no token / missing required model). The commit also pulls in the prior multi-provider card UI (zhipu·qwen·doubao·deepseek) that had been sitting in the unstaged work pool — they're functionally tied to the test-connection feature and ship together. Task 27c (provider priority drag-reorder writing to `PetConfig.providers`) remains pending.
+Implementation note: each card (GithubCard / AnthropicCard / ProviderCard for zhipu·qwen·doubao·deepseek) gains a 测试连接 button beside 保存. Per-card `testing` + `testResult` state. The result line appears between the existing notice/error block and the actions row, styled with `styles.notice` (green) for `ok=true` and `styles.error` (red) for `ok=false`; carries `data-testid=test-{name}-result` + `data-ok="true|false"` for stable test selectors. The button itself has `data-testid=test-{name}` and respects the same `disabled` rules as 保存 (no token / missing required model). The commit also pulls in the prior multi-provider card UI (zhipu·qwen·doubao·deepseek) that had been sitting in the unstaged work pool — they're functionally tied to the test-connection feature and ship together.
+
+#### Task 27c — provider priority order UI (DONE)
+
+- **Tests:** Vitest 191/191 (no dedicated unit test for the order bar — flow covered by Playwright path).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-27c/verify.py` → snapshot baseline `PetConfig.providers` via API → login → /admin/settings → Integrations tab → wait for `[data-testid=provider-order-bar]` → read DOM order via `data-name` attrs → click `[data-testid=provider-up-{target}]` → assert slot 0 now has the target → click `[data-testid=provider-order-save]` → assert "优先级已保存" notice → GET /api/admin/pet returns the new order at `providers[0]` → restore original providers via PUT.
+- **Snapshots:** `/tmp/admin-rebuild/task-27c/order-saved.png`.
+- **Commit:** `307670e` (`feat(admin/integrations): provider priority order UI (Task 27c)`).
+
+Implementation note: simple ↑/↓ arrow buttons instead of HTML5 drag-and-drop — equivalent UX, much easier to test in headless Playwright (drag events are flaky in jsdom-style envs). The bar fetches the full PetConfig once on mount, merges persisted order with `ORDERABLE_PROVIDERS` (so newly-added providers always appear at the end without breaking saved order), and only saves when the local order differs from `config.providers` (`dirty` check). The save calls `apiPet.put({...config, providers: order})` since the backend has no PATCH; sending the full config back is fine for this small payload. Each row carries `data-testid=provider-order-{idx}` + `data-name=zhipu` so tests can assert order without coupling to display labels.
 
 ---
 
@@ -1148,3 +1157,4 @@ Append-only. Every entry below means a real commit shipped.
 | 22b | HomeA /now public panel | `4cf1753` | `vitest run src/components/NowPanel.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-22b/verify.py` PASSED | 2026-05-06 |
 | 27a | Integrations test-without-save endpoint | `8418544` | `pytest tests/test_admin_integrations.py` 26/26 | `python /tmp/admin-rebuild/task-27a/verify.py` PASSED | 2026-05-06 |
 | 27b | Integrations 测试连接 button + multi-provider cards | `c4cf3f1` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-27b/verify.py` PASSED | 2026-05-06 |
+| 27c | Provider priority order UI | `307670e` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-27c/verify.py` PASSED | 2026-05-06 |
