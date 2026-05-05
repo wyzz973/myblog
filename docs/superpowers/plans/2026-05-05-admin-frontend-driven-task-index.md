@@ -457,7 +457,7 @@ Implementation note: backend gained a single-statement `bulk_set_status` / `bulk
 
 ### Task 11 — Theme color picker (replace raw oklch strings)
 
-**Status:** pending
+**Status:** completed
 **Priority:** medium
 **Frontend evidence:** TopBar accent dot, every `color-mix(in oklab, var(--accent), …)`, every `--danger` border on public site.
 **Owner problem:** editing oklch is developer-only; one slip blanks half the site. C9.
@@ -478,7 +478,13 @@ Implementation note: backend gained a single-statement `bulk_set_status` / `bulk
 **Snapshot location:** `/tmp/admin-rebuild/task-11/picker.png`, `/tmp/admin-rebuild/task-11/public-applied.png`
 **Commit message:** `feat(admin/theme): swatch picker with live preview replaces raw oklch input`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `bcdd8ca` (`feat(admin/theme): swatch picker with live preview replaces raw oklch input`).
+
+- **Tests:** `npx vitest run src/admin/oklch.test.js` → 8/8 (parse with whitespace + alpha, returns null on garbage, clamps absurd values, format emits canonical L% C H with rounded chroma + integer hue, parse↔format round-trips, THEME_DEFAULTS match public seeds). Combined regression `npx vitest run` → 93/93 (no Task 1-10 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-11/verify.py` → login → /admin/site (now 主题) → assert 4 color rows + preview render → drive H slider on accent_color via JS-dispatched events → raw input picks up new hue → save → 已保存 toast → API confirms backend stored new color → visit / on public → assert document.documentElement's --accent CSS variable resolves to the new oklch() string → cleanup restores original. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-11/{theme-page,saved}.png`.
+
+Implementation note: oklch parse / format helpers in their own module so they're trivially unit-tested. Site.jsx now owns just the theme workflow — identity fields are gone (already lived on /admin/site-identity from Task 6) so the page no longer duplicates them. Public theme apply lives in App.jsx: every /api/site fetch copies accent_color / accent2_color / violet_color / danger_color onto document.documentElement as `--accent / --accent-2 / --violet / --danger` plus an oklab `color-mix` `--accent-glow`. The visitor-side green/amber/violet preset overlay (utils/accent.js) is unchanged; admin-saved values are the *defaults* the overlay sits on top of.
 
 ---
 
@@ -1030,3 +1036,4 @@ Append-only. Every entry below means a real commit shipped.
 | 8 | Reader likes wired to server + admin column | `fcab65e` | `vitest run src/api/client.test.js` 3/3 | `python /tmp/admin-rebuild/task-8/verify.py` PASSED | 2026-05-06 |
 | 9 | HomeA contacts from API + fallback | `c8f48e1` | `vitest run src/components/contact-row.test.jsx` 7/7 | `python /tmp/admin-rebuild/task-9/verify.py` PASSED | 2026-05-06 |
 | 10 | Comments per-post filter + bulk moderation | `87a8875` | `vitest run src/admin/Comments.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-10/verify.py` PASSED | 2026-05-06 |
+| 11 | Theme color picker + live preview | `bcdd8ca` | `vitest run src/admin/oklch.test.js` 8/8 | `python /tmp/admin-rebuild/task-11/verify.py` PASSED | 2026-05-06 |
