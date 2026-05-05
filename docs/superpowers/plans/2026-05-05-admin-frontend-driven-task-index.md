@@ -1197,3 +1197,39 @@ Append-only. Every entry below means a real commit shipped.
 | 27c | Provider priority order UI | `307670e` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-27c/verify.py` PASSED | 2026-05-06 |
 | 25a | Per-post analytics CSV export | `7a80f03` | `pytest tests/test_admin_analytics.py -k csv` 3/3 | `python /tmp/admin-rebuild/task-25a/verify.py` PASSED | 2026-05-06 |
 | 31 | Tags reference scan + 409 delete refusal | `f0eb20c` | `pytest tests/test_admin_taxonomy.py` 15/15 | `python /tmp/admin-rebuild/task-30/verify.py` PASSED | 2026-05-06 |
+| 32 | Frontmatter plain-scalar auto-quote | `0aa0d40` | `pytest tests/test_admin_posts.py` 10/10 | `python /tmp/admin-rebuild/task-32/verify.py` PASSED | 2026-05-06 |
+| 33 | PostDetail exposes lifecycle flags | `5ded359` | `pytest tests/test_admin_posts.py` 11/11 | live `curl` probe shows status/featured/private/comments_enabled/scheduled_at | 2026-05-06 |
+
+---
+
+### Task 32 — Frontmatter plain-scalar colon auto-quote
+
+**Status:** completed
+**Priority:** low (UX safety net)
+**Frontend evidence:** PostEditor allows free-text frontmatter; YAML is strict about scalars containing colons (e.g. `summary: 推荐（按稳定度排序）:`).
+**Owner problem:** typing a perfectly natural CJK summary that ends with `:` rejects the whole save with a parser error — surprising and obscure.
+**Existing capability:** `parse_or_infer_frontmatter` calls `frontmatter.loads()` which throws on strict YAML errors.
+**Gap:** no recovery path; render-preview returns 500-shaped errors via try/except outside the helper.
+**Backend touch:** `app/services/post_ingest.py` — new `_quote_plain_frontmatter_scalars` helper + try/except retry; `IngestError` raised when even the fixed input fails to parse.
+**Automated tests:** pytest covers (a) genuinely malformed yaml on render-preview returns structured 200 error, (b) genuinely malformed yaml on create returns 422, (c) plain scalar with colon now parses.
+**Commit message:** `feat(admin/posts): auto-quote plain frontmatter scalars with colons (Task 32)`
+**Completed:** `0aa0d40`.
+
+Implementation note: helper only rewrites top-level `key: value` lines where the value has no leading quote / bracket / pipe / etc. — leaves all structured YAML untouched. JSON-encodes the value so embedded quotes / unicode survive correctly. Fall-through to `IngestError` when the rewrite still doesn't parse, so the API surface is unchanged for genuinely-broken inputs.
+
+---
+
+### Task 33 — PostDetail exposes lifecycle flags
+
+**Status:** completed
+**Priority:** medium (closes editor round-trip gap)
+**Frontend evidence:** PostEditor's GUI strip (Task 3) reads `status / scheduled_at / featured / private / comments_enabled` from the post detail; previously the backend returned only the body + tag, so those toggles were always default.
+**Owner problem:** opening an existing post in the editor lost the persisted lifecycle flags.
+**Existing capability:** Post model has all 5 columns; PUT / patch endpoints accept them via frontmatter; only the GET shape was missing them.
+**Gap:** `PostDetail` schema lacked these fields; both the `_detail` helper and the direct `get_post` constructor missed them.
+**Backend touch:** `app/schemas/post.py` adds 5 fields (typed as `| None = None` so test fixtures and old clients don't break); `app/routers/admin/posts.py` populates from `Post` columns in both call sites.
+**Automated tests:** pytest creates a post via `POST /api/admin/posts` (frontmatter `status: published`) → GET → asserts all five fields present + correct defaults.
+**Commit message:** `feat(admin/posts): expose lifecycle flags on PostDetail (Task 33)`
+**Completed:** `5ded359`.
+
+Implementation note: the Pydantic v2 default `None` makes the new fields opt-out for any non-admin caller that never populates them, so this is backwards-compatible. Live `curl` against `/api/admin/posts/vps` now returns `{"status":"published","scheduled_at":null,"featured":false,"private":false,"comments_enabled":true}` — exactly what the editor's GUI strip needs.
