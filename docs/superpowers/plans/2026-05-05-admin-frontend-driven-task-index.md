@@ -623,7 +623,7 @@ Implementation note: pure helpers in `src/admin/draftStore.js` (saveDraft / load
 
 ### Task 16 — Global command palette in admin (⌘K)
 
-**Status:** pending
+**Status:** completed
 **Priority:** medium
 **Frontend evidence:** public site has `Palette.jsx`. PRD §6.2 — admin must adopt the same shortcut model.
 **Owner problem:** every workflow today requires sidebar click. ⌘K should jump to any page or run common commands.
@@ -645,7 +645,13 @@ Implementation note: pure helpers in `src/admin/draftStore.js` (saveDraft / load
 **Snapshot location:** `/tmp/admin-rebuild/task-16/palette.png`
 **Commit message:** `feat(admin/palette): ⌘K command palette mirroring public site`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `28cae37` (`feat(admin/palette): cmd-K command palette mirroring public site`).
+
+- **Tests:** `npx vitest run src/admin/commandPaletteItems.test.js src/admin/CommandPalette.test.jsx` → 18/18 (build/filter/group helpers + render, query filter, Enter runs, ArrowDown moves selection, Escape closes, empty placeholder, async post load). Combined regression `npx vitest run` → 139/139 (no Task 1-15 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-16/verify.py` → login → Meta+K opens palette → 收件 narrows results → Enter routes to /admin/inbox → Meta+K → 新建 → Enter routes to /admin/posts and editor opens (post-fields-strip visible) → Meta+K → Escape detaches palette → Meta+K from posts page surfaces post typeahead section. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-16/palette-open.png`, `/new-post-from-palette.png`, `/palette-with-posts.png`.
+
+Implementation note: pure helpers in `src/admin/commandPaletteItems.js` (build / filter / groupBySection) keep React state thin. Layout owns the global ⌘K listener and the runners object (navigate / new post / open post via location.state side door / clipboard token / open public site / logout). Posts.jsx pops `location.state.editPost` on mount so the palette's "新建文章" or post typeahead lands directly on the editor without inventing a new `/admin/posts/__new__` route. A document-level Escape listener on the palette ensures Esc closes the dialog even if focus moved off the search input.
 
 ---
 
@@ -1065,3 +1071,4 @@ Append-only. Every entry below means a real commit shipped.
 | 13 | Pet visitor profile sidebar | `4f8f8e7` | `vitest run src/admin/pet/VisitorProfileSidebar.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-13/verify.py` PASSED | 2026-05-06 |
 | 14 | Inbox page (运营中枢) | `040356e` | `vitest run src/admin/Inbox.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-14/verify.py` PASSED | 2026-05-06 |
 | 15 | Posts editor autosave drafts | `d54d90f` | `vitest run src/admin/draftStore.test.js` 9/9 | `python /tmp/admin-rebuild/task-15/verify.py` PASSED | 2026-05-06 |
+| 16 | Admin ⌘K command palette | `28cae37` | `vitest run src/admin/CommandPalette.test.jsx src/admin/commandPaletteItems.test.js` 18/18 | `python /tmp/admin-rebuild/task-16/verify.py` PASSED | 2026-05-06 |
