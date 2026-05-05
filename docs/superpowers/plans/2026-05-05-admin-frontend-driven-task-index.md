@@ -724,7 +724,7 @@ Implementation note: pure helpers in `src/admin/searchParamsState.js` (`buildQue
 
 ### Task 19 — Unified ConfirmModal + Toast across admin
 
-**Status:** pending
+**Status:** completed
 **Priority:** medium
 **Frontend evidence:** PRD §6.2.
 **Owner problem:** five different feedback patterns (native confirm/alert, ConfirmModal, SecretModal, inline banner, toast) erodes trust.
@@ -746,7 +746,13 @@ Implementation note: pure helpers in `src/admin/searchParamsState.js` (`buildQue
 **Snapshot location:** `/tmp/admin-rebuild/task-19/confirm.png`, `/tmp/admin-rebuild/task-19/toast.png`
 **Commit message:** `refactor(admin/ui): unify ConfirmModal + Toast across admin`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `e86e322` (`refactor(admin/ui): unify ConfirmModal + Toast across admin`).
+
+- **Tests:** `npx vitest run src/admin/ui/UIProvider.test.jsx` → 9/9 (confirm resolves true/false, Esc cancels, destructive style, toasts render by kind, click dismisses, ttl auto-dismiss, throws outside provider). Plus updated `src/admin/Comments.test.jsx` (5/5) + `src/admin/pet/PetConversationDetail.test.jsx` (2/2) wrap their renders in UIProvider and click `[data-testid=confirm-ok]` instead of mocking `window.confirm`. Combined regression at the Task 19 commit was 171/171; an unrelated prior-round i18n change to `Login.jsx` (button text → 登录) without a matching `Login.test.jsx` update introduces 5 pre-existing failures when the unstaged stash is restored — those live in unstaged work, not in `e86e322`.
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-19/verify.py` → login → /admin/tags → create unique-slug tag → toast-success appears (no native dialog) → click delete → `[data-testid=confirm-modal]` opens (browser-native confirm did NOT fire — verified via `page.on('dialog', ...)` listener) → cancel keeps row → ok deletes row + toast-success → invalid slug 创建 surfaces toast-error. Page-level dialog listener confirms zero native confirm/alert events fired during the entire flow.
+- **Snapshots:** `/tmp/admin-rebuild/task-19/{after-create,confirm-modal,toast-success,toast-error}.png`.
+
+Implementation note: single `UIProvider` mounted in `Layout.jsx` exposes `useConfirm()` (returning `Promise<boolean>` from `await confirm({title, message, confirmLabel, cancelLabel, destructive})`) and `useToast()` (with `success/error/info/dismiss` methods, default 3.5s ttl, error gets 6s). All eleven `confirm()` callsites + every page-level `alert()` were replaced: Posts, Tags, Media, Now, Pet, Projects, Contacts, Comments (bulk + single delete + reply), settings/ApiTokens, pet/PetConversationDetail. Destructive intents pass `destructive: true` for the red primary button. The modal carries `data-shortcut-suppress="true"` so the Task 17 global keyboard layer treats it as an active dialog. Test harnesses for Comments + PetConversationDetail now wrap their components in `<UIProvider>` and trigger the modal via `findByTestId('confirm-ok')` — closer to real UX than the previous `window.confirm` spy.
 
 ---
 
@@ -1086,3 +1092,4 @@ Append-only. Every entry below means a real commit shipped.
 | 16 | Admin ⌘K command palette | `28cae37` | `vitest run src/admin/CommandPalette.test.jsx src/admin/commandPaletteItems.test.js` 18/18 | `python /tmp/admin-rebuild/task-16/verify.py` PASSED | 2026-05-06 |
 | 17 | Global keyboard shortcuts (?, g x, j/k) | `f688b6e` | `vitest run src/admin/keyboardShortcuts.test.js` 11/11 | `python /tmp/admin-rebuild/task-17/verify.py` PASSED | 2026-05-06 |
 | 18 | URL-state filters & pagination on Posts | `ae66dbd` | `vitest run src/admin/searchParamsState.test.js` 12/12 | `python /tmp/admin-rebuild/task-18/verify.py` PASSED | 2026-05-06 |
+| 19 | Unified ConfirmModal + Toast | `e86e322` | `vitest run src/admin/ui/ src/admin/Comments.test.jsx src/admin/pet/PetConversationDetail.test.jsx` 16/16 | `python /tmp/admin-rebuild/task-19/verify.py` PASSED | 2026-05-06 |
