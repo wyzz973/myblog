@@ -323,7 +323,7 @@ Implementation note: backend keeps two endpoints (`PUT /profile` and `PUT /site`
 
 ### Task 7 — Pet templates: expose all 12 modes
 
-**Status:** pending
+**Status:** completed
 **Priority:** high
 **Frontend evidence:** `AsciiPet.jsx` payload modes — `greet, recommend_next, summary_react, selection_explain, selection_qa, free_chat, idle_monologue, article_finished, code_assist, pet_care`, plus backend-known `follow_up`, `reading_assist`. S6.
 **Owner problem:** owner can only edit 5/12 mode templates from admin. The rest fall back to backend defaults; tuning requires a code edit.
@@ -344,7 +344,13 @@ Implementation note: backend keeps two endpoints (`PUT /profile` and `PUT /site`
 **Snapshot location:** `/tmp/admin-rebuild/task-7/templates.png`
 **Commit message:** `feat(admin/pet): expose all 12 mode templates instead of 5`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `993465e` (`feat(admin/pet): expose all 12 mode templates instead of 5`).
+
+- **Tests:** `npx vitest run src/admin/pet/PetTemplates.test.jsx` → 5/5 (all 12 modes render, edits flow through patch with merged map, per-mode reset writes default, reset disabled when default-matched, group reset triggers parent onReset). Combined regression `npx vitest run src/admin/pet/PetTemplates.test.jsx src/admin/SiteIdentity.test.jsx src/admin/ActivityLog.test.jsx src/admin/Layout.test.jsx src/admin/frontmatter.test.js src/api/admin.test.js src/admin/Login.test.jsx` → 42/42 (no Task 1-6 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-7/verify.py` → login → /admin/pet?tab=templates → assert all 12 fieldsets visible (greet / idle_monologue / recommend_next / article_finished / reading_assist / code_assist / pet_care / summary_react / selection_explain / selection_qa / free_chat / follow_up) → edit code_assist via JS-dispatched events → click Save (Pet.jsx primary button) → API check confirms backend stored the new template → cleanup restores original. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-7/templates.png` (full-page).
+
+Implementation note: the 12 modes are split into 主动 / 响应 groups for UX legibility only — backend treats every mode the same. Each fieldset adds a hint line under the legend, a char-count footer (turns red past 90% of 800-char limit), and a per-mode 重置默认 button that lazily fetches the backend defaults via `apiPet.fetchDefaults` and writes one mode at a time.
 
 ---
 
@@ -1002,3 +1008,4 @@ Append-only. Every entry below means a real commit shipped.
 | 4 | Sidebar IA regrouped + breadcrumb | `e30dbae` | `vitest run src/admin/Layout.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-4/verify.py` PASSED | 2026-05-05 |
 | 5 | Activity feed on dashboard + activity log page | `d63255d` | `vitest run src/admin/ActivityLog.test.jsx` 4/4 | `python /tmp/admin-rebuild/task-5/verify.py` PASSED | 2026-05-06 |
 | 6 | Site identity merged workflow | `7d404a5` | `vitest run src/admin/SiteIdentity.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-6/verify.py` PASSED | 2026-05-06 |
+| 7 | Pet templates: 12 modes | `993465e` | `vitest run src/admin/pet/PetTemplates.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-7/verify.py` PASSED | 2026-05-06 |
