@@ -4,11 +4,32 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { act } from 'react';
 import AsciiPet, { IDLE_MONOLOGUE_MS } from './AsciiPet.jsx';
+import { SPECIES, __resetSpeciesForTests } from './pet/species.js';
+
+// In production the species catalogue is hydrated from /api/pet/species at
+// app boot. The component-level test focuses on UI behavior, so we pre-fill
+// SPECIES.cat with a stub that satisfies AsciiPet's render contract (frames
+// + stats + rarity). Keeps the fetch-count assertions in the existing tests
+// stable — only /api/pet/config is fetched.
+const CAT_FIXTURE = {
+  id: 'cat', name: 'Cat', rarity: 'common', color: '#e0a96d',
+  trait: 'terminal familiar', personality: 'curious',
+  description: 'a classic coding companion',
+  frames: [
+    ['            ', '   /\\__/\\   ', '  ( {E}  {E} )  ', '  (  ω   )  ', '  (")__(")  '],
+    ['            ', '   /\\__/\\   ', '  ( {E}  {E} )  ', '  (  ω   )  ', '  (")__(")~ '],
+    ['            ', '   /\\--/\\   ', '  ( {E}  {E} )  ', '  (  ω   )  ', '  (")__(")  '],
+  ],
+  behavior: {}, stats: { debugging: 62, patience: 64, chaos: 30, wisdom: 38, snark: 44 },
+  visible: true, sort_order: 0,
+};
 
 describe('AsciiPet', () => {
   let store;
 
   beforeEach(() => {
+    __resetSpeciesForTests();
+    Object.assign(SPECIES, { cat: CAT_FIXTURE });
     store = new Map();
     vi.stubGlobal('localStorage', {
       getItem: vi.fn((key) => store.get(key) ?? null),
@@ -32,6 +53,7 @@ describe('AsciiPet', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    __resetSpeciesForTests();
   });
 
   it('does not render when public config disables the pet', async () => {

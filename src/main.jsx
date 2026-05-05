@@ -5,6 +5,12 @@ import App from './App.jsx';
 import AdminApp from './admin/index.jsx';
 import './styles.css';
 import { sendHit } from './utils/beacon.js';
+import { loadSpecies } from './components/pet/species.js';
+
+// Kick off the species catalogue fetch as early as possible — runs in
+// parallel with React tree mount so AsciiPet usually renders against a
+// populated catalogue on first commit.
+loadSpecies().catch(() => { /* offline / blocked — pet falls back to "loading" */ });
 
 // Prime the favicon from a cached GitHub handle BEFORE React mounts. This
 // avoids the brief flash of the inline pixel-art icon on every page load

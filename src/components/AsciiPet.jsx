@@ -11,6 +11,7 @@ import {
   STATE_EYE,
   STAT_KEYS,
   rarityStars,
+  useSpecies,
 } from './pet/species.js';
 
 const STATES = {
@@ -63,16 +64,20 @@ function Dots() {
 }
 
 export default function AsciiPet({ hint = null }) {
+  // Species catalogue is hydrated by main.jsx → loadSpecies(). useSpecies()
+  // re-renders this component once the fetch lands so we can safely look up
+  // SPECIES[k] below. Until ready we render nothing — saves a flash of
+  // wrong-species sprite on first paint.
+  const { ready: speciesReady } = useSpecies();
   // Server picks the species deterministically from (ip, user-agent) so
   // visitors can't reroll by clearing localStorage. localStorage is only
   // a fast-paint cache; on mount we fetch /api/pet/config and trust the
   // server's `assigned_species` as the source of truth.
   const [bodyKey, setBodyKey] = useState(() => {
-    const saved = localStorage.getItem('pet.body');
-    if (saved && SPECIES[saved]) return saved;
-    if (saved && LEGACY_BODY_MAP[saved] && SPECIES[LEGACY_BODY_MAP[saved]]) {
-      return LEGACY_BODY_MAP[saved];
-    }
+    try {
+      const saved = localStorage.getItem('pet.body');
+      if (saved) return saved;
+    } catch { /* ignore */ }
     return 'cat';  // placeholder; replaced on first /api/pet/config response
   });
   const [petEnabled, setPetEnabled] = useState(true);
@@ -579,6 +584,10 @@ export default function AsciiPet({ hint = null }) {
   }, [bodyKey]);
 
   if (!petEnabled) return null;
+  // Render nothing until the species catalogue has hydrated. The fetch is
+  // kicked off in main.jsx so this gate is usually <100ms; without it we'd
+  // flash a missing-frame sprite (body undefined) on first paint.
+  if (!speciesReady || !body) return null;
 
   if (hidden) {
     return (

@@ -1,42 +1,115 @@
-import { describe, it, expect } from 'vitest';
-import { SPECIES, RARITY_ORDER, STAT_KEYS, byRarity, rarityStars } from '../species.js';
+// Tests the species catalogue loader (Task 21e).
+//
+// The catalogue used to live as a hardcoded JS object — these tests
+// confirmed shape. Now the catalogue comes from /api/pet/species, so we
+// mount a fetch mock and assert that loadSpecies hydrates SPECIES with the
+// expected adapter shape (legacy trait/personality/description fields).
 
-describe('SPECIES', () => {
-  it('has 27 entries (18 from buddy-editor + 4 first-batch legendary + 4 cute round 2)', () => {
-    expect(Object.keys(SPECIES).length).toBe(27);
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  RARITY_ORDER,
+  STAT_KEYS,
+  SPECIES,
+  SPECIES_BEHAVIOR,
+  byRarity,
+  rarityStars,
+  loadSpecies,
+  isSpeciesLoaded,
+  __resetSpeciesForTests,
+} from '../species.js';
+
+const SAMPLE_API_RESPONSE = [
+  {
+    id: 'duck', name: 'Duck', rarity: 'common', color: '#f5d44c',
+    trait_zh: 'rubber debugger', personality_zh: 'cheerful', description_zh: 'a duck',
+    frames: [['            ', '    __      ', '  <({E} )___  ', '   (  ._>   ', '    `--´    ']],
+    behavior: { proactiveLevel: 3, idleFrequency: 'normal', localLines: ['quack'] },
+    stats: { debugging: 42, patience: 78, chaos: 30, wisdom: 38, snark: 12 },
+    visible: true, sort_order: 0,
+    created_at: '2026-05-01T00:00:00Z', updated_at: '2026-05-01T00:00:00Z',
+  },
+  {
+    id: 'dragon', name: 'Dragon', rarity: 'legendary', color: '#ff7a5c',
+    trait_zh: 'prod firekeeper', personality_zh: 'proud', description_zh: 'breathes fire',
+    frames: [['x']],
+    behavior: { proactiveLevel: 4, idleFrequency: 'normal', localLines: [] },
+    stats: { debugging: 96, patience: 40, chaos: 90, wisdom: 84, snark: 72 },
+    visible: true, sort_order: 18,
+    created_at: '2026-05-01T00:00:00Z', updated_at: '2026-05-01T00:00:00Z',
+  },
+];
+
+beforeEach(() => {
+  __resetSpeciesForTests();
+});
+afterEach(() => {
+  __resetSpeciesForTests();
+});
+
+describe('loadSpecies', () => {
+  it('hydrates SPECIES with adapter shape (no _zh suffix)', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => SAMPLE_API_RESPONSE }));
+    expect(isSpeciesLoaded()).toBe(false);
+
+    await loadSpecies(fetchMock);
+
+    expect(isSpeciesLoaded()).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith('/api/pet/species');
+    expect(SPECIES.duck.trait).toBe('rubber debugger');
+    expect(SPECIES.duck.personality).toBe('cheerful');
+    expect(SPECIES.duck.description).toBe('a duck');
+    // Original API fields stay too — useful for the admin editor that wants
+    // _zh fields explicitly (it loads via apiPetSpecies, but the adapter
+    // shape is forward-compatible).
+    expect(SPECIES.duck.trait_zh).toBe('rubber debugger');
+    expect(SPECIES.duck.frames).toEqual([['            ', '    __      ', '  <({E} )___  ', '   (  ._>   ', '    `--´    ']]);
   });
 
-  it('each entry has color, rarity, frames (3 frames, 5 lines each, all 12 chars wide)', () => {
-    for (const [key, sp] of Object.entries(SPECIES)) {
-      expect(sp.color, key).toMatch(/^#[0-9a-f]{3,8}$/i);
-      expect(RARITY_ORDER, key).toContain(sp.rarity);
-      expect(sp.personality, key).toEqual(expect.any(String));
-      expect(sp.trait, key).toEqual(expect.any(String));
-      expect(sp.stats, key).toBeTruthy();
-      for (const stat of STAT_KEYS) {
-        expect(sp.stats[stat], `${key}: ${stat}`).toBeGreaterThanOrEqual(0);
-        expect(sp.stats[stat], `${key}: ${stat}`).toBeLessThanOrEqual(100);
-      }
-      expect(sp.frames, key).toHaveLength(3);
-      for (const frame of sp.frames) {
-        expect(frame, key).toHaveLength(5);
-        for (const line of frame) {
-          // Width including {E} placeholder normalized: substitute {E} with X for length check
-          const w = line.replace(/\{E\}/g, 'X').length;
-          expect(w, `${key}: line "${line}"`).toBe(12);
-        }
-      }
-    }
+  it('memoizes — second call doesn\'t re-fetch', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => SAMPLE_API_RESPONSE }));
+    await loadSpecies(fetchMock);
+    await loadSpecies(fetchMock);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('byRarity groups species by rarity preserving RARITY_ORDER', () => {
-    const groups = byRarity();
-    const orderedKeys = Object.keys(groups);
-    expect(orderedKeys).toEqual(RARITY_ORDER.filter((r) => groups[r].length > 0));
+  it('populates SPECIES_BEHAVIOR keyed by id, alongside the default fallback', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => SAMPLE_API_RESPONSE }));
+    await loadSpecies(fetchMock);
+    expect(SPECIES_BEHAVIOR.duck).toEqual({
+      proactiveLevel: 3, idleFrequency: 'normal', localLines: ['quack'],
+    });
+    expect(SPECIES_BEHAVIOR.default).toBeTruthy();
+    expect(SPECIES_BEHAVIOR.default.localLines.length).toBeGreaterThan(0);
   });
 
-  it('rarityStars mirrors the buddy editor five-star rarity scale', () => {
+  it('throws on non-200; allows a future caller to retry', async () => {
+    const failing = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }));
+    await expect(loadSpecies(failing)).rejects.toThrow(/500/);
+
+    // After failure the cache is cleared so the next call retries.
+    const ok = vi.fn(async () => ({ ok: true, json: async () => SAMPLE_API_RESPONSE }));
+    await loadSpecies(ok);
+    expect(ok).toHaveBeenCalledTimes(1);
+    expect(SPECIES.duck).toBeTruthy();
+  });
+});
+
+describe('static exports', () => {
+  it('RARITY_ORDER, STAT_KEYS, rarityStars are stable without a fetch', () => {
+    expect(RARITY_ORDER).toEqual(['common', 'uncommon', 'rare', 'epic', 'legendary']);
+    expect(STAT_KEYS).toEqual(['debugging', 'patience', 'chaos', 'wisdom', 'snark']);
     expect(rarityStars('common')).toBe('★');
     expect(rarityStars('legendary')).toBe('★★★★★');
+  });
+
+  it('byRarity returns empty for unloaded catalogue, populated buckets after load', async () => {
+    expect(byRarity()).toEqual({});
+
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => SAMPLE_API_RESPONSE }));
+    await loadSpecies(fetchMock);
+    const groups = byRarity();
+    expect(Object.keys(groups)).toEqual(['common', 'legendary']);
+    expect(groups.common[0].key).toBe('duck');
+    expect(groups.legendary[0].key).toBe('dragon');
   });
 });
