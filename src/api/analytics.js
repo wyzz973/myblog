@@ -38,12 +38,28 @@ async function req(path, opts = {}) {
   return r.json();
 }
 
-// Range tokens accepted by UI -> days for backend
+// Range tokens accepted by UI -> days for backend.
+//   '7d' / '30d' / '90d' — fixed presets
+//   'since:YYYY-MM-DD'  — custom: derive days = (today_utc - start) + 1
 function rangeToDays(range) {
+  if (typeof range === 'string' && range.startsWith('since:')) {
+    const iso = range.slice('since:'.length);
+    const start = new Date(`${iso}T00:00:00Z`);
+    if (Number.isNaN(start.getTime())) return 30;
+    const todayUtc = new Date();
+    todayUtc.setUTCHours(0, 0, 0, 0);
+    const ms = todayUtc.getTime() - start.getTime();
+    const days = Math.floor(ms / 86400000) + 1;
+    if (days < 1) return 1;
+    if (days > 365) return 365;
+    return days;
+  }
   if (range === '7d') return 7;
   if (range === '90d') return 90;
   return 30;
 }
+
+export { rangeToDays };
 
 export const apiAnalytics = {
   bundle(range) {

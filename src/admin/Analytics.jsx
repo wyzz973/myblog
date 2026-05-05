@@ -66,6 +66,7 @@ export default function Analytics() {
               </button>
             );
           })}
+          <SinceDatePicker range={range} onChange={setRange} />
           <ExportCsvButton range={range} />
         </div>
       </header>
@@ -348,6 +349,39 @@ const styles = {
 // `apiAnalytics.downloadPostsCsv(range)` which builds a blob URL and
 // triggers a synthetic <a download> click — works in plain browsers
 // without any extra deps.
+// Task 25b: custom since-date picker. The active range is encoded as
+// `since:YYYY-MM-DD` so the same `range` prop drives bundle/posts/tags
+// fetches AND the CSV download. Value clears (=> falls back to a chip
+// preset) when the input is emptied.
+function SinceDatePicker({ range, onChange }) {
+  const value = typeof range === 'string' && range.startsWith('since:')
+    ? range.slice('since:'.length)
+    : '';
+  // Today UTC for the upper bound of the picker — picking "today" still
+  // produces 1 day inclusive.
+  const todayUtc = (() => {
+    const d = new Date();
+    d.setUTCHours(0, 0, 0, 0);
+    return d.toISOString().slice(0, 10);
+  })();
+  return (
+    <input
+      type="date"
+      value={value}
+      max={todayUtc}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (!v) onChange('30d'); // clearing falls back to the default preset
+        else onChange(`since:${v}`);
+      }}
+      style={value ? { ...styles.rangeBtn, ...styles.rangeBtnActive } : styles.rangeBtn}
+      data-testid="analytics-since-date"
+      data-active={value ? 'true' : undefined}
+      aria-label="自定义起始日期"
+    />
+  );
+}
+
 function ExportCsvButton({ range }) {
   const [busy, setBusy] = useState(false);
   async function onClick() {
