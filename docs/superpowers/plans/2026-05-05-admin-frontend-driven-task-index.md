@@ -845,7 +845,7 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 
 ### Task 23 — Media: usage backreference
 
-**Status:** pending
+**Status:** completed
 **Priority:** medium
 **Frontend evidence:** Reader body images.
 **Owner problem:** deleting a media item used in a post body silently orphans `<img>` references; only the avatar reverse-lookup is enforced.
@@ -868,7 +868,14 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 **Snapshot location:** `/tmp/admin-rebuild/task-23/refs-blocked.png`
 **Commit message:** `feat(admin/media): refuse delete when referenced by post body`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `974063b` (`feat(admin/media): refuse delete when referenced by post body`).
+
+- **Backend tests:** `backend/.venv/bin/python -m pytest tests/test_admin_media.py` → 21/21 (4 new for Task 23: GET surfaces referenced_by, GET shows posts list when post body cites the media URL, DELETE returns 409 with detail listing post ids, DELETE returns 409 when avatar_id points at the media; 1 existing test updated to reflect new "refuse first, FK SET NULL only as last-resort safety net" semantics).
+- **Vitest:** Combined `npx vitest run` → 177/177 (no Task 1-20 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-23/verify.py` PASSED → upload media → GET shows empty refs → admin UI shows "未在任何文章或头像中引用" with delete enabled → PUT /admin/profile sets avatar_id → GET shows avatar=true → DELETE returns 409 with detail.avatar=true → admin UI shows "用作站点头像" badge with delete `data-blocked="true"` → cleanup deletes after avatar cleared.
+- **Snapshots:** `/tmp/admin-rebuild/task-23/refs-empty.png`, `/refs-blocked.png`.
+
+Implementation note: new `media.references(s, media_id)` service scans `posts.body_md LIKE '%/media/<storage_path>%'` (LIKE on a small table is fine — the URL shape is exactly what `url_for(storage_path)` produces in post bodies via the MediaPicker insert helper) AND checks `site_meta.avatar_id == media_id`. The schema gains `MediaReferences` and `MediaItem.referenced_by`. The DELETE handler checks references BEFORE calling `delete_one` and raises 409 with `{error: "media_referenced", posts: [...], avatar: bool}` — the previous behavior relied on `ON DELETE SET NULL` on the avatar FK to silently null the avatar, which made the avatar disappear without explanation. Frontend Media.jsx fetches the full detail (with refs) when the modal opens, renders a "被引用于" panel, and disables the delete button when blocked (with a tooltip naming the blocker); the catch path also surfaces 409 detail in the toast for the rare race where the cached refs are stale.
 
 ---
 
@@ -1100,3 +1107,4 @@ Append-only. Every entry below means a real commit shipped.
 | 18 | URL-state filters & pagination on Posts | `ae66dbd` | `vitest run src/admin/searchParamsState.test.js` 12/12 | `python /tmp/admin-rebuild/task-18/verify.py` PASSED | 2026-05-06 |
 | 19 | Unified ConfirmModal + Toast | `e86e322` | `vitest run src/admin/ui/ src/admin/Comments.test.jsx src/admin/pet/PetConversationDetail.test.jsx` 16/16 | `python /tmp/admin-rebuild/task-19/verify.py` PASSED | 2026-05-06 |
 | 20 | SectionHead + Kbd visual primitives | `0c61615` | `vitest run src/admin/ui/SectionHead.test.jsx` 6/6 | `python /tmp/admin-rebuild/task-20/verify.py` PASSED | 2026-05-06 |
+| 23 | Media reference scan + 409 delete refusal | `974063b` | `pytest tests/test_admin_media.py` 21/21 | `python /tmp/admin-rebuild/task-23/verify.py` PASSED | 2026-05-06 |
