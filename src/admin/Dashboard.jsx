@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiAdmin } from '../api/admin.js';
 import { activityApi } from '../api/activity.js';
+import SectionHead from './ui/SectionHead.jsx';
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
@@ -39,8 +40,11 @@ export default function Dashboard() {
   return (
     <div>
       <header style={styles.header}>
-        <h1 style={styles.h1}>Dashboard</h1>
-        <p style={styles.lead}>Snapshot of site activity.</p>
+        <SectionHead
+          n="01"
+          title="./dashboard"
+          lead="站点活动快照"
+        />
       </header>
       <div style={styles.grid}>
         {tiles.map((t) => (

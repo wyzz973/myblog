@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import { commentsApi } from '../api/comments.js';
 import { apiPet } from '../api/pet.js';
 import { activityApi } from '../api/activity.js';
+import SectionHead from './ui/SectionHead.jsx';
 
 const LAST_SEEN_KEY = 'bl.admin.inbox.last_seen';
 const SECTION_LIMIT = 10;
@@ -83,14 +84,12 @@ export default function Inbox() {
   return (
     <div data-testid="inbox-page">
       <header style={styles.header}>
-        <div>
-          <h1 style={styles.h1}>
-            <span style={styles.headN}>01</span>{' '}
-            <span style={styles.headSlash}>/</span> 收件箱
-          </h1>
-          <p style={styles.lead}>
-            把待审评论、最新宠物对话、登录异常合并到一屏。点击行跳转到原位继续处理。
-          </p>
+        <div style={{ flex: 1 }}>
+          <SectionHead
+            n="01"
+            title="./inbox · 收件箱"
+            lead="把待审评论、最新宠物对话、登录异常合并到一屏。点击行跳转到原位继续处理。"
+          />
         </div>
         <div style={styles.headerRight}>
           <span style={styles.newCount} data-testid="inbox-new-count">

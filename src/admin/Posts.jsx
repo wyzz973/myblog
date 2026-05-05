@@ -6,6 +6,7 @@ import { shouldIgnoreEvent } from './keyboardShortcuts.js';
 import useSyncedSearchParams from './useSyncedSearchParams.js';
 import { intParser } from './searchParamsState.js';
 import { useConfirm, useToast } from './ui/UIProvider.jsx';
+import SectionHead from './ui/SectionHead.jsx';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'all' },
@@ -167,18 +168,19 @@ export default function Posts() {
   return (
     <div>
       <header style={styles.header}>
-        <div>
-          <h1 style={styles.h1}>Posts</h1>
-          <p style={styles.lead}>
-            {loading ? 'loading…' : `${total} post${total === 1 ? '' : 's'} total`}
-          </p>
+        <div style={{ flex: 1 }}>
+          <SectionHead
+            n="02"
+            title="./posts"
+            count={loading ? 'loading…' : `${total} entries`}
+          />
         </div>
         <button
           type="button"
           style={styles.btnPrimary}
           onClick={() => setEditing('__new__')}
         >
-          + new post
+          + 新建文章
         </button>
       </header>
 

@@ -685,6 +685,36 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .section-head .label .n { color: var(--accent); }
 .section-head .count { color: var(--fg-4); font-size: 11px; }
 
+/* Lead paragraph below a section head — used by admin SectionHead. */
+.section-lead {
+  font-size: 12px;
+  color: var(--fg-3);
+  margin: -8px 0 18px;
+  letter-spacing: 0.02em;
+}
+
+/* Inline keyboard chip used in admin shortcut hints (mirrors
+   .palette .phint kbd to keep one shared visual). */
+.admin-kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg-3);
+  color: var(--fg);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* The public .section-head padding is "40px 0 16px" — too large
+   for admin pages where the topbar already provides chrome. The
+   admin override only changes spacing, never colors / typography. */
+.admin-content .section-head {
+  padding: 4px 0 12px;
+  margin-bottom: 16px;
+}
+
 /* Post list */
 .posts {
   display: grid;

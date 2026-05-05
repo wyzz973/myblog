@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiMedia, mediaUrl } from '../api/media.js';
 import { useConfirm } from './ui/UIProvider.jsx';
+import SectionHead from './ui/SectionHead.jsx';
 
 export default function Media() {
   const [items, setItems] = useState([]);
@@ -130,12 +131,13 @@ export default function Media() {
   return (
     <div>
       <header style={styles.header}>
-        <div>
-          <h1 style={styles.h1}>Media</h1>
-          <p style={styles.lead}>
-            {items.length} item{items.length === 1 ? '' : 's'} ·
-            {' '}upload images and manage alt text.
-          </p>
+        <div style={{ flex: 1 }}>
+          <SectionHead
+            n="02"
+            title="./media"
+            count={`${items.length} 项`}
+            lead="上传图片并管理 alt 文本"
+          />
         </div>
         <div style={styles.actions}>
           <button

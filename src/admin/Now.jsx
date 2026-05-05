@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiNow } from '../api/now.js';
 import { useConfirm, useToast } from './ui/UIProvider.jsx';
+import SectionHead from './ui/SectionHead.jsx';
 
 // Admin timeline of "now" entries.
 // Single is_current at any time — backend auto-flips others off when one
@@ -140,10 +141,12 @@ export default function Now() {
   return (
     <div>
       <header style={styles.header}>
-        <h1 style={styles.h1}>Now</h1>
-        <p style={styles.lead}>
-          What you're doing right now. The current entry is shown on /now.
-        </p>
+        <SectionHead
+          n="02"
+          title="./now"
+          count={rows ? `${rows.length} 条` : undefined}
+          lead="你当下在做的事 — 当前条目展示在 /now 页"
+        />
       </header>
 
       <form style={styles.composer} onSubmit={submitDraft}>

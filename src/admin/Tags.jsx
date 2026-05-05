@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { tagsApi } from '../api/tags.js';
 import { useConfirm, useToast } from './ui/UIProvider.jsx';
+import SectionHead from './ui/SectionHead.jsx';
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,31}$/;
 const DEFAULT_NEW = { slug: '', name: '', color: '#7dd3a4', sort_order: 0 };
@@ -129,11 +130,12 @@ export default function Tags() {
   return (
     <div>
       <header style={styles.header}>
-        <div>
-          <h1 style={styles.h1}>Tags</h1>
-          <p style={styles.lead}>
-            {loading ? 'loading…' : `${items.length} tag${items.length === 1 ? '' : 's'}`}
-          </p>
+        <div style={{ flex: 1 }}>
+          <SectionHead
+            n="02"
+            title="./tags"
+            count={loading ? '加载中…' : `${items.length} 个标签`}
+          />
         </div>
         {!newDraft && (
           <button

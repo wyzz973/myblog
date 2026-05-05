@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { commentsApi } from '../api/comments.js';
 import { useConfirm, useToast } from './ui/UIProvider.jsx';
+import SectionHead from './ui/SectionHead.jsx';
 
 // Backend status enum is pending|approved|spam; "all" is a frontend-only
 // pseudo-filter that omits the status query param.
@@ -168,13 +169,12 @@ export default function Comments() {
   return (
     <div>
       <header style={styles.header}>
-        <div>
-          <h1 style={styles.h1}>Comments</h1>
-          <p style={styles.lead}>
-            {loading
-              ? 'loading…'
-              : `${items.length} ${tab === 'all' ? 'total' : tab}`}
-          </p>
+        <div style={{ flex: 1 }}>
+          <SectionHead
+            n="03"
+            title="./comments"
+            count={loading ? '加载中…' : `${items.length} ${tab === 'all' ? '条' : tab}`}
+          />
         </div>
         <div style={styles.tabs}>
           {TABS.map((t) => {
