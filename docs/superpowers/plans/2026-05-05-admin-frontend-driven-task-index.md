@@ -356,7 +356,7 @@ Implementation note: the 12 modes are split into 主动 / 响应 groups for UX l
 
 ### Task 8 — Public Reader likes wired to server (O5)
 
-**Status:** pending
+**Status:** completed
 **Priority:** high (data integrity)
 **Frontend evidence:** `Reader.jsx` reactions row — `onLike` writes only to `localStorage[bl.likes.<id>]` despite `api.posts.like(id)` existing.
 **Owner problem:** admin shows zero likes because the public site never POSTs them. The KPI on dashboard is meaningless until this is fixed.
@@ -377,7 +377,13 @@ Implementation note: the 12 modes are split into 主动 / 响应 groups for UX l
 **Snapshot location:** `/tmp/admin-rebuild/task-8/reader-liked.png`, `/tmp/admin-rebuild/task-8/admin-likes.png`
 **Commit message:** `fix(reader): write likes to server, surface counts in admin`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `fcab65e` (`fix(reader): write likes to server, surface counts in admin`).
+
+- **Tests:** `npx vitest run src/api/client.test.js` → 3/3 (api.posts.like POSTs the right URL + parses {likes, was_new}; non-2xx throws so caller can fall back; api.posts.detail surfaces server's likes field). Combined regression `npx vitest run src/api/client.test.js src/admin/pet/PetTemplates.test.jsx src/admin/SiteIdentity.test.jsx src/admin/ActivityLog.test.jsx src/admin/Layout.test.jsx src/admin/frontmatter.test.js src/api/admin.test.js src/admin/Login.test.jsx` → 45/45 (no Task 1-7 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-8/verify.py` → seed initial likes via API → public `/p/vps` → click ♡ → assert POST `/api/posts/vps/like` fired and Reader counter equals server total (per-IP-per-day dedup means a re-run keeps the same total — proves wiring without depending on a fresh dedup window) → admin `/admin/posts` → vps likes cell matches server total → reload `/p/vps` → counter persists. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-8/{reader-liked,admin-likes}.png`.
+
+Implementation note: backend gained a batch `likes.get_counts(post_ids)` so the admin list populates a likes column without N+1 queries; PostSummary's new `likes: int = 0` default leaves public list endpoints unchanged. Reader's onLike is fully optimistic — flips heart and bumps count immediately, then replaces the local count with the server total on success; on 429 / network error the optimistic state sticks and reconciles on next load.
 
 ---
 
@@ -1009,3 +1015,4 @@ Append-only. Every entry below means a real commit shipped.
 | 5 | Activity feed on dashboard + activity log page | `d63255d` | `vitest run src/admin/ActivityLog.test.jsx` 4/4 | `python /tmp/admin-rebuild/task-5/verify.py` PASSED | 2026-05-06 |
 | 6 | Site identity merged workflow | `7d404a5` | `vitest run src/admin/SiteIdentity.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-6/verify.py` PASSED | 2026-05-06 |
 | 7 | Pet templates: 12 modes | `993465e` | `vitest run src/admin/pet/PetTemplates.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-7/verify.py` PASSED | 2026-05-06 |
+| 8 | Reader likes wired to server + admin column | `fcab65e` | `vitest run src/api/client.test.js` 3/3 | `python /tmp/admin-rebuild/task-8/verify.py` PASSED | 2026-05-06 |
