@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import json
 from datetime import date
 from pathlib import Path
 
@@ -46,6 +47,52 @@ def _detect_lang(text: str) -> str:
     return "zh" if cjk / max(1, len(text)) > 0.3 else "en"
 
 
+def _quote_plain_frontmatter_scalars(raw: str) -> str | None:
+    """Quote top-level plain scalar values that contain a colon.
+
+    Authors commonly write values like ``summary: release notes:`` in the
+    admin editor. YAML requires that scalar to be quoted, but rejecting the
+    whole post is unnecessarily sharp. This fallback only rewrites simple
+    top-level ``key: value`` lines and leaves nested or already-structured YAML
+    alone.
+    """
+    if not raw.startswith("---"):
+        return None
+
+    lines = raw.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return None
+
+    close_idx = None
+    for i, line in enumerate(lines[1:], start=1):
+        if line.strip() in {"---", "..."}:
+            close_idx = i
+            break
+    if close_idx is None:
+        return None
+
+    changed = False
+    fixed = lines[:]
+    for i in range(1, close_idx):
+        line = fixed[i]
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or line[:1].isspace():
+            continue
+        match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*):(\s*)(.*?)(\r?\n)?$", line)
+        if not match:
+            continue
+        key, spacing, value, newline = match.groups()
+        value = value.strip()
+        if ":" not in value or not value:
+            continue
+        if value[0] in {"'", '"', "[", "{", "|", ">", "!", "&", "*"}:
+            continue
+        fixed[i] = f"{key}:{spacing}{json.dumps(value, ensure_ascii=False)}{newline or ''}"
+        changed = True
+
+    return "".join(fixed) if changed else None
+
+
 def _extract_first_h1(body: str) -> str | None:
     for line in body.splitlines():
         if line.startswith("# ") and not line.startswith("## "):
@@ -74,7 +121,16 @@ async def parse_or_infer_frontmatter(
     body (first H1 → title, filename → id, mtime → date, char ratio → lang)
     and the caller-supplied default_tag.
     """
-    parsed = frontmatter.loads(raw)
+    try:
+        parsed = frontmatter.loads(raw)
+    except Exception as e:  # noqa: BLE001 - normalize parser errors for admin/API callers.
+        fixed_raw = _quote_plain_frontmatter_scalars(raw)
+        if fixed_raw is None:
+            raise IngestError(f"frontmatter invalid: {e}") from e
+        try:
+            parsed = frontmatter.loads(fixed_raw)
+        except Exception as e2:  # noqa: BLE001 - keep API errors structured.
+            raise IngestError(f"frontmatter invalid: {e2}") from e2
     body = parsed.content
     meta = dict(parsed.metadata)
 

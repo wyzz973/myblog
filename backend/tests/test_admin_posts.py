@@ -64,6 +64,32 @@ async def test_render_preview_returns_blocks(client, auth):
     assert any(b["t"] == "h2" for b in body["body"])
 
 
+async def test_render_preview_invalid_frontmatter_returns_errors(client, auth):
+    bad = GOOD_MD.replace("title: Test post", "title: [unterminated")
+    r = await client.post("/api/admin/posts/render-preview", json={"markdown": bad}, headers=auth)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["frontmatter"] is None
+    assert body["body"] == []
+    assert "frontmatter invalid" in body["errors"][0]
+
+
+async def test_create_invalid_frontmatter_returns_422(client, auth):
+    bad = GOOD_MD.replace("title: Test post", "title: [unterminated")
+    r = await client.post("/api/admin/posts", json={"markdown": bad}, headers=auth)
+    assert r.status_code == 422
+    assert "frontmatter invalid" in r.json()["detail"]
+
+
+async def test_render_preview_accepts_plain_scalar_colon(client, auth):
+    md = GOOD_MD.replace("status: published", "status: published\nsummary: 推荐（按稳定度排序）:")
+    r = await client.post("/api/admin/posts/render-preview", json={"markdown": md}, headers=auth)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["errors"] == []
+    assert body["frontmatter"]["summary"] == "推荐（按稳定度排序）:"
+
+
 async def test_create_duplicate_409(client, auth):
     await client.delete("/api/admin/posts/test-post-1", headers=auth)
     r1 = await client.post("/api/admin/posts", json={"markdown": GOOD_MD}, headers=auth)
