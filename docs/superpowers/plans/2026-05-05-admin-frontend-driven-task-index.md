@@ -898,7 +898,7 @@ Implementation note: new `media.references(s, media_id)` service scans `posts.bo
 
 ### Task 24 — Projects: GitHub repo autofill
 
-**Status:** pending
+**Status:** in-progress (24a backend endpoint + cache done; 24b admin UI modal pending)
 **Priority:** medium
 **Frontend evidence:** `HomeA` projects grid.
 **Owner problem:** every new project requires manual entry of name/desc/lang/stars even though GitHub integration syncs repos.
@@ -918,7 +918,18 @@ Implementation note: new `media.references(s, media_id)` service scans `posts.bo
 **Snapshot location:** `/tmp/admin-rebuild/task-24/import-modal.png`
 **Commit message:** `feat(admin/projects): one-click GitHub repo import`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** 24a only — `ab2ca0d` (`feat(admin/integrations): GET /integrations/github/repos with 10m cache (Task 24a)`).
+
+#### Task 24a — backend repo listing + cache (DONE)
+
+- **Backend tests:** `backend/.venv/bin/python -m pytest tests/test_admin_integrations.py` → 30/30 (4 new for 24a: 404 when not configured, returns items + username when configured (mocked `fetch_repos`), 401 unauth, service-level cache test asserting only 1 underlying httpx call for repeated `fetch_repos('tok', 'alice')`).
+- **Vitest:** No frontend changes this task.
+- **Live probe:** none — endpoint hits real GitHub which we don't want to call from CI / verifier.
+- **Commit:** `ab2ca0d`.
+
+Implementation note: `app/services/github.py::fetch_repos(token, login)` is unified into a single function with a process-local 10-minute TTL cache keyed by login. The cache key intentionally excludes the token (rotating the token doesn't change the repo list) and stays small enough that no eviction is needed for one-owner deployments. `_repos_cache_clear()` is exported for tests. Returns `[{name, description, lang, stars, archived, fork, url}]` — `fork` is preserved so the existing worker `tasks/github.py` repo-sync still filters out forks correctly. The router `GET /api/admin/integrations/github/repos` 404s when github isn't configured; otherwise returns `{items, username}`. The admin Projects modal (Task 24b) will consume this.
+
+**Removed dead code**: an earlier revision had two `fetch_repos` definitions in github.py — Python kept only the last one which lacked caching. The duplicate is now stripped and the canonical version (with cache + url field) sits at the top of the file alongside the cache state.
 
 ---
 
@@ -1245,6 +1256,7 @@ Append-only. Every entry below means a real commit shipped.
 | 25b | Analytics custom since-date picker | `a7e7e0a` | `vitest run src/api/analytics.test.js` 5/5 | `python /tmp/admin-rebuild/task-25b/verify.py` PASSED | 2026-05-06 |
 | 29 | API tokens usage_count counter + UI | `cae0a56` | `pytest tests/test_api_tokens.py` 12/12 | `python /tmp/admin-rebuild/task-29/verify.py` PASSED | 2026-05-06 |
 | 26b | PetUsage per-mode pie chart | `506c8a0` | `vitest run src/admin/pet/petUsageChart.test.js` 16/16 | `python /tmp/admin-rebuild/task-26b/verify.py` PASSED | 2026-05-06 |
+| 24a | GitHub repo listing endpoint + cache | `ab2ca0d` | `pytest tests/test_admin_integrations.py` 30/30 | n/a (mocked GraphQL; live calls would hit real GitHub) | 2026-05-06 |
 
 ---
 
