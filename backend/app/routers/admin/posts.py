@@ -31,6 +31,10 @@ async def _detail(s: AsyncSession, p: Post) -> PostDetail:
         tldr=p.tldr, body=p.body_json, body_md=p.body_md,
         likes=await likes.get_count(s, post_id=p.id),
         word_count=p.word_count,
+        # Task 33: lifecycle / visibility flags so the admin editor can
+        # round-trip them through the PostEditor's GUI strip.
+        status=p.status, scheduled_at=p.scheduled_at, featured=p.featured,
+        private=p.private, comments_enabled=p.comments_enabled,
     )
 
 
@@ -102,6 +106,9 @@ async def get_post(
         tldr=post.tldr, body=post.body_json, body_md=post.body_md,
         likes=await likes.get_count(s, post_id=post.id),
         word_count=post.word_count,
+        # Task 33: lifecycle / visibility flags.
+        status=post.status, scheduled_at=post.scheduled_at, featured=post.featured,
+        private=post.private, comments_enabled=post.comments_enabled,
     )
 
 

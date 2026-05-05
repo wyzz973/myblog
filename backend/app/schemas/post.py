@@ -1,4 +1,4 @@
-from datetime import date as date_t
+from datetime import date as date_t, datetime
 from typing import Any
 
 from pydantic import BaseModel
@@ -27,6 +27,13 @@ class PostDetail(PostSummary):
     body_md: str | None = None
     likes: int
     word_count: int
+    # Lifecycle / visibility flags — admin-only on the response so the editor
+    # can preserve them when serializing back to frontmatter on save.
+    status: str | None = None
+    scheduled_at: datetime | None = None
+    featured: bool | None = None
+    private: bool | None = None
+    comments_enabled: bool | None = None
 
 
 class PostList(BaseModel):

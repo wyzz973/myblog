@@ -133,3 +133,31 @@ async def test_upload_partial_failure_returns_207(client, auth):
     assert body["summary"]["total"] == 2
     assert body["summary"]["ok"] == 1
     await client.delete("/api/admin/posts/upload-test-2", headers=auth)
+
+
+# --- Task 33: PostDetail exposes lifecycle / visibility flags ---
+
+
+async def test_post_detail_includes_lifecycle_flags(client, auth):
+    # Seed via the create endpoint; default status/visibility flags
+    # come from the model + frontmatter.
+    await client.delete("/api/admin/posts/test-post-1", headers=auth)
+    create = await client.post(
+        "/api/admin/posts", json={"markdown": GOOD_MD}, headers=auth,
+    )
+    assert create.status_code == 201, create.text
+    try:
+        r = await client.get("/api/admin/posts/test-post-1", headers=auth)
+        assert r.status_code == 200
+        body = r.json()
+        # All five fields must be present so the editor's GUI strip can
+        # round-trip them.
+        for field in ("status", "scheduled_at", "featured", "private", "comments_enabled"):
+            assert field in body, f"missing {field!r} in PostDetail: {list(body.keys())}"
+        assert body["status"] == "published"  # from frontmatter
+        assert body["featured"] is False
+        assert body["private"] is False
+        assert body["comments_enabled"] is True  # default for new post
+        assert body["scheduled_at"] is None
+    finally:
+        await client.delete("/api/admin/posts/test-post-1", headers=auth)
