@@ -6,11 +6,13 @@ import { useConfirm } from './ui/UIProvider.jsx';
 import PetBehavior from './pet/PetBehavior.jsx';
 import PetConversations from './pet/PetConversations.jsx';
 import PetPersonas from './pet/PetPersonas.jsx';
+import PetSpeciesEditor from './pet/PetSpeciesEditor.jsx';
 import PetTemplates from './pet/PetTemplates.jsx';
 import PetUsage from './pet/PetUsage.jsx';
 
 const TABS = [
   { id: 'behavior', label: 'Behavior' },
+  { id: 'species', label: 'Species' },
   { id: 'personas', label: 'Personas' },
   { id: 'templates', label: 'Prompt templates' },
   { id: 'conversations', label: 'Conversations' },
@@ -112,6 +114,7 @@ export default function Pet() {
       )}
 
       {tab === 'behavior' && <PetBehavior config={config} patch={patch} />}
+      {tab === 'species' && <PetSpeciesEditor />}
       {tab === 'personas' && (
         <PetPersonas
           config={config} patch={patch} saving={saving}

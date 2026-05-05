@@ -2375,6 +2375,40 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   min-height: 60px;
 }
 
+/* PetSpeciesEditor (Task 21d) — per-row editor inside the Species tab. */
+.admin-pet .species-row {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: var(--bg-2);
+}
+.admin-pet .species-row[data-dirty="true"] { border-color: var(--accent); }
+.admin-pet .species-row legend {
+  font-size: 12px;
+  color: var(--fg-3);
+  padding: 0 6px;
+}
+.admin-pet .species-row legend code {
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+}
+.admin-pet .species-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 12px;
+}
+.admin-pet .species-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--fg-2);
+}
+.admin-pet .species-grid label.span-2 { grid-column: span 2; }
+.admin-pet .species-grid input[type="color"] { width: 80px; height: 28px; padding: 0; }
+.admin-pet .species-grid textarea { min-height: 48px; }
+
 /* PetBehavior — providers comma-edit field & advanced details */
 .admin-pet .form > fieldset > input[type="text"] {
   margin-top: 6px;
