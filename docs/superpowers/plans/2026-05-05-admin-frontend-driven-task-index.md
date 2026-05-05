@@ -590,7 +590,7 @@ Implementation note: the page composes from existing endpoints (no backend chang
 
 ### Task 15 — Posts editor: autosave drafts
 
-**Status:** pending
+**Status:** completed
 **Priority:** medium
 **Frontend evidence:** any post in `Reader.jsx` (downstream effect: less risk of losing in-flight edits).
 **Owner problem:** browser crash mid-edit loses all unsaved changes. Cross-cut: same risk in Pet templates and Now composer (deferred to those tasks).
@@ -611,7 +611,13 @@ Implementation note: the page composes from existing endpoints (no backend chang
 **Snapshot location:** `/tmp/admin-rebuild/task-15/draft-banner.png`
 **Commit message:** `feat(admin/posts): autosave drafts to localStorage with recovery banner`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `d54d90f` (`feat(admin/posts): autosave drafts to localStorage with recovery banner`).
+
+- **Tests:** `npx vitest run src/admin/draftStore.test.js` → 9/9 (save/load roundtrip with timestamp, null id falls back to `__new__`, garbage JSON returns null, `draftIsNewerThan` handles ms / ISO / missing server timestamps). Combined regression `npx vitest run` → 121/121 (no Task 1-14 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-15/verify.py` → login → open editor for `vps` → JS-dispatch type a marker → wait 6s → assert `[data-testid=draft-status]` indicator appears → reload → re-open editor → assert `[data-testid=draft-banner]` recovery banner visible → click 恢复 → textarea contains marker → type a discard probe + wait 6s + reload + click 丢弃 → banner removed and textarea reverts to server content. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-15/autosave-status.png`, `/tmp/admin-rebuild/task-15/recovery-banner.png`.
+
+Implementation note: pure helpers in `src/admin/draftStore.js` (saveDraft / loadDraft / clearDraft / draftIsNewerThan) keep all storage concerns out of the editor. PostEditor sets `dirtyRef = true` from every user-driven mutation (textarea onChange, GUI strip updateField, image insert) and runs a 5-second debounced autosave only when the dirty flag is set. The recovery banner appears only when the local draft's `savedAt` is newer than the server's `updated_at`, so freshly-saved server content doesn't trigger a stale prompt. On successful save the draft is cleared so reload shows a clean editor.
 
 ---
 
@@ -1058,3 +1064,4 @@ Append-only. Every entry below means a real commit shipped.
 | 12 | Posts editor media picker | `5d3d3e9` | `vitest run src/admin/markdownInsert.test.js` 9/9 | `python /tmp/admin-rebuild/task-12/verify.py` PASSED | 2026-05-06 |
 | 13 | Pet visitor profile sidebar | `4f8f8e7` | `vitest run src/admin/pet/VisitorProfileSidebar.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-13/verify.py` PASSED | 2026-05-06 |
 | 14 | Inbox page (运营中枢) | `040356e` | `vitest run src/admin/Inbox.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-14/verify.py` PASSED | 2026-05-06 |
+| 15 | Posts editor autosave drafts | `d54d90f` | `vitest run src/admin/draftStore.test.js` 9/9 | `python /tmp/admin-rebuild/task-15/verify.py` PASSED | 2026-05-06 |
