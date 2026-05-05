@@ -1,30 +1,30 @@
-import { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
-import { apiAdmin, getToken, setToken, clearToken } from '../api/admin.js';
+import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import {
+  apiAdmin,
+  getToken,
+  setToken,
+  clearToken,
+  jwtExpiresAt,
+  setOnUnauthorized,
+  tryRefresh,
+} from '../api/admin.js';
 
 const AuthContext = createContext(null);
 
-// Install once: any /api/admin/* response with 401 clears the token and bounces
-// to the login screen, so a stale JWT doesn't leave the app stuck on an
-// unrecoverable error card. Patch is idempotent across HMR reloads.
-function installAuthFetchInterceptor(onUnauthorized) {
-  if (typeof window === 'undefined') return;
-  if (window.__myblogFetchPatched) {
-    window.__myblogOnUnauthorized = onUnauthorized;
-    return;
-  }
-  const original = window.fetch.bind(window);
-  window.__myblogOnUnauthorized = onUnauthorized;
-  window.__myblogFetchPatched = true;
-  window.fetch = async (input, init) => {
-    const r = await original(input, init);
-    if (r.status === 401) {
-      const url = typeof input === 'string' ? input : input?.url || '';
-      if (url.includes('/api/admin/') && !url.includes('/api/admin/auth/login')) {
-        window.__myblogOnUnauthorized?.();
-      }
-    }
-    return r;
-  };
+// Refresh proactively this far before the access token's `exp` claim.
+// 80% of the lifetime — leaves a comfortable margin without burning
+// /auth/refresh on every request. Floor at 30s so a tiny TTL doesn't
+// cause a refresh storm.
+const REFRESH_AHEAD_RATIO = 0.8;
+const MIN_REFRESH_DELAY_MS = 30 * 1000;
+
+function computeRefreshDelay(token, now = Date.now()) {
+  const expAt = jwtExpiresAt(token);
+  if (!expAt) return null;
+  const remaining = expAt - now;
+  if (remaining <= 0) return null;
+  const target = Math.floor(remaining * REFRESH_AHEAD_RATIO);
+  return Math.max(target, MIN_REFRESH_DELAY_MS);
 }
 
 export function AuthProvider({ children }) {
@@ -36,6 +36,14 @@ export function AuthProvider({ children }) {
       return null;
     }
   });
+  const refreshTimerRef = useRef(null);
+
+  const clearRefreshTimer = useCallback(() => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+  }, []);
 
   const persistAccess = useCallback((access, emailInput) => {
     setToken(access);
@@ -74,6 +82,7 @@ export function AuthProvider({ children }) {
   );
 
   const logout = useCallback(() => {
+    clearRefreshTimer();
     clearToken();
     setTokenState(null);
     setEmail(null);
@@ -82,17 +91,46 @@ export function AuthProvider({ children }) {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [clearRefreshTimer]);
 
+  // Wire the api-layer's onUnauthorized callback once. When refresh
+  // ultimately fails, the api layer has already cleared the token; this
+  // callback handles the React side: drop session state and bounce to
+  // /admin if we're inside a protected screen.
   useEffect(() => {
-    installAuthFetchInterceptor(() => {
-      clearToken();
+    setOnUnauthorized(() => {
+      clearRefreshTimer();
       setTokenState(null);
-      if (window.location.pathname.startsWith('/admin') && window.location.pathname !== '/admin') {
+      setEmail(null);
+      if (
+        typeof window !== 'undefined' &&
+        window.location.pathname.startsWith('/admin') &&
+        window.location.pathname !== '/admin'
+      ) {
         window.location.replace('/admin');
       }
     });
-  }, []);
+    return () => setOnUnauthorized(null);
+  }, [clearRefreshTimer]);
+
+  // Proactive refresh: schedule a single timer per token. Whenever the
+  // token changes (login / verifyTfa / refresh), reset the timer to fire
+  // at ~80% of remaining TTL.
+  useEffect(() => {
+    clearRefreshTimer();
+    if (!token) return undefined;
+    const delay = computeRefreshDelay(token);
+    if (delay == null) return undefined;
+    refreshTimerRef.current = setTimeout(async () => {
+      const result = await tryRefresh();
+      if (result?.access) {
+        // Trigger re-render with new token — onUnauthorized handles the
+        // failure path so we don't need to act here on null.
+        setTokenState(result.access);
+      }
+    }, delay);
+    return clearRefreshTimer;
+  }, [token, clearRefreshTimer]);
 
   const value = useMemo(
     () => ({ token, email, login, verifyTfa, logout, isAuthed: Boolean(token) }),

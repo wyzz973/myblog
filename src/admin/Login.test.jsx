@@ -14,6 +14,9 @@ vi.mock('../api/admin.js', () => ({
   clearToken: vi.fn(),
   TOKEN_KEY: 'myblog.admin.token',
   adminRequest: vi.fn(),
+  jwtExpiresAt: vi.fn(() => null),
+  setOnUnauthorized: vi.fn(),
+  tryRefresh: vi.fn(),
 }));
 
 import { apiAdmin } from '../api/admin.js';
