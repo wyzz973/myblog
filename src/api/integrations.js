@@ -18,6 +18,12 @@ export const apiIntegrations = {
   syncGithub() {
     return req('/integrations/github/sync', { method: 'POST' });
   },
+  // Task 24a/b: list the owner's public repos for one-click import.
+  // Returns { items: [{name, description, lang, stars, archived, fork, url}], username }.
+  // 404 when the github integration isn't configured yet.
+  listGithubRepos() {
+    return req('/integrations/github/repos');
+  },
   getAnthropic() {
     return req('/integrations/anthropic');
   },

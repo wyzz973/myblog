@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiProjects } from '../api/projects.js';
+import { apiIntegrations } from '../api/integrations.js';
 import { useConfirm, useToast } from './ui/UIProvider.jsx';
 
 // Admin screen for the /projects portfolio list.
@@ -15,8 +16,26 @@ export default function Projects() {
 
   const [edits, setEdits] = useState({}); // { [name]: partial }
   const [savingName, setSavingName] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
   const confirm = useConfirm();
   const toast = useToast();
+
+  // Names of projects already saved — used by the GitHub import modal
+  // to grey out repos that have already been added.
+  const existingNames = new Set((rows || []).map((r) => r.name));
+
+  function applyRepoToDraft(repo) {
+    setDraft({
+      name: repo.name,
+      description: repo.description || '',
+      lang: repo.lang || '',
+      stars: String(repo.stars || 0),
+      status: 'active',
+      visible: true,
+    });
+    setImportOpen(false);
+    toast.info(`已填入 ${repo.name},按"添加"保存`);
+  }
 
   async function load() {
     setLoading(true);
@@ -146,12 +165,30 @@ export default function Projects() {
 
   return (
     <div>
-      <header style={styles.header}>
-        <h1 style={styles.h1}>Projects</h1>
-        <p style={styles.lead}>
-          Portfolio entries shown on the projects page.
-        </p>
+      <header style={{ ...styles.header, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={styles.h1}>Projects</h1>
+          <p style={styles.lead}>
+            Portfolio entries shown on the projects page.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setImportOpen(true)}
+          style={styles.btnGhost || { padding: '6px 12px', border: '1px solid var(--line-2)', borderRadius: 4, background: 'transparent', color: 'var(--fg-2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}
+          data-testid="projects-github-import"
+        >
+          从 GitHub 导入
+        </button>
       </header>
+
+      {importOpen && (
+        <GithubImportModal
+          existingNames={existingNames}
+          onPick={applyRepoToDraft}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
 
       <form style={styles.newRow} onSubmit={submitDraft}>
         <div style={styles.newRowTitle}>+ new project</div>
@@ -551,4 +588,171 @@ const styles = {
     transform: 'translateX(14px)',
     background: 'var(--accent)',
   },
+};
+
+// Task 24b: pull the owner's public repos via /api/admin/integrations/github/repos
+// (Task 24a) and let the user click one to prefill the new-project form.
+function GithubImportModal({ existingNames, onPick, onClose }) {
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState(null);
+  const [username, setUsername] = useState('');
+  const [filter, setFilter] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    apiIntegrations.listGithubRepos()
+      .then((res) => {
+        if (!mounted) return;
+        setItems(res?.items || []);
+        setUsername(res?.username || '');
+        setError(null);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        if (err?.status === 404) {
+          setError('GitHub 集成尚未配置 — 请先在 设置 → 集成 中保存账号 + token。');
+        } else {
+          setError(err?.detail || err?.message || '加载失败');
+        }
+      });
+    return () => { mounted = false; };
+  }, []);
+
+  const lower = filter.trim().toLowerCase();
+  const filtered = (items || []).filter((r) => {
+    if (r.fork) return false; // forks rarely belong on a portfolio
+    if (!lower) return true;
+    return r.name.toLowerCase().includes(lower)
+      || (r.description || '').toLowerCase().includes(lower);
+  });
+
+  return (
+    <div
+      className="palette-bg"
+      data-testid="gh-import-modal"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        style={ghStyles.shell}
+        onMouseDown={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <header style={ghStyles.head}>
+          <span style={ghStyles.title}>从 GitHub 导入项目</span>
+          {username && <span style={ghStyles.user}>@{username}</span>}
+          <span style={{ flex: 1 }} />
+          <button type="button" onClick={onClose} style={ghStyles.closeBtn} aria-label="关闭">×</button>
+        </header>
+        <div style={ghStyles.body}>
+          {items === null && !error && <div style={ghStyles.muted}>加载仓库列表…</div>}
+          {error && <div style={ghStyles.error}>! {error}</div>}
+          {items && (
+            <>
+              <input
+                type="search"
+                placeholder="按名称或描述过滤…"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                style={ghStyles.search}
+                autoFocus
+              />
+              {filtered.length === 0 ? (
+                <div style={ghStyles.muted}>没有匹配的仓库。</div>
+              ) : (
+                <ul style={ghStyles.list} data-testid="gh-repo-list">
+                  {filtered.map((r) => {
+                    const taken = existingNames.has(r.name);
+                    return (
+                      <li
+                        key={r.name}
+                        data-testid={`gh-repo-${r.name}`}
+                        data-taken={taken ? 'true' : undefined}
+                        style={{ ...ghStyles.row, ...(taken ? ghStyles.rowTaken : null) }}
+                        onClick={() => { if (!taken) onPick(r); }}
+                      >
+                        <div style={ghStyles.rowMain}>
+                          <span style={ghStyles.repoName}>{r.name}</span>
+                          {taken && <span style={ghStyles.takenBadge}>已添加</span>}
+                          {r.archived && <span style={ghStyles.archivedBadge}>archived</span>}
+                        </div>
+                        {r.description && (
+                          <div style={ghStyles.repoDesc}>{r.description}</div>
+                        )}
+                        <div style={ghStyles.repoMeta}>
+                          {r.lang && <span>{r.lang}</span>}
+                          <span>★ {r.stars}</span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const ghStyles = {
+  shell: {
+    width: 'min(640px, 92vw)',
+    maxHeight: '78vh',
+    background: 'var(--bg-2)',
+    border: '1px solid var(--line-2)',
+    borderRadius: 10,
+    boxShadow: '0 20px 80px rgba(0,0,0,0.6)',
+    display: 'flex',
+    flexDirection: 'column',
+    fontFamily: "'JetBrains Mono', monospace",
+  },
+  head: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '12px 16px',
+    borderBottom: '1px solid var(--line)',
+  },
+  title: { fontSize: 13, fontWeight: 600, color: 'var(--fg)' },
+  user: { fontSize: 11, color: 'var(--fg-3)' },
+  closeBtn: {
+    background: 'transparent', border: 0, fontSize: 18, color: 'var(--fg-3)',
+    cursor: 'pointer', padding: 0, width: 22, height: 22, lineHeight: 1,
+  },
+  body: { padding: 16, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 10 },
+  muted: { color: 'var(--fg-4)', fontSize: 12, padding: '8px 0' },
+  error: { color: 'var(--danger, #c44)', fontSize: 12 },
+  search: {
+    background: 'var(--bg)',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg)',
+    padding: '6px 10px',
+    fontFamily: 'inherit',
+    fontSize: 12,
+    borderRadius: 4,
+    outline: 'none',
+  },
+  list: { listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 },
+  row: {
+    border: '1px solid var(--line)',
+    borderRadius: 4,
+    padding: '8px 12px',
+    cursor: 'pointer',
+    background: 'var(--bg)',
+  },
+  rowTaken: { cursor: 'not-allowed', opacity: 0.55 },
+  rowMain: { display: 'flex', alignItems: 'center', gap: 8 },
+  repoName: { color: 'var(--fg)', fontWeight: 600, fontSize: 12 },
+  takenBadge: {
+    fontSize: 9, color: 'var(--fg-4)', border: '1px solid var(--line-2)',
+    padding: '1px 5px', borderRadius: 3, letterSpacing: '0.06em',
+  },
+  archivedBadge: {
+    fontSize: 9, color: 'var(--fg-4)', background: 'var(--bg-3)',
+    padding: '1px 5px', borderRadius: 3, letterSpacing: '0.06em',
+  },
+  repoDesc: { fontSize: 11, color: 'var(--fg-2)', marginTop: 2 },
+  repoMeta: { display: 'flex', gap: 12, color: 'var(--fg-4)', fontSize: 10, marginTop: 4 },
 };
