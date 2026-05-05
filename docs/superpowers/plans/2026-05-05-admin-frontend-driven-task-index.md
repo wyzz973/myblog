@@ -290,7 +290,7 @@ Implementation note: many backend write_event calls don't attach `meta`, so the 
 
 ### Task 6 — Site identity merged workflow (Profile + Site → 站点身份)
 
-**Status:** pending
+**Status:** completed
 **Priority:** high
 **Frontend evidence:** `HomeA.HeroA` (handle, name, name_en, typing_line, stack_chips), TopBar (handle, location), Reader author block (avatar, tagline, github, email, name), footer (handle, name_en, github, email).
 **Owner problem:** identity fields live in two screens with a confusing note "请在另一页修改", though both PUT to the same `site_meta` row. C7.
@@ -311,7 +311,13 @@ Implementation note: many backend write_event calls don't attach `meta`, so the 
 **Snapshot location:** `/tmp/admin-rebuild/task-6/identity-form.png`, `/tmp/admin-rebuild/task-6/public-after.png`
 **Commit message:** `refactor(admin/identity): merge profile + site into one workflow`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `7d404a5` (`refactor(admin/identity): merge profile + site into one workflow`).
+
+- **Tests:** `npx vitest run src/admin/SiteIdentity.test.jsx` → 5/5 (load both endpoints, save only changed slices, skip endpoint when slice clean, partial-failure surface, dirty-disabled save). Combined `npx vitest run src/admin/SiteIdentity.test.jsx src/admin/ActivityLog.test.jsx src/admin/Layout.test.jsx src/admin/frontmatter.test.js src/api/admin.test.js src/admin/Login.test.jsx` → 37/37 (no Task 1/2/3/4/5 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-6/verify.py` → login → sidebar 04 group shows 站点身份 / 联系方式 / 主题 (no 作者资料) → /admin/site-identity loads both /profile and /site → edit name (profile) + tagline (site) → save → toast 已保存 → reload → both fields persisted → public HomeA shows new name; cleanup restores originals. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-6/{sidebar,site-identity,public-after}.png`.
+
+Implementation note: backend keeps two endpoints (`PUT /profile` and `PUT /site`); the merged page builds two patches and fires them in parallel only for slices that actually changed, surfacing partial failure ("部分保存失败") so the owner knows which surface to retry. The 主题 entry temporarily reuses `/admin/site` until Task 11 splits theme into its own page.
 
 ---
 
@@ -995,3 +1001,4 @@ Append-only. Every entry below means a real commit shipped.
 | 3 | Posts editor GUI for lifecycle fields | `b08f712` | `vitest run src/admin/frontmatter.test.js` 11/11 | `python /tmp/admin-rebuild/task-3/verify.py` PASSED | 2026-05-05 |
 | 4 | Sidebar IA regrouped + breadcrumb | `e30dbae` | `vitest run src/admin/Layout.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-4/verify.py` PASSED | 2026-05-05 |
 | 5 | Activity feed on dashboard + activity log page | `d63255d` | `vitest run src/admin/ActivityLog.test.jsx` 4/4 | `python /tmp/admin-rebuild/task-5/verify.py` PASSED | 2026-05-06 |
+| 6 | Site identity merged workflow | `7d404a5` | `vitest run src/admin/SiteIdentity.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-6/verify.py` PASSED | 2026-05-06 |
