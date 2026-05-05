@@ -42,7 +42,7 @@ async def test_pet_species_table_exists_and_round_trips(cleanup_species):
             trait_zh="嘎嘎调试搭子",
             personality_zh="开朗、字面意思理解,对沉默的失败保持怀疑。",
             description_zh="一只小桌鸭,先听后嘎,只有 bug 显而易见时才出声。",
-            frames=["frame1", "frame2", "frame3"],
+            frames=[["frame1"], ["frame2"], ["frame3"]],
             behavior={"proactive_level": 0.3, "idle_frequency": 90, "local_lines": []},
             stats={"patience": 78, "snark": 12},
             visible=True,
@@ -57,7 +57,7 @@ async def test_pet_species_table_exists_and_round_trips(cleanup_species):
         )).scalar_one()
     assert row.name == "Duck"
     assert row.rarity == "common"
-    assert row.frames == ["frame1", "frame2", "frame3"]
+    assert row.frames == [["frame1"], ["frame2"], ["frame3"]]
     assert row.behavior["proactive_level"] == 0.3
     assert row.stats["patience"] == 78
     assert row.visible is True
@@ -91,7 +91,7 @@ async def test_schema_in_validates_slug_pattern():
         name="Duck",
         rarity="common",
         color="#7dd3a4",
-        frames=["x"],
+        frames=[["x"]],
     )
     assert p.id == "duck"
     # Invalid: starts with digit / contains uppercase / too long
@@ -120,7 +120,7 @@ async def test_schema_out_round_trips_from_model(cleanup_species):
             trait_zh="t",
             personality_zh="p",
             description_zh="d",
-            frames=["frame"],
+            frames=[["frame"]],
             behavior={"x": 1},
             stats={"y": 2},
             visible=True,
@@ -135,6 +135,6 @@ async def test_schema_out_round_trips_from_model(cleanup_species):
     out = PetSpeciesOut.model_validate(row)
     assert out.id == "t21a-out"
     assert out.rarity == "rare"
-    assert out.frames == ["frame"]
+    assert out.frames == [["frame"]]
     assert out.created_at is not None
     assert out.updated_at is not None

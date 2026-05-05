@@ -13,9 +13,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import AsyncSessionLocal, get_session
-from app.models import PetMessage, PetUsageEvent, PetVisitorProfile, Post, SiteMeta, Tag
+from app.models import PetMessage, PetSpecies, PetUsageEvent, PetVisitorProfile, Post, SiteMeta, Tag
 from app.redis import get_redis
 from app.schemas.pet import PetConfig, PetMode, PublicPetConfig, SummonRequest
+from app.schemas.pet_species import PetSpeciesOut
 from app.services import integrations as integrations_svc
 from app.services import (
     pet_archive,
@@ -141,6 +142,24 @@ async def _record_usage_and_archive(
         fallback_level=fallback_level,
     )
     s.add_all([m, u])
+
+
+@router.get("/pet/species", response_model=list[PetSpeciesOut])
+async def public_pet_species(
+    s: AsyncSession = Depends(get_session),
+) -> list[PetSpeciesOut]:
+    """Visible-only species catalogue. Replaces the hardcoded JS species list
+    once the frontend swap (21e) lands; AsciiPet reads frames+behavior from
+    here and applies its STATE_EYE substitution to {E} markers."""
+    from sqlalchemy import asc
+    rows = (
+        await s.execute(
+            select(PetSpecies)
+            .where(PetSpecies.visible.is_(True))
+            .order_by(asc(PetSpecies.sort_order), asc(PetSpecies.id))
+        )
+    ).scalars().all()
+    return [PetSpeciesOut.model_validate(r) for r in rows]
 
 
 @router.get("/pet/config", response_model=PublicPetConfig)

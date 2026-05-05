@@ -29,10 +29,11 @@ class PetSpeciesBase(_Strict):
     trait_zh: str = Field(default="", max_length=512)
     personality_zh: str = Field(default="", max_length=512)
     description_zh: str = Field(default="", max_length=2048)
-    # Frames: list of multi-line strings — each frame is one ASCII pose.
-    # We keep the validation loose at the schema level (just a list of
-    # strings) since AsciiPet does layout validation client-side.
-    frames: list[str] = Field(default_factory=list, max_length=12)
+    # Frames: each frame is a list of line strings (one ASCII pose). We keep
+    # validation loose at the schema level — AsciiPet does width/height layout
+    # validation client-side. The JS hardcode and seed both use 3 frames × 5
+    # lines × 12 chars but we don't enforce shape here.
+    frames: list[list[str]] = Field(default_factory=list, max_length=12)
     behavior: dict[str, Any] = Field(default_factory=dict)
     stats: dict[str, Any] = Field(default_factory=dict)
     visible: bool = True
@@ -52,7 +53,7 @@ class PetSpeciesPatch(_Strict):
     trait_zh: str | None = Field(default=None, max_length=512)
     personality_zh: str | None = Field(default=None, max_length=512)
     description_zh: str | None = Field(default=None, max_length=2048)
-    frames: list[str] | None = Field(default=None, max_length=12)
+    frames: list[list[str]] | None = Field(default=None, max_length=12)
     behavior: dict[str, Any] | None = None
     stats: dict[str, Any] | None = None
     visible: bool | None = None
