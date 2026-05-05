@@ -47,7 +47,10 @@ const NAV_GROUPS = [
   {
     n: '06',
     label: '系统',
-    items: [{ to: '/admin/settings', label: '设置' }],
+    items: [
+      { to: '/admin/settings', label: '设置' },
+      { to: '/admin/activity-log', label: '活动日志' },
+    ],
   },
 ];
 

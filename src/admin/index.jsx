@@ -16,6 +16,7 @@ import Now from './Now.jsx';
 import Pet from './Pet.jsx';
 import PetConversationDetail from './pet/PetConversationDetail.jsx';
 import Settings from './Settings.jsx';
+import ActivityLog from './ActivityLog.jsx';
 
 function RequireAuth({ children }) {
   const { isAuthed } = useAuth();
@@ -71,6 +72,7 @@ export default function AdminApp() {
           <Route path="pet" element={<Pet />} />
           <Route path="pet/conversations/:visitorHash" element={<PetConversationDetail />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="activity-log" element={<ActivityLog />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>

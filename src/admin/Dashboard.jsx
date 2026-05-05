@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiAdmin } from '../api/admin.js';
+import { activityApi } from '../api/activity.js';
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
@@ -45,8 +47,93 @@ export default function Dashboard() {
           <Card key={t.key} title={t.title} headline={t.headline} subs={t.subs} />
         ))}
       </div>
+      <RecentActivity />
     </div>
   );
+}
+
+function RecentActivity() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    activityApi
+      .recent({ limit: 20 })
+      .then((data) => {
+        if (!mounted) return;
+        setRows(data || []);
+        setError(null);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(err?.detail || err?.message || '加载失败');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return (
+    <section style={styles.activitySection} data-testid="dashboard-activity">
+      <div style={styles.activityHead}>
+        <div style={styles.activityHeadLeft}>
+          <span style={styles.activityHeadN}>01</span>
+          <span style={styles.activityHeadSlash}>/</span>
+          <span style={styles.activityHeadTitle}>最近活动</span>
+        </div>
+        <Link to="/admin/activity-log" style={styles.activityMore}>
+          查看全部 →
+        </Link>
+      </div>
+      {error && <div style={styles.activityError}>! {error}</div>}
+      {!error && (
+        <ul style={styles.activityList}>
+          {loading && rows.length === 0 ? (
+            <li style={styles.activityMuted}>loading…</li>
+          ) : rows.length === 0 ? (
+            <li style={styles.activityMuted}>[ 暂无事件 ]</li>
+          ) : (
+            rows.map((it) => (
+              <li key={it.id} style={styles.activityRow}>
+                <span style={styles.activityType}>{it.type}</span>
+                <span style={styles.activitySep}>·</span>
+                <span style={styles.activityActor}>{it.actor || '—'}</span>
+                {it.target && (
+                  <>
+                    <span style={styles.activitySep}>·</span>
+                    <span style={styles.activityTarget}>{it.target}</span>
+                  </>
+                )}
+                <span style={styles.activityAgo}>{ago(it.created_at)}</span>
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function ago(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const ms = Date.now() - d.getTime();
+  if (ms < 0) return d.toLocaleString();
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const days = Math.floor(h / 24);
+  if (days < 30) return `${days}d`;
+  return d.toLocaleDateString();
 }
 
 function buildTiles(d) {
@@ -165,5 +252,80 @@ const styles = {
     border: '1px solid var(--danger)',
     padding: '10px 12px',
     borderRadius: 4,
+  },
+  activitySection: {
+    marginTop: 24,
+    border: '1px solid var(--line)',
+    borderRadius: 6,
+    background: 'var(--bg-2)',
+    overflow: 'hidden',
+  },
+  activityHead: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '10px 14px',
+    borderBottom: '1px solid var(--line)',
+    background: 'var(--bg)',
+  },
+  activityHeadLeft: { display: 'flex', alignItems: 'baseline', gap: 6 },
+  activityHeadN: {
+    color: 'var(--accent)',
+    fontSize: 9,
+    letterSpacing: '0.12em',
+    fontWeight: 600,
+  },
+  activityHeadSlash: { color: 'var(--fg-4)', fontSize: 11 },
+  activityHeadTitle: {
+    color: 'var(--fg-2)',
+    fontSize: 11,
+    letterSpacing: '0.06em',
+  },
+  activityMore: {
+    color: 'var(--fg-3)',
+    fontSize: 11,
+    textDecoration: 'none',
+    letterSpacing: '0.04em',
+  },
+  activityList: {
+    margin: 0,
+    padding: 0,
+    listStyle: 'none',
+    fontSize: 11,
+  },
+  activityRow: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(140px, max-content) 8px minmax(120px, 1fr) 8px minmax(0, 2fr) max-content',
+    alignItems: 'baseline',
+    gap: 6,
+    padding: '7px 14px',
+    borderBottom: '1px solid var(--line)',
+    color: 'var(--fg-2)',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  activityType: { color: 'var(--fg)' },
+  activityActor: { color: 'var(--fg-2)' },
+  activityTarget: {
+    color: 'var(--fg-3)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  activitySep: { color: 'var(--fg-4)' },
+  activityAgo: {
+    color: 'var(--fg-4)',
+    textAlign: 'right',
+  },
+  activityMuted: {
+    padding: '14px 16px',
+    color: 'var(--fg-4)',
+    fontSize: 12,
+    fontStyle: 'italic',
+    listStyle: 'none',
+  },
+  activityError: {
+    color: 'var(--danger)',
+    fontSize: 11,
+    padding: '10px 14px',
   },
 };
