@@ -758,7 +758,7 @@ Implementation note: single `UIProvider` mounted in `Layout.jsx` exposes `useCon
 
 ### Task 20 — Section-head + kbd visual primitives match public site
 
-**Status:** pending
+**Status:** completed
 **Priority:** medium
 **Frontend evidence:** `HomeA.jsx:315-323, 343-344, 367-368` — `<span class="n">01 /</span>` numbered heads with `<span class="count">…</span>` right-aligned counts.
 **Owner problem:** admin pages lack the public site's visual punctuation; the rebuild doesn't *feel* like the same product.
@@ -779,7 +779,13 @@ Implementation note: single `UIProvider` mounted in `Layout.jsx` exposes `useCon
 **Snapshot location:** `/tmp/admin-rebuild/task-20/heads.png`
 **Commit message:** `feat(admin/ui): SectionHead + Kbd primitives match public visual language`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `0c61615` (`feat(admin/ui): SectionHead + Kbd primitives match public visual language`).
+
+- **Tests:** `npx vitest run src/admin/ui/SectionHead.test.jsx` → 6/6 (n + title + count + .label .n accent class, count omitted when null, lead paragraph below the rule, n missing falls back). Combined regression `npx vitest run` → 177/177 (no Task 1-19 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-20/verify.py` → login → visits 7 admin pages and asserts each shows a `[data-testid=section-head-{n}]` head with the `n / ./path` text + `.label .n` accent span. dashboard / posts / comments / tags / media / now / inbox all green; no duplicate heads on dashboard.
+- **Snapshots:** `/tmp/admin-rebuild/task-20/{dashboard,posts,comments}.png`.
+
+Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lead="..." />` reuses the public site's `.section-head` CSS class (HomeA.jsx line 317-326) with three new helper rules in `styles.css`: `.section-lead` (small dim paragraph), `.admin-kbd` (inline keycap chip), and `.admin-content .section-head` (smaller padding so the admin topbar's chrome doesn't double-stack). `<Kbd>` renders a `<kbd className="admin-kbd">` for shortcut hints. Applied across Dashboard / Posts / Comments / Tags / Media / Now / Inbox; remaining pages (Projects, Contacts, Pet, Site, SiteIdentity, Analytics, ActivityLog, Settings) keep their existing per-page heads for now and adopt incrementally as they're touched.
 
 ---
 
@@ -1093,3 +1099,4 @@ Append-only. Every entry below means a real commit shipped.
 | 17 | Global keyboard shortcuts (?, g x, j/k) | `f688b6e` | `vitest run src/admin/keyboardShortcuts.test.js` 11/11 | `python /tmp/admin-rebuild/task-17/verify.py` PASSED | 2026-05-06 |
 | 18 | URL-state filters & pagination on Posts | `ae66dbd` | `vitest run src/admin/searchParamsState.test.js` 12/12 | `python /tmp/admin-rebuild/task-18/verify.py` PASSED | 2026-05-06 |
 | 19 | Unified ConfirmModal + Toast | `e86e322` | `vitest run src/admin/ui/ src/admin/Comments.test.jsx src/admin/pet/PetConversationDetail.test.jsx` 16/16 | `python /tmp/admin-rebuild/task-19/verify.py` PASSED | 2026-05-06 |
+| 20 | SectionHead + Kbd visual primitives | `0c61615` | `vitest run src/admin/ui/SectionHead.test.jsx` 6/6 | `python /tmp/admin-rebuild/task-20/verify.py` PASSED | 2026-05-06 |
