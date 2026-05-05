@@ -791,7 +791,7 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 
 ### Task 21 — Pet species catalogue admin (extract `species.js` to backend)
 
-**Status:** in-progress (21a + 21b + 21c + 21d done; 21e public swap pending)
+**Status:** completed (21a + 21b + 21c + 21d + 21e done)
 **Priority:** medium
 **Frontend evidence:** `src/components/pet/species.js` — 28 entries, hardcoded. `AsciiPet.jsx` reads frames + behavior from it. S7.
 **Owner problem:** adding/tweaking a species requires a code edit + redeploy.
@@ -814,7 +814,7 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 **Snapshot location:** `/tmp/admin-rebuild/task-21/species-admin.png`, `/tmp/admin-rebuild/task-21/pet-bubble.png`
 **Commit message:** `feat(admin/pet): species catalogue editable from admin`
 **Definition of done:** standard checklist
-**Completed:** 21a + 21b + 21c + 21d — `2b68fd6` (table+model+schema), `64184c7` (seed), `4b1af73` (CRUD router + public list), `35fc1b5` (`feat(admin/pet): species editor tab on Pet page (Task 21d)`). 21e (replace frontend hardcode with fetch) still pending.
+**Completed:** all five sub-tasks — `2b68fd6` (table+model+schema), `64184c7` (seed), `4b1af73` (CRUD router + public list), `35fc1b5` (admin editor tab), `ee79017` (`feat(pet): hydrate species catalogue from /api/pet/species (Task 21e)`).
 
 #### Task 21a — pet_species table + model + schema (DONE)
 
@@ -852,6 +852,15 @@ Implementation note: schema `frames` was originally typed `list[str]` but the se
 - **Endpoints used:** existing 21c `/api/admin/pet/species[/<id>]` for list/PATCH/POST/DELETE.
 
 Implementation note: new `Species` tab in `src/admin/Pet.jsx` next to Behavior/Personas/Templates/Conversations/Usage; per-row save instead of bulk save because the catalogue is N rows owned independently and 409 conflicts on one row shouldn't block edits to others. Frame editing intentionally not exposed in this tab — frames are 3-frame ASCII with strict layout rules and deserve a dedicated frame composer (likely follow-up 21f). Delete uses `window.confirm` to keep blast radius local; the admin shell's ConfirmModal can replace it later for visual consistency. New `src/api/petSpecies.js` mirrors the rest of the api/ folder (token from localStorage, 204 → null, JSON-decode detail on error). CSS additions live in `src/styles.css` under `.admin-pet .species-row` / `.species-grid` and reuse existing `--accent` / `--bg-2` / `--line` tokens for consistency.
+
+#### Task 21e — frontend reads species from /api/pet/species (DONE)
+
+- **Tests:** `npx vitest run src/components/pet/__tests__/species.test.js src/components/AsciiPet.test.jsx` → 13/13. Combined regression `npx vitest run` → **220/220** (no Task 1-23 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-21e/verify.py` → /api/pet/species returns 27 rows → visit / → AsciiPet mounted → confirm /api/pet/species was actually fetched by browser → AsciiPet element has rendered content → toggle `axolotl.visible=false` via API → public list excludes it → restore.
+- **Snapshots:** `/tmp/admin-rebuild/task-21e/homepage-with-pet.png`.
+- **Commit:** `ee79017` (`feat(pet): hydrate species catalogue from /api/pet/species (Task 21e)`).
+
+Implementation note: removed the inline 27-species hardcode (SPECIES_BASE / PET_PROFILES / RARITY_STAT_BASE blocks — ~280 LOC of static data) from `src/components/pet/species.js`; replaced with `loadSpecies(fetch)` that calls `/api/pet/species` and mutates the exported `SPECIES` / `SPECIES_BEHAVIOR` objects in place. Importers get live bindings so the existing `import { SPECIES }` reads keep working without a rename. Added `useSpecies()` React hook returning `{ ready, species, behavior }`; AsciiPet gates render on `speciesReady` to avoid a missing-frame flash, PetPersonas shows "加载物种目录中…" until ready. `loadSpecies()` is kicked off in `src/main.jsx` so the fetch runs in parallel with React mount and usually lands well before AsciiPet's first commit. Adapter maps `*_zh` → `trait/personality/description` so consumers don't need updates.
 
 ---
 
