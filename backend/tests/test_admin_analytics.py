@@ -204,3 +204,80 @@ async def test_analytics_posts_excludes_deleted(
             await s.execute(sa_delete(HitDaily).where(HitDaily.path == f"/post/{slug}"))
             await s.execute(sa_delete(Tag).where(Tag.slug == "p6btest-fk-tag"))
             await s.commit()
+
+
+# --- Task 25a: CSV export of per-post hits ---
+
+
+async def test_analytics_posts_csv_401(client, clean_analytics):
+    r = await client.get("/api/admin/analytics/posts.csv")
+    assert r.status_code == 401
+
+
+async def test_analytics_posts_csv_empty_returns_header_only(
+    client, admin_token, clean_analytics
+):
+    r = await client.get(
+        "/api/admin/analytics/posts.csv",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/csv")
+    assert 'attachment; filename="analytics-posts-' in r.headers.get("content-disposition", "")
+    text = r.content.decode("utf-8-sig").replace("\r\n", "\n")
+    assert text.strip() == "post_id,title,hits"
+
+
+async def test_analytics_posts_csv_includes_seeded_row(
+    client, admin_token, clean_analytics
+):
+    # The service uses UTC dates; using local `date.today()` for yesterday
+    # is racy when the test runs in a tz that's ahead of UTC.
+    from datetime import UTC, datetime as _dt
+    yesterday = _dt.now(UTC).date() - timedelta(days=1)
+    slug = "p25a-csv-test"
+    async with AsyncSessionLocal() as s:
+        existing_tag = (await s.execute(
+            Tag.__table__.select().where(Tag.slug == "p25a-csv-tag")
+        )).first()
+        if existing_tag is None:
+            s.add(Tag(slug="p25a-csv-tag", name="CSV Tag",
+                      color="#888", sort_order=0))
+            await s.flush()
+            existing_tag = (await s.execute(
+                Tag.__table__.select().where(Tag.slug == "p25a-csv-tag")
+            )).first()
+        s.add(Post(
+            id=slug, n="1", title='Hello, "world"', subtitle="",
+            date=date(2026, 4, 28), read="1", lang="en", summary="",
+            tldr="", body_md="", body_json=[],
+            word_count=0, status="published", featured=False, private=False,
+            comments_enabled=True, tag_id=existing_tag.id,
+        ))
+        await s.flush()
+        s.add(HitDaily(date=yesterday, path=f"/post/{slug}",
+                       hits=42, post_id=slug,
+                       referrers_top=[], countries_top=[]))
+        await s.commit()
+    try:
+        r = await client.get(
+            "/api/admin/analytics/posts.csv?days=7",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert r.status_code == 200
+        text = r.content.decode("utf-8-sig").replace("\r\n", "\n")
+        lines = text.strip().split("\n")
+        assert lines[0] == "post_id,title,hits"
+        # Title contains a comma + quotes → CSV must quote-and-escape
+        row = next((line for line in lines if line.startswith(slug + ",")), None)
+        assert row is not None, f"slug not in csv:\n{text}"
+        # csv.writer escapes " as "" and wraps the field in quotes
+        assert '"Hello, ""world"""' in row
+        assert row.endswith(",42")
+    finally:
+        from sqlalchemy import delete as sa_delete
+        async with AsyncSessionLocal() as s:
+            await s.execute(sa_delete(HitDaily).where(HitDaily.post_id == slug))
+            await s.execute(sa_delete(Post).where(Post.id == slug))
+            await s.execute(sa_delete(Tag).where(Tag.slug == "p25a-csv-tag"))
+            await s.commit()

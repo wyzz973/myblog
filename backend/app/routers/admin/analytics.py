@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, Query
+import csv
+import io
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -56,3 +60,32 @@ async def get_analytics_tags(
 ) -> list[TagHitsItem]:
     days = min(days, 365)
     return await analytics_svc.per_tag(s, days=days)
+
+
+# Task 25a: CSV export of per-post hits. The CSV uses BOM-prefixed UTF-8
+# so Excel opens it without mojibake; columns are post_id,title,hits.
+# Quoting is QUOTE_MINIMAL — only fields containing commas / quotes /
+# newlines get wrapped, which keeps small datasets readable.
+@router.get("/analytics/posts.csv")
+async def get_analytics_posts_csv(
+    days: int = Query(default=30, ge=1),
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> Response:
+    days = min(days, 365)
+    rows = await analytics_svc.per_post(s, days=days, limit=1000)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["post_id", "title", "hits"])
+    for r in rows:
+        writer.writerow([r.post_id, r.title, r.hits])
+    body = "﻿" + buf.getvalue()  # UTF-8 BOM for Excel
+    stamp = datetime.now(UTC).strftime("%Y%m%d")
+    filename = f"analytics-posts-{stamp}-{days}d.csv"
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )

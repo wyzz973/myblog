@@ -58,6 +58,36 @@ export const apiAnalytics = {
     const days = rangeToDays(range);
     return req(`/analytics/tags?days=${days}`);
   },
+  // Task 25a: download per-post hits as CSV. Fetches with the bearer
+  // token, then triggers a browser download via an in-memory blob.
+  // Returns the suggested filename so callers can surface a toast.
+  async downloadPostsCsv(range) {
+    const days = rangeToDays(range);
+    const token = getToken();
+    const r = await fetch(`${BASE}/api/admin/analytics/posts.csv?days=${days}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) {
+      const detail = await r.text().catch(() => `${r.status}`);
+      const err = new Error(`${r.status} ${detail}`);
+      err.status = r.status;
+      throw err;
+    }
+    const blob = await r.blob();
+    // Server's Content-Disposition: attachment; filename="..."
+    const cd = r.headers.get('content-disposition') || '';
+    const m = cd.match(/filename="([^"]+)"/);
+    const filename = m ? m[1] : `analytics-posts-${days}d.csv`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { filename };
+  },
 };
 
 export default apiAnalytics;

@@ -66,6 +66,7 @@ export default function Analytics() {
               </button>
             );
           })}
+          <ExportCsvButton range={range} />
         </div>
       </header>
 
@@ -342,3 +343,33 @@ const styles = {
     borderRadius: 4,
   },
 };
+
+// Task 25a: download per-post hits as CSV. Uses the authenticated
+// `apiAnalytics.downloadPostsCsv(range)` which builds a blob URL and
+// triggers a synthetic <a download> click — works in plain browsers
+// without any extra deps.
+function ExportCsvButton({ range }) {
+  const [busy, setBusy] = useState(false);
+  async function onClick() {
+    setBusy(true);
+    try {
+      await apiAnalytics.downloadPostsCsv(range);
+    } catch {
+      /* surface via inline status next round; for now silent */
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      style={styles.rangeBtn}
+      data-testid="analytics-export-csv"
+      title="导出 per-post CSV"
+    >
+      {busy ? '导出中…' : '导出 CSV'}
+    </button>
+  );
+}
