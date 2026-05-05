@@ -9,7 +9,10 @@ const NAV_GROUPS = [
   {
     n: '01',
     label: '运营中枢',
-    items: [{ to: '/admin/dashboard', label: '仪表盘' }],
+    items: [
+      { to: '/admin/dashboard', label: '仪表盘' },
+      { to: '/admin/inbox', label: '收件箱' },
+    ],
   },
   {
     n: '02',

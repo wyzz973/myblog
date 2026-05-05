@@ -18,6 +18,7 @@ import PetConversationDetail from './pet/PetConversationDetail.jsx';
 import Settings from './Settings.jsx';
 import ActivityLog from './ActivityLog.jsx';
 import SiteIdentity from './SiteIdentity.jsx';
+import Inbox from './Inbox.jsx';
 
 function RequireAuth({ children }) {
   const { isAuthed } = useAuth();
@@ -75,6 +76,7 @@ export default function AdminApp() {
           <Route path="settings" element={<Settings />} />
           <Route path="activity-log" element={<ActivityLog />} />
           <Route path="site-identity" element={<SiteIdentity />} />
+          <Route path="inbox" element={<Inbox />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>

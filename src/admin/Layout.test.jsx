@@ -43,7 +43,7 @@ describe('Layout sidebar IA', () => {
   it('keeps every existing route reachable from the sidebar', () => {
     renderAt('/admin/dashboard');
     const expected = [
-      '仪表盘', '文章', '标签', '媒体', '近况', '项目',
+      '仪表盘', '收件箱', '文章', '标签', '媒体', '近况', '项目',
       '数据分析', '评论',
       '站点身份', '联系方式', '主题',
       '宠物助手', '设置',
