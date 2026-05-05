@@ -193,3 +193,70 @@ async def test_contacts_reorder_rejects_bad_payload(client, auth):
         "/api/admin/contacts/order", json={"ids": "nope"}, headers=auth
     )
     assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Task 30: tags reference scan + 409 delete refusal
+# ---------------------------------------------------------------------------
+
+
+async def test_tags_list_includes_post_count(client, auth):
+    r = await client.get("/api/admin/tags", headers=auth)
+    assert r.status_code == 200
+    rows = r.json()
+    # Every row should now expose post_count (>= 0) — the field was added so
+    # the admin UI can warn / disable delete for tags still in use.
+    assert all("post_count" in t for t in rows), rows
+    assert all(isinstance(t["post_count"], int) for t in rows), rows
+    assert all(t["post_count"] >= 0 for t in rows), rows
+
+
+async def test_tags_delete_409_when_posts_reference_it(client, auth):
+    # Seed: create a tag, attach a post to it, then try to delete the tag.
+    from datetime import date as _d
+    from sqlalchemy import delete as sa_delete
+    from app.db import AsyncSessionLocal
+    from app.models import Post, Tag
+    create = await client.post(
+        "/api/admin/tags",
+        json={"slug": "t30-in-use", "name": "in-use", "color": "#aaa", "sort_order": 99},
+        headers=auth,
+    )
+    assert create.status_code == 201
+    tid = create.json()["id"]
+    slug = "t30-post-ref"
+    async with AsyncSessionLocal() as s:
+        s.add(Post(
+            id=slug, n="1", title="t30", subtitle="", date=_d(2026, 4, 28),
+            read="1", lang="en", summary="", tldr="", body_md="", body_json=[],
+            word_count=0, status="published", featured=False, private=False,
+            comments_enabled=True, tag_id=tid,
+        ))
+        await s.commit()
+    try:
+        r = await client.delete(f"/api/admin/tags/{tid}", headers=auth)
+        assert r.status_code == 409, r.text
+        assert "post" in r.json()["detail"].lower()
+        # Tag should still exist after refusal.
+        listing2 = (await client.get("/api/admin/tags", headers=auth)).json()
+        assert any(t["id"] == tid for t in listing2)
+    finally:
+        async with AsyncSessionLocal() as s:
+            await s.execute(sa_delete(Post).where(Post.id == slug))
+            await s.commit()
+        # Now delete should succeed
+        r2 = await client.delete(f"/api/admin/tags/{tid}", headers=auth)
+        assert r2.status_code == 204
+
+
+async def test_tags_delete_204_when_no_posts(client, auth):
+    create = await client.post(
+        "/api/admin/tags",
+        json={"slug": "t30-empty", "name": "empty", "color": "#aaa", "sort_order": 99},
+        headers=auth,
+    )
+    assert create.status_code == 201, create.text
+    tid = create.json()["id"]
+    # Fresh tag has no posts → delete must succeed.
+    r = await client.delete(f"/api/admin/tags/{tid}", headers=auth)
+    assert r.status_code == 204

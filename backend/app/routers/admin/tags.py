@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.deps import current_admin, require_scope
-from app.models import Account, Tag
+from app.models import Account, Post, Tag
 from app.services.event_log import write_event
 
 router = APIRouter()
@@ -24,6 +24,9 @@ class TagOut(BaseModel):
     name: str
     color: str
     sort_order: int
+    # Post count exposed so the admin UI can warn / disable the delete button
+    # for tags that still have posts attached.
+    post_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -33,8 +36,21 @@ async def list_(
     _: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ):
-    rows = (await s.execute(select(Tag).order_by(Tag.sort_order))).scalars().all()
-    return [TagOut.model_validate(r) for r in rows]
+    rows = (
+        await s.execute(
+            select(Tag, func.count(Post.id))
+            .join(Post, Post.tag_id == Tag.id, isouter=True)
+            .group_by(Tag.id)
+            .order_by(Tag.sort_order)
+        )
+    ).all()
+    return [
+        TagOut(
+            id=t.id, slug=t.slug, name=t.name, color=t.color,
+            sort_order=t.sort_order, post_count=int(c or 0),
+        )
+        for t, c in rows
+    ]
 
 
 @router.post("/tags", response_model=TagOut, status_code=201, dependencies=[Depends(require_scope("write"))])
@@ -103,5 +119,15 @@ async def delete(
     ).scalar_one_or_none()
     if tag is None:
         raise HTTPException(status_code=404, detail="not found")
+    # Refuse delete when posts still reference the tag — the FK is RESTRICT,
+    # so without this check the row stays but the response was already 204.
+    in_use = (
+        await s.execute(select(func.count(Post.id)).where(Post.tag_id == tag.id))
+    ).scalar_one()
+    if in_use:
+        raise HTTPException(
+            status_code=409,
+            detail=f"tag has {in_use} post(s); reassign or delete them first",
+        )
     await s.delete(tag)
     await write_event(s, type="tag.deleted", actor=admin.email, target=tag.slug)
