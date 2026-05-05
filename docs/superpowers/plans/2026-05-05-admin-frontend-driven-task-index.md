@@ -1089,7 +1089,7 @@ Implementation note: simple ↑/↓ arrow buttons instead of HTML5 drag-and-drop
 
 ### Task 28 — Account: email change
 
-**Status:** in-progress (28a backend endpoint done; magic-link confirm + UI pending)
+**Status:** in-progress (28a backend + 28b UI form done; magic-link confirm flow still pending)
 **Priority:** medium
 **Frontend evidence:** Profile page reads-only email; account login uses email.
 **Owner problem:** owner cannot rotate the admin email.
@@ -1118,7 +1118,16 @@ Implementation note: simple ↑/↓ arrow buttons instead of HTML5 drag-and-drop
 - **Live probe:** `/tmp/admin-rebuild/task-28a/verify.py` PASSED → wrong password 400 → same email 400 → invalid email 422 → rotate to `wyzz973+t28a@gmail.com` → login with new email 200 + new token → login with old email 401 → restore via the same endpoint to original email.
 - **Commit:** `da9dbfb`.
 
-Implementation note: `EmailChangeRequest{current_password, new_email: EmailStr}` schema; the endpoint sits at `POST /api/admin/account/email` and depends on `current_session_admin` so api-tokens (read or write scope) cannot rotate the email. Verifies the password via `verify_password(stored_hash, current_password)`, normalizes `new_email` to lowercase, refuses if it equals the current email (avoids "case-only changes"). Writes `account.email.changed` to event_log with `{old, new}` meta so the activity feed shows the rotation. Single-account site so we don't check uniqueness today (accounts.email has a UNIQUE constraint anyway). 28b (magic-link confirmation flow + Account.jsx UI form) is deferred — the endpoint alone closes the "I literally can't change the admin email" gap.
+Implementation note: `EmailChangeRequest{current_password, new_email: EmailStr}` schema; the endpoint sits at `POST /api/admin/account/email` and depends on `current_session_admin` so api-tokens (read or write scope) cannot rotate the email. Verifies the password via `verify_password(stored_hash, current_password)`, normalizes `new_email` to lowercase, refuses if it equals the current email (avoids "case-only changes"). Writes `account.email.changed` to event_log with `{old, new}` meta so the activity feed shows the rotation. Single-account site so we don't check uniqueness today (accounts.email has a UNIQUE constraint anyway).
+
+#### Task 28b — Account 修改邮箱 UI form (DONE)
+
+- **Tests:** Vitest 212/212 (no dedicated unit test for the form — flow is end-to-end Playwright). 28a backend tests still cover the API.
+- **Playwright:** `/tmp/admin-rebuild/task-28b/verify.py` PASSED → /admin/settings → 账号 tab → `[data-testid=email-change-form]` visible → wrong password fills + submit → `[data-testid=email-change-error]` rendered → correct password + new email → `[data-testid=email-change-done]` shows "邮箱已改为 wyzz973+t28b@gmail.com" → API `/auth/login` with new email returns 200 → cleanup restores via API.
+- **Snapshots:** `/tmp/admin-rebuild/task-28b/after-change.png`.
+- **Commit:** `5df5684` (`feat(admin/account): change-email form on Account tab (Task 28b)`).
+
+Implementation note: `apiAccount.changeEmail(currentPassword, newEmail)` posts to `/api/admin/account/email` and returns `{email}`. Account.jsx adds a new `<EmailSection>` Card between MagicLink and Password, mirroring the password-change form layout (current_password + new_email + submit). All inputs carry `data-testid=email-change-{role}` for stable test selectors. Success message tells the user their next login uses the new address. The current JWT keeps working because access tokens claim `sub` (account id) not email; only the login form has to use the new value. Magic-link confirmation (28c) is still pending — current flow trusts the password gate alone, which is fine for a single-owner site but could be tightened with email-roundtrip later.
 
 ---
 
@@ -1276,6 +1285,7 @@ Append-only. Every entry below means a real commit shipped.
 | 24a | GitHub repo listing endpoint + cache | `ab2ca0d` | `pytest tests/test_admin_integrations.py` 30/30 | n/a (mocked GraphQL; live calls would hit real GitHub) | 2026-05-06 |
 | 24b | GitHub import modal on Projects | `42e0781` | `vitest run` 212/212 | `python /tmp/admin-rebuild/task-24b/verify.py` PASSED | 2026-05-06 |
 | 28a | Account email change endpoint | `da9dbfb` | `pytest tests/test_admin_email_change.py` 7/7 | `python /tmp/admin-rebuild/task-28a/verify.py` PASSED | 2026-05-06 |
+| 28b | Account 修改邮箱 UI form | `5df5684` | `vitest run` 212/212 | `python /tmp/admin-rebuild/task-28b/verify.py` PASSED | 2026-05-06 |
 
 ---
 
