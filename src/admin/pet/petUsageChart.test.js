@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildBars,
+  buildPieSlices,
   groupByDay,
+  groupByMode,
   legendFromData,
+  modeColor,
   SOURCE_COLORS,
   SOURCE_LABELS,
 } from './petUsageChart.js';
@@ -70,5 +73,69 @@ describe('legendFromData', () => {
 
   it('returns empty when no rows', () => {
     expect(legendFromData([])).toEqual([]);
+  });
+});
+
+describe('groupByMode', () => {
+  it('aggregates calls by mode and sorts descending', () => {
+    const modes = groupByMode(ROWS);
+    // ROWS has greet (provider 5 + cache_hit 3 = 8) and summary (provider 2 + unknown 1 = 3)
+    expect(modes.map((m) => m.mode)).toEqual(['greet', 'summary']);
+    expect(modes[0].calls).toBe(8);
+    expect(modes[1].calls).toBe(3);
+  });
+
+  it('attaches a deterministic color to each mode', () => {
+    const a = groupByMode(ROWS);
+    const b = groupByMode(ROWS);
+    expect(a[0].color).toBe(b[0].color);
+    // Different mode names yield colors from the palette
+    expect(a[0].color).toMatch(/^var\(/);
+  });
+
+  it('skips modes with zero calls and handles null inputs', () => {
+    expect(groupByMode([])).toEqual([]);
+    expect(groupByMode(null)).toEqual([]);
+    expect(groupByMode([{ mode: 'x', calls: 0 }])).toEqual([]);
+  });
+});
+
+describe('modeColor', () => {
+  it('is stable for the same input', () => {
+    expect(modeColor('greet')).toBe(modeColor('greet'));
+  });
+  it('returns a CSS var token from the palette', () => {
+    expect(modeColor('summary')).toMatch(/^var\(/);
+  });
+});
+
+describe('buildPieSlices', () => {
+  const modes = groupByMode(ROWS);
+  const slices = buildPieSlices(modes, { cx: 80, cy: 80, r: 70, inner: 30 });
+
+  it('produces one slice per mode whose frac sums to ~1', () => {
+    expect(slices).toHaveLength(modes.length);
+    const sum = slices.reduce((a, s) => a + s.frac, 0);
+    expect(Math.abs(sum - 1)).toBeLessThan(0.0001);
+  });
+
+  it('every slice has a non-empty SVG path and a label inside the donut', () => {
+    for (const s of slices) {
+      expect(s.path).toMatch(/^M /);
+      expect(typeof s.label.x).toBe('number');
+      expect(typeof s.label.y).toBe('number');
+    }
+  });
+
+  it('returns empty for empty/zero-total inputs', () => {
+    expect(buildPieSlices([], { cx: 0, cy: 0, r: 10 })).toEqual([]);
+    expect(buildPieSlices([{ mode: 'x', calls: 0 }], { cx: 0, cy: 0, r: 10 })).toEqual([]);
+  });
+
+  it('single-slice case still produces one renderable path', () => {
+    const single = buildPieSlices([{ mode: 'only', calls: 5, color: 'red' }], { cx: 50, cy: 50, r: 40 });
+    expect(single).toHaveLength(1);
+    expect(single[0].frac).toBe(1);
+    expect(single[0].path).toMatch(/^M /);
   });
 });
