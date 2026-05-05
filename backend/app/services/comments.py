@@ -139,3 +139,28 @@ async def delete_one(s: AsyncSession, *, comment_id: int) -> bool:
     res = await s.execute(delete(Comment).where(Comment.id == comment_id))
     await s.flush()
     return res.rowcount > 0
+
+
+async def bulk_delete(s: AsyncSession, *, comment_ids: list[int]) -> int:
+    if not comment_ids:
+        return 0
+    res = await s.execute(delete(Comment).where(Comment.id.in_(comment_ids)))
+    await s.flush()
+    return int(res.rowcount or 0)
+
+
+async def bulk_set_status(
+    s: AsyncSession, *, comment_ids: list[int], status: str
+) -> int:
+    """Flip the status field on a set of comments. Returns the count of
+    rows actually updated (matches IDs that existed)."""
+    if not comment_ids or status not in {"pending", "approved", "spam"}:
+        return 0
+    from sqlalchemy import update as _update
+    res = await s.execute(
+        _update(Comment)
+        .where(Comment.id.in_(comment_ids))
+        .values(status=status)
+    )
+    await s.flush()
+    return int(res.rowcount or 0)

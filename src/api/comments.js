@@ -61,6 +61,14 @@ export const commentsApi = {
   remove(id) {
     return adminRequest(`/comments/${id}`, { method: 'DELETE' });
   },
+  // Bulk moderation: action ∈ approve|spam|pending|delete.
+  // Returns {affected, action}.
+  bulk(action, ids) {
+    return adminRequest(`/comments/bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ action, ids }),
+    });
+  },
 };
 
 export default commentsApi;

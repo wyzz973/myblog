@@ -8,6 +8,8 @@ from app.db import get_session
 from app.deps import current_admin, require_scope
 from app.models import Account, Post, SiteMeta
 from app.schemas.comment import (
+    AdminCommentBulkRequest,
+    AdminCommentBulkResponse,
     AdminCommentItem,
     AdminCommentPatchRequest,
     AdminCommentPatchResponse,
@@ -99,6 +101,35 @@ async def patch_comment(
         flag=parent.flag,
         reply_id=child.id if child else None,
     )
+
+
+@router.post(
+    "/comments/bulk",
+    response_model=AdminCommentBulkResponse,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def bulk_moderate(
+    req: AdminCommentBulkRequest,
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> AdminCommentBulkResponse:
+    if req.action == "delete":
+        affected = await comments.bulk_delete(s, comment_ids=req.ids)
+        await write_event(
+            s, type="comment.bulk_deleted", actor=_admin.email,
+            meta={"ids": req.ids, "affected": affected},
+        )
+    else:
+        status_map = {"approve": "approved", "spam": "spam", "pending": "pending"}
+        affected = await comments.bulk_set_status(
+            s, comment_ids=req.ids, status=status_map[req.action]
+        )
+        await write_event(
+            s, type="comment.bulk_moderated", actor=_admin.email,
+            meta={"ids": req.ids, "to_status": status_map[req.action], "affected": affected},
+        )
+    await s.commit()
+    return AdminCommentBulkResponse(affected=affected, action=req.action)
 
 
 @router.delete("/comments/{comment_id}", status_code=204, dependencies=[Depends(require_scope("write"))])

@@ -62,3 +62,13 @@ class AdminCommentPatchResponse(_Strict):
     status: str
     flag: bool
     reply_id: int | None = None
+
+
+class AdminCommentBulkRequest(_Strict):
+    ids: list[int] = Field(min_length=1, max_length=200)
+    action: Literal["approve", "spam", "pending", "delete"]
+
+
+class AdminCommentBulkResponse(_Strict):
+    affected: int
+    action: str

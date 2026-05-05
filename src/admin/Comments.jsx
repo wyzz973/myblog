@@ -12,6 +12,7 @@ const TABS = [
 
 export default function Comments() {
   const [tab, setTab] = useState('pending');
+  const [postFilter, setPostFilter] = useState('');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -19,14 +20,20 @@ export default function Comments() {
   const [reloadTick, setReloadTick] = useState(0);
   const [replyOpen, setReplyOpen] = useState(null); // id of comment whose reply form is open
   const [replyText, setReplyText] = useState('');
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const reload = useCallback(() => setReloadTick((t) => t + 1), []);
 
   useEffect(() => {
     let mounted = true;
     setLoading(true);
+    setSelected(new Set());
     commentsApi
-      .list({ status: tab === 'all' ? undefined : tab })
+      .list({
+        status: tab === 'all' ? undefined : tab,
+        post_id: postFilter.trim() || undefined,
+      })
       .then((rows) => {
         if (!mounted) return;
         setItems(rows || []);
@@ -42,7 +49,49 @@ export default function Comments() {
     return () => {
       mounted = false;
     };
-  }, [tab, reloadTick]);
+  }, [tab, postFilter, reloadTick]);
+
+  function toggleSelected(id) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected((prev) =>
+      prev.size === items.length && items.length > 0
+        ? new Set()
+        : new Set(items.map((c) => c.id)),
+    );
+  }
+
+  async function bulkAction(action) {
+    if (selected.size === 0) return;
+    const verb = { approve: '通过', spam: '标垃圾', pending: '退回待审', delete: '删除' }[action];
+    // eslint-disable-next-line no-alert
+    if (!confirm(`确定${verb} ${selected.size} 条评论？`)) return;
+    setBulkBusy(true);
+    try {
+      const ids = [...selected];
+      const res = await commentsApi.bulk(action, ids);
+      // After server confirms, reload from source so per-tab membership is correct.
+      setSelected(new Set());
+      reload();
+      // Optionally surface affected count somewhere; reuse alert for now.
+      if (typeof res?.affected === 'number' && res.affected !== ids.length) {
+        // eslint-disable-next-line no-alert
+        alert(`已处理 ${res.affected}/${ids.length} 条`);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      alert(`批量操作失败：${err?.detail || err?.message}`);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   async function setStatus(c, status) {
     setBusyId(c.id);
@@ -134,6 +183,85 @@ export default function Comments() {
         </div>
       </header>
 
+      <div style={styles.toolRow}>
+        <input
+          type="text"
+          value={postFilter}
+          onChange={(e) => setPostFilter(e.target.value)}
+          placeholder="按 post id 过滤（如 vps）"
+          style={styles.postFilter}
+          data-testid="post-filter"
+        />
+        {postFilter && (
+          <button
+            type="button"
+            onClick={() => setPostFilter('')}
+            style={styles.btnGhost}
+          >
+            清除
+          </button>
+        )}
+        <span style={{ flex: 1 }} />
+        {items.length > 0 && (
+          <label style={styles.selectAll}>
+            <input
+              type="checkbox"
+              checked={selected.size === items.length && items.length > 0}
+              onChange={toggleAll}
+              data-testid="select-all"
+            />
+            <span>{selected.size > 0 ? `已选 ${selected.size}/${items.length}` : `全选 (${items.length})`}</span>
+          </label>
+        )}
+      </div>
+
+      {selected.size > 0 && (
+        <div style={styles.bulkBar} data-testid="bulk-bar">
+          <span style={styles.bulkInfo}>已选 {selected.size} 条</span>
+          <button
+            type="button"
+            style={styles.btnAction}
+            onClick={() => bulkAction('approve')}
+            disabled={bulkBusy}
+            data-testid="bulk-approve"
+          >
+            批量通过
+          </button>
+          <button
+            type="button"
+            style={styles.btnAction}
+            onClick={() => bulkAction('spam')}
+            disabled={bulkBusy}
+          >
+            批量标垃圾
+          </button>
+          <button
+            type="button"
+            style={styles.btnAction}
+            onClick={() => bulkAction('pending')}
+            disabled={bulkBusy}
+          >
+            批量退回待审
+          </button>
+          <button
+            type="button"
+            style={styles.btnDanger}
+            onClick={() => bulkAction('delete')}
+            disabled={bulkBusy}
+          >
+            批量删除
+          </button>
+          <button
+            type="button"
+            style={styles.btnGhost}
+            onClick={() => setSelected(new Set())}
+            disabled={bulkBusy}
+          >
+            清除选择
+          </button>
+        </div>
+      )}
+
       {error && <div style={styles.error}>! {error}</div>}
 
       <div style={styles.list}>
@@ -144,9 +272,16 @@ export default function Comments() {
           const isBusy = busyId === c.id;
           const replyForThis = replyOpen === c.id;
           return (
-            <article key={c.id} style={styles.card}>
+            <article key={c.id} style={styles.card} data-testid={`comment-${c.id}`}>
               <header style={styles.cardHead}>
                 <div style={styles.who}>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(c.id)}
+                    onChange={() => toggleSelected(c.id)}
+                    style={styles.rowCheckbox}
+                    data-testid={`select-${c.id}`}
+                  />
                   <span style={styles.whoName}>{c.who}</span>
                   {c.parent_id && (
                     <span style={styles.replyBadge}>reply to #{c.parent_id}</span>
@@ -282,6 +417,46 @@ function fmtDate(s) {
 }
 
 const styles = {
+  toolRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  postFilter: {
+    background: 'var(--bg)',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg)',
+    padding: '7px 10px',
+    fontFamily: 'inherit',
+    fontSize: 12,
+    borderRadius: 4,
+    outline: 'none',
+    minWidth: 220,
+  },
+  selectAll: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 11,
+    color: 'var(--fg-3)',
+    cursor: 'pointer',
+  },
+  bulkBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '8px 12px',
+    border: '1px solid color-mix(in oklab, var(--accent) 40%, transparent)',
+    background: 'color-mix(in oklab, var(--accent) 10%, transparent)',
+    borderRadius: 4,
+    marginBottom: 10,
+    fontSize: 11,
+    flexWrap: 'wrap',
+  },
+  bulkInfo: { color: 'var(--fg-2)', marginRight: 4 },
+  rowCheckbox: { marginRight: 8, cursor: 'pointer' },
   header: {
     display: 'flex',
     alignItems: 'flex-end',
@@ -384,6 +559,16 @@ const styles = {
     background: 'transparent',
     border: '1px solid var(--line-2)',
     color: 'var(--fg-2)',
+    padding: '4px 10px',
+    borderRadius: 4,
+    fontSize: 11,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+  },
+  btnGhost: {
+    background: 'transparent',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-3)',
     padding: '4px 10px',
     borderRadius: 4,
     fontSize: 11,
