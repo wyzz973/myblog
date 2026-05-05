@@ -692,7 +692,7 @@ Implementation note: pure helpers in `src/admin/keyboardShortcuts.js` (`JUMP_MAP
 
 ### Task 18 — URL-state filters & pagination
 
-**Status:** pending
+**Status:** completed
 **Priority:** medium
 **Frontend evidence:** PRD §6.2 — refresh / share must restore.
 **Owner problem:** refresh on /admin/posts loses filter+page; can't share a filtered view.
@@ -712,7 +712,13 @@ Implementation note: pure helpers in `src/admin/keyboardShortcuts.js` (`JUMP_MAP
 **Snapshot location:** `/tmp/admin-rebuild/task-18/url-restored.png`
 **Commit message:** `feat(admin): url-state filters and pagination`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `ae66dbd` (`feat(admin): url-state filters and pagination on posts`).
+
+- **Tests:** `npx vitest run src/admin/searchParamsState.test.js` → 12/12 (default values omitted, non-default values written, garbage int falls back, round-trip identity, statesEqual). Combined regression `npx vitest run` → 162/162 (no Task 1-17 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-18/verify.py` → login → /admin/posts has no query → set pageSize=50 → URL writes `pageSize=50` → click status=draft → URL writes `status=draft` → type "rust" → URL writes `q=rust` → reload → all three preserved including search input value → clear q → URL drops `q` (default empty) → browser Back → q=rust restored → click status=all → URL drops `status` (default). All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-18/filtered-state.png`, `/after-reload.png`.
+
+Implementation note: pure helpers in `src/admin/searchParamsState.js` (`buildQueryFromState`, `buildStateFromQuery`, `intParser`, `statesEqual`) keep encoding logic separate from React; the schema array per page declares each field's default + parser/serializer. `useSyncedSearchParams` hook owns the bidirectional bind (URL → state via location.search effect, state → URL via `navigate({pathname,search})` with `replace:false` so back/forward replays prior views). Posts.jsx now derives `statusFilter / q / page / pageSize` from the hook state and writes via `setFilters({key,page:1})`. The palette side-door for `editPost` was updated to preserve `location.search` when wiping `state`, so jumping to a post from the palette no longer clobbers the user's filters.
 
 ---
 
@@ -1079,3 +1085,4 @@ Append-only. Every entry below means a real commit shipped.
 | 15 | Posts editor autosave drafts | `d54d90f` | `vitest run src/admin/draftStore.test.js` 9/9 | `python /tmp/admin-rebuild/task-15/verify.py` PASSED | 2026-05-06 |
 | 16 | Admin ⌘K command palette | `28cae37` | `vitest run src/admin/CommandPalette.test.jsx src/admin/commandPaletteItems.test.js` 18/18 | `python /tmp/admin-rebuild/task-16/verify.py` PASSED | 2026-05-06 |
 | 17 | Global keyboard shortcuts (?, g x, j/k) | `f688b6e` | `vitest run src/admin/keyboardShortcuts.test.js` 11/11 | `python /tmp/admin-rebuild/task-17/verify.py` PASSED | 2026-05-06 |
+| 18 | URL-state filters & pagination on Posts | `ae66dbd` | `vitest run src/admin/searchParamsState.test.js` 12/12 | `python /tmp/admin-rebuild/task-18/verify.py` PASSED | 2026-05-06 |
