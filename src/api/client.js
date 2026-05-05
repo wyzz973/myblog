@@ -37,4 +37,5 @@ export const api = {
     detail: (id) => request(`/posts/${id}`),
     like: (id) => request(`/posts/${id}/like`, { method: 'POST' }),
   },
+  now: () => request('/now'),
 };

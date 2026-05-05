@@ -685,6 +685,46 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .section-head .label .n { color: var(--accent); }
 .section-head .count { color: var(--fg-4); font-size: 11px; }
 
+/* /now public panel (HomeA, between contributions and posts). */
+.now-panel { margin: 0 0 8px; }
+.now-card {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.now-body { font-size: 14px; line-height: 1.65; color: var(--fg); }
+.now-body p:first-child { margin-top: 0; }
+.now-body p:last-child { margin-bottom: 0; }
+.now-body strong { color: var(--accent); }
+.now-body code {
+  background: var(--bg-3);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.now-body ul { margin: 6px 0 6px 20px; padding: 0; }
+.now-body li { margin: 2px 0; }
+.now-body a { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent); }
+.now-meta {
+  display: flex;
+  gap: 18px;
+  font-size: 11px;
+  color: var(--fg-3);
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+}
+.now-meta-label {
+  color: var(--fg-4);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-right: 6px;
+  font-size: 9px;
+}
+
 /* Lead paragraph below a section head — used by admin SectionHead. */
 .section-lead {
   font-size: 12px;

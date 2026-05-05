@@ -39,3 +39,4 @@ export const usePosts = (params) =>
   useResource(() => api.posts.list(params), [JSON.stringify(params)]);
 export const usePost = (id) =>
   useResource(() => (id ? api.posts.detail(id) : Promise.resolve(null)), [id]);
+export const useNow = () => useResource(() => api.now());

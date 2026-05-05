@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useSite, useProjects, useContrib, useContacts } from '../api/hooks.js';
 import ContactRow from './ContactRow.jsx';
 import { copyToClipboard } from './CopyText.jsx';
+import NowPanel from './NowPanel.jsx';
 
 function HeroA() {
   const { data: site } = useSite();
@@ -314,11 +315,13 @@ export default function HomeA({ posts, tags, activeTag, setTag, focusIdx, onOpen
     <>
       <HeroA />
       <div className="wrap">
-        <div className="section-head" id="now">
+        <div className="section-head" id="contributions">
           <span className="label"><span className="n">02 /</span> contributions · 52 weeks</span>
           <span className="count">{(SITE.commits52w || 0).toLocaleString()} commits</span>
         </div>
         <ContribGraph grid={CONTRIB} counts={CONTRIB_COUNTS} months={CONTRIB_MONTHS} />
+
+        <NowPanel />
 
         <div className="section-head" id="writing">
           <span className="label"><span className="n">03 /</span> ./posts</span>
