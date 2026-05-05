@@ -8,6 +8,7 @@ from app.models import Account, Media
 from app.schemas.media import (
     MediaItem,
     MediaPatch,
+    MediaReferences,
     MediaUploadFailure,
     MediaUploadResponse,
 )
@@ -50,7 +51,12 @@ async def get_media(
     row = await media_svc.get(s, media_id=media_id)
     if row is None:
         raise HTTPException(404, "media not found")
-    return _to_item(row)
+    item = _to_item(row)
+    refs = await media_svc.references(s, media_id=media_id)
+    item.referenced_by = MediaReferences(
+        posts=refs["posts"], avatar=refs["avatar"]
+    )
+    return item
 
 
 @router.patch(
@@ -85,6 +91,20 @@ async def delete_media(
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> Response:
+    # Refuse to delete if anything still references this media. Owners
+    # who really want to delete must first remove the post references
+    # or change the avatar.
+    refs = await media_svc.references(s, media_id=media_id)
+    if refs["posts"] or refs["avatar"]:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "media_referenced",
+                "posts": refs["posts"],
+                "avatar": refs["avatar"],
+            },
+        )
+
     was_deleted, storage_path, filename = await media_svc.delete_one(
         s, media_id=media_id
     )

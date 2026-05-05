@@ -6,6 +6,12 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
+class MediaReferences(BaseModel):
+    """Where a media item is currently in use. Empty = safe to delete."""
+    posts: list[str] = Field(default_factory=list)
+    avatar: bool = False
+
+
 class MediaItem(BaseModel):
     id: int
     filename: str
@@ -16,6 +22,7 @@ class MediaItem(BaseModel):
     height: int | None = None
     alt: str | None = None
     created_at: datetime
+    referenced_by: MediaReferences | None = None
 
 
 class MediaPatch(BaseModel):

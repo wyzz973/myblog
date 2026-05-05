@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Media
+from app.models import Media, Post, SiteMeta
 from app.services.media_storage import SaveResult
 
 
@@ -78,3 +78,28 @@ async def delete_one(
     await s.execute(delete(Media).where(Media.id == media_id))
     await s.flush()
     return True, storage_path, filename
+
+
+async def references(s: AsyncSession, *, media_id: int) -> dict:
+    """Return where a media item is currently embedded.
+
+    Scans `posts.body_md` for `/media/<storage_path>` substrings (the URL
+    shape produced by `url_for(storage_path)`) and checks
+    `site_meta.avatar_id`. Used by the delete handler to refuse with 409
+    when the media is still in use.
+    """
+    row = await get(s, media_id=media_id)
+    if row is None:
+        return {"posts": [], "avatar": False}
+    needle = f"/media/{row.storage_path}"
+    # Posts.body_md scan — small enough table that LIKE on every row is fine.
+    res = await s.execute(
+        select(Post.id).where(Post.body_md.like(f"%{needle}%")).order_by(Post.id)
+    )
+    post_ids = [pid for (pid,) in res.all()]
+    # Avatar reverse lookup.
+    res2 = await s.execute(
+        select(SiteMeta.avatar_id).where(SiteMeta.avatar_id == media_id).limit(1)
+    )
+    is_avatar = res2.scalar_one_or_none() is not None
+    return {"posts": post_ids, "avatar": is_avatar}

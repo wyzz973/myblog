@@ -114,7 +114,17 @@ export default function Media() {
       if (selectedId === id) setSelectedId(null);
       setToast('deleted');
     } catch (err) {
-      setToast(`error: ${err?.detail || err.message}`);
+      // 409 conflict — surface the readable list of blockers.
+      if (err?.status === 409 && typeof err.detail === 'object' && err.detail) {
+        const parts = [];
+        if (err.detail.avatar) parts.push('用作头像');
+        if (err.detail.posts?.length) {
+          parts.push(`${err.detail.posts.length} 篇文章 (${err.detail.posts.join(', ')})`);
+        }
+        setToast(`删除被拒：${parts.join('、') || '仍被引用'}`);
+      } else {
+        setToast(`error: ${err?.detail || err?.message}`);
+      }
     }
   }
 
@@ -260,11 +270,35 @@ function Tile({ item, active, onClick }) {
 function DetailModal({ item, onClose, onSaveAlt, onDelete, onCopy }) {
   const [alt, setAlt] = useState(item.alt || '');
   const [saving, setSaving] = useState(false);
+  // referenced_by is fetched lazily on open; null = loading, then {posts, avatar}.
+  const [refs, setRefs] = useState(null);
 
-  // When the item changes (selecting another), reset local alt.
+  // When the item changes (selecting another), reset local alt and refetch refs.
   useEffect(() => {
     setAlt(item.alt || '');
   }, [item.id, item.alt]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRefs(null);
+    apiMedia.get(item.id).then((full) => {
+      if (cancelled) return;
+      setRefs(full?.referenced_by || { posts: [], avatar: false });
+    }).catch(() => {
+      if (!cancelled) setRefs({ posts: [], avatar: false });
+    });
+    return () => { cancelled = true; };
+  }, [item.id]);
+
+  const blocked = refs && (refs.posts.length > 0 || refs.avatar);
+  const blockerHint = !refs
+    ? '加载引用…'
+    : blocked
+      ? `仍被引用，无法删除：${[
+          refs.avatar ? '用作头像' : null,
+          refs.posts.length > 0 ? `${refs.posts.length} 篇文章` : null,
+        ].filter(Boolean).join('、')}`
+      : null;
 
   async function save() {
     setSaving(true);
@@ -319,6 +353,29 @@ function DetailModal({ item, onClose, onSaveAlt, onDelete, onCopy }) {
             />
             <span style={styles.counter}>{alt.length}/512</span>
           </label>
+
+          {refs && (
+            <div style={styles.refs} data-testid="media-refs">
+              <div style={styles.labelText}>被引用于</div>
+              {!refs.posts.length && !refs.avatar && (
+                <div style={styles.refsEmpty}>未在任何文章或头像中引用</div>
+              )}
+              {refs.avatar && (
+                <div style={styles.refRow}>
+                  <span style={styles.refBadge}>avatar</span>
+                  <span style={styles.refDesc}>当前用作站点头像</span>
+                </div>
+              )}
+              {refs.posts.map((pid) => (
+                <div key={pid} style={styles.refRow}>
+                  <span style={styles.refBadge}>post</span>
+                  <span style={styles.refDesc} data-testid={`media-ref-${pid}`}>
+                    {pid}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div style={styles.modalFoot}>
           <button type="button" style={styles.btn} onClick={() => onCopy(item)}>
@@ -328,6 +385,10 @@ function DetailModal({ item, onClose, onSaveAlt, onDelete, onCopy }) {
             type="button"
             style={styles.btnDanger}
             onClick={() => onDelete(item.id)}
+            disabled={!!blocked}
+            title={blockerHint || ''}
+            data-testid="media-delete"
+            data-blocked={blocked ? 'true' : undefined}
           >
             delete
           </button>
@@ -608,6 +669,32 @@ const styles = {
     fontSize: 12,
     cursor: 'pointer',
   },
+  refs: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTop: '1px dashed var(--line)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  refsEmpty: { color: 'var(--fg-4)', fontSize: 11 },
+  refRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    fontSize: 12,
+    color: 'var(--fg-2)',
+  },
+  refBadge: {
+    fontSize: 9,
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase',
+    color: 'var(--accent)',
+    border: '1px solid var(--line-2)',
+    padding: '1px 6px',
+    borderRadius: 3,
+  },
+  refDesc: { fontFamily: 'JetBrains Mono, monospace' },
   iconBtn: {
     background: 'transparent',
     border: '1px solid var(--line-2)',

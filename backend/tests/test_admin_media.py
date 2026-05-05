@@ -6,7 +6,8 @@ from PIL import Image
 from sqlalchemy import delete, select, update
 
 from app.db import AsyncSessionLocal
-from app.models import Media, SiteMeta
+from app.models import Media, Post, SiteMeta, Tag
+from datetime import date as _date
 
 EMAIL = "hi@wangyang.dev"
 PASS = "changeme"
@@ -126,24 +127,33 @@ async def test_media_delete_404(client, admin_token, cleanup_media):
 
 
 async def test_media_delete_clears_avatar_id_via_fk(client, admin_token, cleanup_media):
-    """site_meta.avatar_id = id; DELETE media → avatar_id becomes NULL via ON DELETE SET NULL."""
+    """Task 23 changed delete behavior: refuse with 409 while avatar_id
+    points at the media. Owners must clear the avatar first; only then
+    does delete proceed. The DB still has ON DELETE SET NULL as a
+    last-resort safety net for direct DB writes, but the API never
+    triggers that path."""
     async with AsyncSessionLocal() as s:
         mid = await _seed_media(s)
         await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(avatar_id=mid))
         await s.commit()
 
+    # First attempt is refused.
     r = await client.delete(
         f"/api/admin/media/{mid}",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert r.status_code == 204
+    assert r.status_code == 409
+    assert r.json()["detail"]["avatar"] is True
 
+    # Clear the avatar, then delete succeeds.
     async with AsyncSessionLocal() as s:
-        site = (await s.execute(select(SiteMeta).where(SiteMeta.id == 1))).scalar_one()
-        assert site.avatar_id is None
-        # Cleanup so the next test sees a clean fixture.
         await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(avatar_id=None))
         await s.commit()
+    r2 = await client.delete(
+        f"/api/admin/media/{mid}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r2.status_code == 204
 
 
 def _png_bytes(w=4, h=3) -> bytes:
@@ -366,3 +376,121 @@ async def test_media_post_with_empty_filename(
     body = r.json()
     if body["ok"]:
         assert body["ok"][0]["filename"]
+
+
+# --- Task 23: refuse delete when media is referenced ---
+
+
+async def _seed_post_with_body(s, *, slug, tag_slug, body_md):
+    tag = (await s.execute(
+        Tag.__table__.select().where(Tag.slug == tag_slug)
+    )).first()
+    if tag is None:
+        s.add(Tag(slug=tag_slug, name=tag_slug.title(), color="#888", sort_order=0))
+        await s.flush()
+        tag = (await s.execute(
+            Tag.__table__.select().where(Tag.slug == tag_slug)
+        )).first()
+    s.add(Post(
+        id=slug, n="1", title="t23-host", subtitle="", date=_date(2026, 4, 28),
+        read="1", lang="en", summary="", tldr="", body_md=body_md, body_json=[],
+        word_count=0, status="published", featured=False, private=False,
+        comments_enabled=True, tag_id=tag.id,
+    ))
+    await s.flush()
+
+
+@pytest.fixture
+async def cleanup_t23_posts():
+    yield
+    async with AsyncSessionLocal() as s:
+        from sqlalchemy import delete as sa_delete
+        await s.execute(sa_delete(Post).where(Post.id.like("t23-%")))
+        await s.execute(sa_delete(Tag).where(Tag.slug == "t23-tag"))
+        await s.commit()
+
+
+async def test_media_get_includes_referenced_by_when_unreferenced(
+    client, admin_token, cleanup_media,
+):
+    async with AsyncSessionLocal() as s:
+        mid = await _seed_media(s, storage_path="t23/lonely.png")
+        await s.commit()
+    r = await client.get(
+        f"/api/admin/media/{mid}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    item = r.json()
+    assert item["referenced_by"] == {"posts": [], "avatar": False}
+
+
+async def test_media_get_referenced_by_post_body(
+    client, admin_token, cleanup_media, cleanup_t23_posts,
+):
+    async with AsyncSessionLocal() as s:
+        mid = await _seed_media(s, storage_path="t23/used.png")
+        await _seed_post_with_body(
+            s, slug="t23-uses-it", tag_slug="t23-tag",
+            body_md="see ![pic](/media/t23/used.png) here",
+        )
+        await s.commit()
+    r = await client.get(
+        f"/api/admin/media/{mid}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    refs = r.json()["referenced_by"]
+    assert refs == {"posts": ["t23-uses-it"], "avatar": False}
+
+
+async def test_media_delete_refused_with_409_when_referenced(
+    client, admin_token, cleanup_media, cleanup_t23_posts,
+):
+    async with AsyncSessionLocal() as s:
+        mid = await _seed_media(s, storage_path="t23/blocker.png")
+        await _seed_post_with_body(
+            s, slug="t23-blocking", tag_slug="t23-tag",
+            body_md="![](/media/t23/blocker.png)",
+        )
+        await s.commit()
+    r = await client.delete(
+        f"/api/admin/media/{mid}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert detail["error"] == "media_referenced"
+    assert detail["posts"] == ["t23-blocking"]
+    assert detail["avatar"] is False
+    # Row should still exist after the refused delete.
+    async with AsyncSessionLocal() as s:
+        still = (await s.execute(
+            select(Media).where(Media.id == mid)
+        )).scalar_one_or_none()
+    assert still is not None
+
+
+async def test_media_delete_refused_when_set_as_avatar(
+    client, admin_token, cleanup_media,
+):
+    async with AsyncSessionLocal() as s:
+        mid = await _seed_media(s, storage_path="t23/avatar.png")
+        # Mark as avatar via SiteMeta
+        sm = (await s.execute(select(SiteMeta).where(SiteMeta.id == 1))).scalar_one_or_none()
+        if sm is None:
+            sm = SiteMeta(id=1)
+            s.add(sm)
+        sm.avatar_id = mid
+        await s.commit()
+    try:
+        r = await client.delete(
+            f"/api/admin/media/{mid}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert r.status_code == 409
+        assert r.json()["detail"]["avatar"] is True
+    finally:
+        async with AsyncSessionLocal() as s:
+            await s.execute(update(SiteMeta).where(SiteMeta.id == 1).values(avatar_id=None))
+            await s.commit()
