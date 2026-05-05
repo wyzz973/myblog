@@ -34,9 +34,11 @@ const NAV_GROUPS = [
     n: '04',
     label: '首页与品牌',
     items: [
-      { to: '/admin/profile', label: '作者资料' },
-      { to: '/admin/site', label: '站点' },
+      { to: '/admin/site-identity', label: '站点身份' },
       { to: '/admin/contacts', label: '联系方式' },
+      // 主题 keeps the legacy /admin/site URL alive while Task 11 will
+      // formally split theme out of that page.
+      { to: '/admin/site', label: '主题' },
     ],
   },
   {

@@ -45,7 +45,7 @@ describe('Layout sidebar IA', () => {
     const expected = [
       '仪表盘', '文章', '标签', '媒体', '近况', '项目',
       '数据分析', '评论',
-      '作者资料', '站点', '联系方式',
+      '站点身份', '联系方式', '主题',
       '宠物助手', '设置',
     ];
     for (const label of expected) {
