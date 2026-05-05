@@ -35,6 +35,7 @@ export default function Posts() {
   const [editing, setEditing] = useState(null); // null | "__new__" | id
   const [reloadTick, setReloadTick] = useState(0);
   const [focusedIdx, setFocusedIdx] = useState(-1);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const rowRefs = useRef([]);
 
   const reload = useCallback(() => setReloadTick((t) => t + 1), []);
@@ -175,14 +176,30 @@ export default function Posts() {
             count={loading ? 'loading…' : `${total} entries`}
           />
         </div>
-        <button
-          type="button"
-          style={styles.btnPrimary}
-          onClick={() => setEditing('__new__')}
-        >
-          + 新建文章
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            style={styles.btnGhost}
+            onClick={() => setBulkOpen(true)}
+            data-testid="posts-bulk-upload"
+          >
+            批量导入
+          </button>
+          <button
+            type="button"
+            style={styles.btnPrimary}
+            onClick={() => setEditing('__new__')}
+          >
+            + 新建文章
+          </button>
+        </div>
       </header>
+      {bulkOpen && (
+        <BulkUploadModal
+          onClose={() => setBulkOpen(false)}
+          onDone={() => { setBulkOpen(false); reload(); }}
+        />
+      )}
 
       <div style={styles.toolRow}>
         <div style={styles.chips}>
@@ -512,4 +529,247 @@ const styles = {
     borderRadius: 4,
   },
   dim: { color: 'var(--fg-4)' },
+};
+
+// Task 30: bulk upload of .md files. Drag-drop or file picker; per-file
+// row with status icon. Posts the multipart batch via postsApi.bulkUpload
+// and renders the structured response (which contains per-file ok/error).
+function BulkUploadModal({ onClose, onDone }) {
+  const [files, setFiles] = useState([]);
+  const [results, setResults] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [overwrite, setOverwrite] = useState(false);
+  const [drag, setDrag] = useState(false);
+  const inputRef = useRef(null);
+
+  function pickFiles(list) {
+    const accepted = Array.from(list || [])
+      .filter((f) => /\.(md|markdown)$/i.test(f.name))
+      .slice(0, 20);
+    setFiles(accepted);
+    setResults(null);
+  }
+
+  async function onUpload() {
+    if (!files.length) return;
+    setBusy(true);
+    try {
+      const res = await postsApi.bulkUpload(files, { overwrite });
+      setResults(res);
+    } catch (err) {
+      setResults({
+        results: files.map((f) => ({
+          file: f.name,
+          ok: false,
+          detail: err?.detail || err?.message || '上传失败',
+        })),
+        summary: { total: files.length, ok: 0, failed: files.length },
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function close() {
+    if (results && results.summary?.ok > 0) onDone?.();
+    else onClose?.();
+  }
+
+  return (
+    <div
+      className="palette-bg"
+      data-testid="bulk-upload-modal"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) close();
+      }}
+    >
+      <div
+        style={bulkStyles.shell}
+        onMouseDown={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <header style={bulkStyles.head}>
+          <span style={bulkStyles.title}>批量导入文章</span>
+          <button type="button" onClick={close} style={bulkStyles.closeBtn} aria-label="关闭">×</button>
+        </header>
+        <div style={bulkStyles.body}>
+          <div
+            style={{ ...bulkStyles.drop, ...(drag ? bulkStyles.dropActive : null) }}
+            onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDrag(false);
+              pickFiles(e.dataTransfer.files);
+            }}
+            onClick={() => inputRef.current?.click()}
+            data-testid="bulk-upload-drop"
+          >
+            {files.length === 0
+              ? '拖入 .md 文件,或点此选择(最多 20 个)'
+              : `已选 ${files.length} 个文件`}
+            <input
+              ref={inputRef}
+              type="file"
+              multiple
+              accept=".md,.markdown"
+              onChange={(e) => pickFiles(e.target.files)}
+              style={{ display: 'none' }}
+            />
+          </div>
+
+          {files.length > 0 && (
+            <ul style={bulkStyles.fileList} data-testid="bulk-upload-files">
+              {files.map((f, i) => {
+                const r = results?.results?.find((x) => x.file === f.name);
+                return (
+                  <li
+                    key={`${f.name}-${i}`}
+                    style={{
+                      ...bulkStyles.fileRow,
+                      ...(r ? (r.ok ? bulkStyles.fileOk : bulkStyles.fileErr) : null),
+                    }}
+                    data-testid={`bulk-file-${i}`}
+                    data-status={r ? (r.ok ? 'ok' : 'err') : 'pending'}
+                  >
+                    <span style={bulkStyles.fileIcon}>
+                      {r ? (r.ok ? '✓' : '!') : '·'}
+                    </span>
+                    <span style={bulkStyles.fileName}>{f.name}</span>
+                    <span style={bulkStyles.fileMeta}>
+                      {r
+                        ? r.ok
+                          ? `→ ${r.post?.id}`
+                          : (r.detail || `HTTP ${r.status}`)
+                        : `${(f.size / 1024).toFixed(1)} KB`}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <label style={bulkStyles.opt}>
+            <input
+              type="checkbox"
+              checked={overwrite}
+              onChange={(e) => setOverwrite(e.target.checked)}
+            />
+            <span>遇到同名 id 时覆盖(否则报 already exists)</span>
+          </label>
+
+          {results && (
+            <div style={bulkStyles.summary} data-testid="bulk-upload-summary">
+              共 {results.summary.total} 个 · 成功 {results.summary.ok} · 失败 {results.summary.failed}
+            </div>
+          )}
+        </div>
+        <footer style={bulkStyles.foot}>
+          <button type="button" onClick={close} style={styles.btnGhost}>
+            {results && results.summary.ok > 0 ? '完成' : '取消'}
+          </button>
+          <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            onClick={onUpload}
+            disabled={busy || !files.length || (results && results.summary.failed === 0)}
+            style={styles.btnPrimary}
+            data-testid="bulk-upload-submit"
+          >
+            {busy ? '上传中…' : '开始上传'}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+const bulkStyles = {
+  shell: {
+    width: 'min(640px, 92vw)',
+    maxHeight: '82vh',
+    background: 'var(--bg-2)',
+    border: '1px solid var(--line-2)',
+    borderRadius: 10,
+    boxShadow: '0 20px 80px rgba(0,0,0,0.6)',
+    display: 'flex',
+    flexDirection: 'column',
+    fontFamily: "'JetBrains Mono', monospace",
+  },
+  head: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 16px',
+    borderBottom: '1px solid var(--line)',
+  },
+  title: { fontSize: 13, fontWeight: 600, color: 'var(--fg)' },
+  closeBtn: {
+    background: 'transparent', border: 0, fontSize: 18, color: 'var(--fg-3)',
+    cursor: 'pointer', padding: 0, width: 22, height: 22, lineHeight: 1,
+  },
+  body: { padding: 16, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 10 },
+  drop: {
+    border: '1px dashed var(--line-2)',
+    borderRadius: 6,
+    padding: '24px 16px',
+    textAlign: 'center',
+    color: 'var(--fg-3)',
+    fontSize: 12,
+    cursor: 'pointer',
+    background: 'var(--bg)',
+  },
+  dropActive: {
+    borderColor: 'var(--accent)',
+    color: 'var(--fg)',
+    background: 'color-mix(in oklab, var(--accent) 8%, transparent)',
+  },
+  fileList: {
+    listStyle: 'none',
+    padding: 0,
+    margin: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    maxHeight: 240,
+    overflow: 'auto',
+  },
+  fileRow: {
+    display: 'grid',
+    gridTemplateColumns: '20px 1fr auto',
+    gap: 8,
+    alignItems: 'center',
+    padding: '6px 10px',
+    border: '1px solid var(--line)',
+    borderRadius: 4,
+    fontSize: 12,
+    color: 'var(--fg-2)',
+  },
+  fileOk: {
+    borderColor: 'color-mix(in oklab, var(--accent) 50%, var(--line))',
+    background: 'color-mix(in oklab, var(--accent) 6%, transparent)',
+  },
+  fileErr: {
+    borderColor: 'var(--danger, #c44)',
+    background: 'color-mix(in oklab, var(--danger, #c44) 6%, transparent)',
+  },
+  fileIcon: { color: 'var(--accent)', fontWeight: 600, textAlign: 'center' },
+  fileName: { fontFamily: 'JetBrains Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  fileMeta: { color: 'var(--fg-4)', fontSize: 11 },
+  opt: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--fg-3)' },
+  summary: {
+    fontSize: 12,
+    color: 'var(--fg-2)',
+    padding: '8px 12px',
+    background: 'var(--bg-3)',
+    borderRadius: 4,
+  },
+  foot: {
+    display: 'flex',
+    gap: 8,
+    padding: '12px 16px',
+    borderTop: '1px solid var(--line)',
+    background: 'var(--bg-3)',
+  },
 };

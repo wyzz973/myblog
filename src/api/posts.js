@@ -78,6 +78,37 @@ export const postsApi = {
       body: JSON.stringify({ markdown }),
     });
   },
+  // Task 30: bulk upload of .md files. Multipart body, omits the
+  // application/json Content-Type so the browser picks the boundary.
+  // Returns the response body for 201/207/422 (per-file results live
+  // there); throws only for genuine errors (auth, network).
+  async bulkUpload(files, { overwrite = false } = {}) {
+    const fd = new FormData();
+    for (const f of files) fd.append('files', f, f.name);
+    const token = getToken();
+    const url = `${BASE}/api/admin/posts/upload${qs({ overwrite })}`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    // 201 (all ok) / 207 (partial) / 422 (all failed) all carry the
+    // structured per-file results in the body.
+    if (r.status === 201 || r.status === 207 || r.status === 422) {
+      return r.json();
+    }
+    let detail = `${r.status}`;
+    try {
+      const body = await r.json();
+      detail = body.detail || detail;
+    } catch {
+      /* non-JSON */
+    }
+    const err = new Error(`${r.status} ${detail}`);
+    err.status = r.status;
+    err.detail = detail;
+    throw err;
+  },
 };
 
 export default postsApi;
