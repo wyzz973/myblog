@@ -6,6 +6,8 @@ import {
   setFmField,
   STATUS_VALUES,
 } from './frontmatter.js';
+import MediaPicker from './MediaPicker.jsx';
+import { buildImageMarkdown, insertAt } from './markdownInsert.js';
 
 const NEW_POST_TEMPLATE = `---
 id: my-new-post
@@ -38,6 +40,36 @@ export default function PostEditor({ id, onClose, onSaved }) {
   const [previewError, setPreviewError] = useState(null);
   const [previewing, setPreviewing] = useState(false);
   const debounceRef = useRef(null);
+
+  const textareaRef = useRef(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  function insertImage(item) {
+    const md = buildImageMarkdown(item);
+    if (!md) return;
+    const ta = textareaRef.current;
+    const start = ta?.selectionStart ?? markdown.length;
+    const end = ta?.selectionEnd ?? markdown.length;
+    const { value, cursor } = insertAt(markdown, start, end, md);
+    setMarkdown(value);
+    setPickerOpen(false);
+    // Restore caret just past the inserted directive on next paint.
+    requestAnimationFrame(() => {
+      const t = textareaRef.current;
+      if (!t) return;
+      t.focus();
+      t.setSelectionRange(cursor, cursor);
+    });
+  }
+
+  // ⌘ / Ctrl + I opens the picker. Bound to the textarea element to
+  // avoid swallowing the global browser shortcut elsewhere on the page.
+  function onTextareaKeyDown(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') {
+      e.preventDefault();
+      setPickerOpen(true);
+    }
+  }
 
   useEffect(() => {
     if (isNew) return;
@@ -255,10 +287,23 @@ export default function PostEditor({ id, onClose, onSaved }) {
 
       <div style={styles.cols}>
         <div style={styles.col}>
-          <div style={styles.colHead}>markdown source</div>
+          <div style={styles.colHead}>
+            <span>markdown source</span>
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              style={styles.colHeadBtn}
+              title="从媒体库插入图片 (⌘ I)"
+              data-testid="insert-image-btn"
+            >
+              插入图片
+            </button>
+          </div>
           <textarea
+            ref={textareaRef}
             value={markdown}
             onChange={(e) => setMarkdown(e.target.value)}
+            onKeyDown={onTextareaKeyDown}
             spellCheck={false}
             style={styles.textarea}
             placeholder="--- frontmatter ---\nbody…"
@@ -305,6 +350,13 @@ export default function PostEditor({ id, onClose, onSaved }) {
           </div>
         </div>
       </div>
+
+      <MediaPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onPick={insertImage}
+        title="插入图片"
+      />
     </div>
   );
 }
@@ -552,9 +604,26 @@ const styles = {
     color: 'var(--fg-4)',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    padding: '8px 12px',
+    padding: '6px 12px',
     borderBottom: '1px solid var(--line)',
     background: 'var(--bg)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    minHeight: 28,
+  },
+  colHeadBtn: {
+    background: 'var(--bg-2)',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-2)',
+    padding: '3px 9px',
+    borderRadius: 3,
+    fontSize: 10,
+    fontFamily: 'inherit',
+    letterSpacing: '0.04em',
+    cursor: 'pointer',
+    textTransform: 'none',
   },
   textarea: {
     flex: 1,
