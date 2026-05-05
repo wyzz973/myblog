@@ -256,7 +256,7 @@ Implementation note: only existing routes were grouped; no new pages built. Pet 
 
 ### Task 5 — Activity feed on dashboard + full activity log page
 
-**Status:** pending
+**Status:** completed
 **Priority:** high
 **Frontend evidence:** none on public site — internal observability surface. Powers post-mortem after surprises. O6.
 **Owner problem:** every admin write writes a row to `event_log`, but there is no UI to read it. After the next "what happened?" we cannot answer.
@@ -278,7 +278,13 @@ Implementation note: only existing routes were grouped; no new pages built. Pet 
 **Snapshot location:** `/tmp/admin-rebuild/task-5/dashboard-widget.png`, `/tmp/admin-rebuild/task-5/log-page.png`
 **Commit message:** `feat(admin/activity): expose event log on dashboard and dedicated page`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `d63255d` (`feat(admin/activity): expose event log on dashboard and dedicated page`).
+
+- **Tests:** `npx vitest run src/admin/ActivityLog.test.jsx` → 4/4 (list + meta expand, chip filter triggers re-fetch with the right type=, empty state, pagination via 加载更多). Combined `npx vitest run src/admin/ActivityLog.test.jsx src/admin/Layout.test.jsx src/admin/frontmatter.test.js src/api/admin.test.js src/admin/Login.test.jsx` → 32/32 (no Task 1/2/3/4 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-5/verify.py` → seed a tag.updated event via API → login → dashboard widget shows recent events including the seed → "查看全部 →" navigates to `/admin/activity-log` with full table → click a chip → list narrows to that type → click a row → meta panel renders (placeholder when meta is empty); cleanup restores the tag color. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-5/{dashboard-widget,activity-log}.png`.
+
+Implementation note: many backend write_event calls don't attach `meta`, so the row-expand panel falls back to "[ 无 meta — 后端未附加额外字段 ]" rather than failing silently. The chip row only surfaces event types actually seen on this site, adapting to the owner's data instead of pre-listing every theoretical type.
 
 ---
 
@@ -988,3 +994,4 @@ Append-only. Every entry below means a real commit shipped.
 | 2 | Refresh-token rotation wired in AuthContext | `30f4db3` | `vitest run src/api/admin.test.js src/admin/Login.test.jsx` 12/12 | `python /tmp/admin-rebuild/task-2/verify.py` PASSED | 2026-05-05 |
 | 3 | Posts editor GUI for lifecycle fields | `b08f712` | `vitest run src/admin/frontmatter.test.js` 11/11 | `python /tmp/admin-rebuild/task-3/verify.py` PASSED | 2026-05-05 |
 | 4 | Sidebar IA regrouped + breadcrumb | `e30dbae` | `vitest run src/admin/Layout.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-4/verify.py` PASSED | 2026-05-05 |
+| 5 | Activity feed on dashboard + activity log page | `d63255d` | `vitest run src/admin/ActivityLog.test.jsx` 4/4 | `python /tmp/admin-rebuild/task-5/verify.py` PASSED | 2026-05-06 |
