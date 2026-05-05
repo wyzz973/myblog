@@ -556,7 +556,7 @@ Implementation note: backend extends the existing detail GET with a `profile` fi
 
 ### Task 14 — Inbox page (运营中枢)
 
-**Status:** pending
+**Status:** completed
 **Priority:** medium
 **Frontend evidence:** none directly — abstracts visitor signals onto a single triage screen. PRD §5.2 introduces it.
 **Owner problem:** owner has 3 attention surfaces (待审评论 / 最新宠物对话 / login alerts) scattered across 3 pages. Inbox unifies them.
@@ -578,7 +578,13 @@ Implementation note: backend extends the existing detail GET with a `profile` fi
 **Snapshot location:** `/tmp/admin-rebuild/task-14/inbox.png`
 **Commit message:** `feat(admin/inbox): unified triage page for visitor signals`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `040356e` (`feat(admin/inbox): unified triage page for visitor signals`).
+
+- **Tests:** `npx vitest run src/admin/Inbox.test.jsx src/admin/Layout.test.jsx` → 10/10 (three sections render, empty placeholders, mark-all-read clears badge, accent stripe on rows newer than last_seen, graceful degradation when one endpoint rejects). Combined regression `npx vitest run` → 112/112 (no Task 1-13 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-14/verify.py` → seed pending comment via public submit → login → /admin/inbox → assert all 3 sections + sidebar 01 group lists 收件箱 + comments section shows seeded row → click 全部已读 → badge flips to "已全部查看" → cleanup deletes seeded comment. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-14/inbox.png`.
+
+Implementation note: the page composes from existing endpoints (no backend change) using `Promise.allSettled`-style isolation — one endpoint failure surfaces a banner but the other sections still render with their data. "新" stripe gating reads `bl.admin.inbox.last_seen` from localStorage; 全部已读 stamps `Date.now()` so a future visit immediately knows what's new since the last triage.
 
 ---
 
@@ -1051,3 +1057,4 @@ Append-only. Every entry below means a real commit shipped.
 | 11 | Theme color picker + live preview | `bcdd8ca` | `vitest run src/admin/oklch.test.js` 8/8 | `python /tmp/admin-rebuild/task-11/verify.py` PASSED | 2026-05-06 |
 | 12 | Posts editor media picker | `5d3d3e9` | `vitest run src/admin/markdownInsert.test.js` 9/9 | `python /tmp/admin-rebuild/task-12/verify.py` PASSED | 2026-05-06 |
 | 13 | Pet visitor profile sidebar | `4f8f8e7` | `vitest run src/admin/pet/VisitorProfileSidebar.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-13/verify.py` PASSED | 2026-05-06 |
+| 14 | Inbox page (运营中枢) | `040356e` | `vitest run src/admin/Inbox.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-14/verify.py` PASSED | 2026-05-06 |
