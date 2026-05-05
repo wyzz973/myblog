@@ -28,6 +28,11 @@ async def enqueue(name: str, **kwargs: Any) -> str:
     returns 'inline'. Otherwise pushes to Redis and returns the job_id."""
     settings = get_settings()
     if settings.arq_inline:
+        if not _TASK_REGISTRY:
+            # Lazy-load runner so its module-level register() calls populate
+            # the registry. The arq worker process imports runner directly,
+            # but the FastAPI app does not — so inline mode needs this hook.
+            import app.workers.runner  # noqa: F401
         fn = _TASK_REGISTRY.get(name)
         if fn is None:
             raise RuntimeError(f"task {name!r} not registered")
