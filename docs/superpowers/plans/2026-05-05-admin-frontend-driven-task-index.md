@@ -155,7 +155,7 @@ Strict rules:
 
 ### Task 2 — Refresh-token rotation wired in AuthContext
 
-**Status:** pending
+**Status:** completed
 **Priority:** critical
 **Frontend evidence:** any admin session — affects S2.
 **Owner problem:** admin sessions silently die after `access_token_ttl` (default ~15 min). The user gets dumped to login mid-edit.
@@ -174,9 +174,13 @@ Strict rules:
   3. expire access token forcibly (clear localStorage `bl.access`) → fire any admin GET → assert auto-refresh + page still works
   4. revoke refresh cookie → fire admin GET → assert redirect to `/admin` login
 **Snapshot location:** `/tmp/admin-rebuild/task-2/post-refresh.png`
-**Commit message:** `fix(admin/auth): rotate refresh token on 401 instead of forcing relogin`
+**Commit message:** `feat(admin/auth): rotate refresh token on 401 instead of forcing relogin`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `30f4db3` (`feat(admin/auth): rotate refresh token on 401 instead of forcing relogin`).
+
+- **Tests:** `npx vitest run src/api/admin.test.js src/admin/Login.test.jsx` → 12/12 passing (7 admin: jwtExpiresAt parse, 401→refresh→retry, onUnauthorized when refresh fails, no retry on /auth/* paths, concurrent-coalesce, tryRefresh non-200; 5 Login: 2FA flow regression check after admin.js mock surface widened).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-2/verify.py` → end-to-end with real backend: login → confirm dashboard → inject expired access token → reload → observe `/auth/refresh` POST in network log + dashboard stays loaded (no redirect) → wipe refresh cookie → reload → bounced to `/admin` login. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-2/{logged-in,after-stale-refresh,bounced-to-login}.png`.
 
 ---
 
@@ -969,3 +973,4 @@ Append-only. Every entry below means a real commit shipped.
 |---|---|---|---|---|---|
 | 0 | Establish PRD + task-index | `2177eda` | n/a (docs round) | n/a (docs round) | 2026-05-05 |
 | 1 | Login 2FA challenge handling | `da9dd66` | `vitest run src/admin/Login.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-1/verify.py` PASSED | 2026-05-05 |
+| 2 | Refresh-token rotation wired in AuthContext | `30f4db3` | `vitest run src/api/admin.test.js src/admin/Login.test.jsx` 12/12 | `python /tmp/admin-rebuild/task-2/verify.py` PASSED | 2026-05-05 |
