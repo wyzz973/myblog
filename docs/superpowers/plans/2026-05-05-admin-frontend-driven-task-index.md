@@ -898,7 +898,7 @@ Implementation note: new `media.references(s, media_id)` service scans `posts.bo
 
 ### Task 24 — Projects: GitHub repo autofill
 
-**Status:** in-progress (24a backend endpoint + cache done; 24b admin UI modal pending)
+**Status:** completed (24a + 24b)
 **Priority:** medium
 **Frontend evidence:** `HomeA` projects grid.
 **Owner problem:** every new project requires manual entry of name/desc/lang/stars even though GitHub integration syncs repos.
@@ -930,6 +930,15 @@ Implementation note: new `media.references(s, media_id)` service scans `posts.bo
 Implementation note: `app/services/github.py::fetch_repos(token, login)` is unified into a single function with a process-local 10-minute TTL cache keyed by login. The cache key intentionally excludes the token (rotating the token doesn't change the repo list) and stays small enough that no eviction is needed for one-owner deployments. `_repos_cache_clear()` is exported for tests. Returns `[{name, description, lang, stars, archived, fork, url}]` — `fork` is preserved so the existing worker `tasks/github.py` repo-sync still filters out forks correctly. The router `GET /api/admin/integrations/github/repos` 404s when github isn't configured; otherwise returns `{items, username}`. The admin Projects modal (Task 24b) will consume this.
 
 **Removed dead code**: an earlier revision had two `fetch_repos` definitions in github.py — Python kept only the last one which lacked caching. The duplicate is now stripped and the canonical version (with cache + url field) sits at the top of the file alongside the cache state.
+
+#### Task 24b — admin Projects 从 GitHub 导入 modal (DONE)
+
+- **Tests:** Vitest 212/212 (no dedicated unit test for the modal — flow is end-to-end Playwright).
+- **Playwright:** `/tmp/admin-rebuild/task-24b/verify.py` PASSED → /admin/projects → click `[data-testid=projects-github-import]` → `[data-testid=gh-import-modal]` opens → 13 `li[data-testid^=gh-repo-]` rows rendered → live DB had every repo already imported, so the test confirmed all rows carry `data-taken="true"` (the "已添加" badge path); the prefill branch is exercised when at least one repo is fresh.
+- **Snapshots:** `/tmp/admin-rebuild/task-24b/import.png`.
+- **Commit:** `42e0781` (`feat(admin/projects): GitHub repo import modal (Task 24b)`).
+
+Implementation note: `apiIntegrations.listGithubRepos()` consumes the 24a endpoint; the modal handles 404 (`GitHub 集成尚未配置 — 请先在 设置 → 集成 中保存账号 + token`) gracefully. Filter input lets the owner narrow long lists. Forks are hidden from the modal (they rarely belong on a portfolio). Each row has `data-testid=gh-repo-{name}` + `data-taken="true"` when the project name is already saved; clicking a non-taken row calls `applyRepoToDraft(repo)` which prefills name/description/lang/stars on the new-project form, closes the modal, and toasts. The 已添加 badge greys out taken rows. The verifier learned to discover its row selector via `li[data-testid^=...]` because the parent UL also has `data-testid=gh-repo-list` and a generic prefix selector matched both.
 
 ---
 
@@ -1257,6 +1266,7 @@ Append-only. Every entry below means a real commit shipped.
 | 29 | API tokens usage_count counter + UI | `cae0a56` | `pytest tests/test_api_tokens.py` 12/12 | `python /tmp/admin-rebuild/task-29/verify.py` PASSED | 2026-05-06 |
 | 26b | PetUsage per-mode pie chart | `506c8a0` | `vitest run src/admin/pet/petUsageChart.test.js` 16/16 | `python /tmp/admin-rebuild/task-26b/verify.py` PASSED | 2026-05-06 |
 | 24a | GitHub repo listing endpoint + cache | `ab2ca0d` | `pytest tests/test_admin_integrations.py` 30/30 | n/a (mocked GraphQL; live calls would hit real GitHub) | 2026-05-06 |
+| 24b | GitHub import modal on Projects | `42e0781` | `vitest run` 212/212 | `python /tmp/admin-rebuild/task-24b/verify.py` PASSED | 2026-05-06 |
 
 ---
 
