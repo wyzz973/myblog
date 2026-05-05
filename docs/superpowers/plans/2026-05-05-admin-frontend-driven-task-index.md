@@ -791,7 +791,7 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 
 ### Task 21 — Pet species catalogue admin (extract `species.js` to backend)
 
-**Status:** in-progress (21a done; 21b seed + 21c CRUD router + 21d admin UI + 21e public swap pending)
+**Status:** in-progress (21a + 21b done; 21c CRUD router + 21d admin UI + 21e public swap pending)
 **Priority:** medium
 **Frontend evidence:** `src/components/pet/species.js` — 28 entries, hardcoded. `AsciiPet.jsx` reads frames + behavior from it. S7.
 **Owner problem:** adding/tweaking a species requires a code edit + redeploy.
@@ -814,7 +814,7 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 **Snapshot location:** `/tmp/admin-rebuild/task-21/species-admin.png`, `/tmp/admin-rebuild/task-21/pet-bubble.png`
 **Commit message:** `feat(admin/pet): species catalogue editable from admin`
 **Definition of done:** standard checklist
-**Completed:** 21a only — `2b68fd6` (`feat(admin/pet): pet_species table + model + schema (Task 21a)`). 21b (seed migration from `species.js`) + 21c (admin CRUD router + public read endpoint) + 21d (admin UI page) + 21e (replace frontend hardcode with fetch) all pending.
+**Completed:** 21a + 21b — `2b68fd6` (`feat(admin/pet): pet_species table + model + schema (Task 21a)`), `64184c7` (`feat(admin/pet): seed pet_species from species.js (Task 21b)`). 21c (admin CRUD router + public read endpoint) + 21d (admin UI page) + 21e (replace frontend hardcode with fetch) still pending.
 
 #### Task 21a — pet_species table + model + schema (DONE)
 
@@ -823,6 +823,15 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 - **Playwright:** none — pure data layer (no router, no UI yet; that lands in 21c/21d).
 
 Implementation note: split species schemas into their own `app/schemas/pet_species.py` module instead of growing `pet.py` (which holds PetConfig). `Rarity = Literal["common","uncommon","rare","epic","legendary"]` is mirrored by a DB-level `CheckConstraint`; pgsql rejects unknowns even if the schema is bypassed. Slug pattern `^[a-z][a-z0-9-]{0,31}$` matches what `AsciiPet.jsx` already feeds the URL state. JSONB columns (`frames`, `behavior`, `stats`) keep schema-level validation loose because layout validation lives in `AsciiPet`.
+
+#### Task 21b — pet_species seed migration (DONE)
+
+- **Tests:** `./.venv/bin/python -m pytest tests/test_pet_species_seed.py` → 6/6 (all 27 expected IDs present, rarity matches frontend table, every species has 3 frames each containing the `{E}` eye-marker, behavior shape `{proactiveLevel,idleFrequency,localLines}`, stats has 5 axes, all visible + sort_order unique).
+- **Idempotency:** down → up → up applied cleanly with `INSERT ... ON CONFLICT (id) DO NOTHING`.
+- **Migration:** `./.venv/bin/alembic upgrade head` → `0015_pet_species -> 0016_pet_species_seed` applied to test + dev DB.
+- **Playwright:** none — no UI / public endpoint yet (lands in 21c/21d).
+
+Implementation note: ports the 27 species in `src/components/pet/species.js` verbatim — frames keep `{E}` markers untouched so the public API can serve them straight to `AsciiPet.jsx` without translation. Behavior keeps the camelCase `proactiveLevel/idleFrequency/localLines` shape for symmetry with the JS hardcode, so 21e can swap the import for a fetch with no transform layer. EN trait/personality/description copied into `*_zh` columns; the admin UI in 21d will let the owner localize. Stats merge `RARITY_STAT_BASE[rarity]` with per-species overrides exactly as the JS does. Migration uses `op.execute(sa.text(...))` with `:name` bindings (asyncpg requires `$N` or named bindings, not psycopg2 `%(name)s`) and `CAST(:frames AS jsonb)` for JSONB columns. Downgrade only deletes the seeded IDs so owner-added species via admin survive.
 
 ---
 
