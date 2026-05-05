@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiIntegrations } from '../../api/integrations.js';
+import { apiPet } from '../../api/pet.js';
 
 const PROVIDERS = [
   {
@@ -38,13 +39,156 @@ const PROVIDERS = [
 
 export default function Integrations() {
   return (
-    <div style={styles.grid}>
-      <GithubCard />
-      <AnthropicCard />
-      {PROVIDERS.map((provider) => (
-        <ProviderCard key={provider.name} provider={provider} />
-      ))}
+    <div>
+      <ProviderOrderBar />
+      <div style={styles.grid}>
+        <GithubCard />
+        <AnthropicCard />
+        {PROVIDERS.map((provider) => (
+          <ProviderCard key={provider.name} provider={provider} />
+        ))}
+      </div>
     </div>
+  );
+}
+
+// All known LLM providers wired to the pet gateway. Order in this list
+// is the *initial* fallback when the persisted PetConfig.providers is
+// missing or empty — the UI below lets the owner reorder.
+const ORDERABLE_PROVIDERS = ['zhipu', 'qwen', 'doubao', 'deepseek', 'anthropic'];
+const PROVIDER_LABELS = {
+  zhipu: '智谱 AI',
+  qwen: '通义千问',
+  doubao: '豆包',
+  deepseek: 'DeepSeek',
+  anthropic: 'Anthropic',
+};
+
+function ProviderOrderBar() {
+  const [config, setConfig] = useState(null); // full PetConfig for PUT round-trip
+  const [order, setOrder] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    apiPet
+      .get()
+      .then((cfg) => {
+        if (!mounted) return;
+        setConfig(cfg);
+        // Persisted order first, then any unseen providers appended.
+        const persisted = Array.isArray(cfg?.providers) ? cfg.providers : [];
+        const merged = [...persisted];
+        for (const p of ORDERABLE_PROVIDERS) {
+          if (!merged.includes(p)) merged.push(p);
+        }
+        // Drop any persisted name that isn't in our known list (defensive).
+        setOrder(merged.filter((p) => ORDERABLE_PROVIDERS.includes(p)));
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(err?.detail || err?.message || '加载 PetConfig 失败');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  function move(idx, delta) {
+    const target = idx + delta;
+    if (target < 0 || target >= order.length) return;
+    const next = order.slice();
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setOrder(next);
+    setNotice(null);
+  }
+
+  const dirty = config && JSON.stringify(order) !== JSON.stringify(config.providers);
+
+  async function onSave() {
+    if (!config) return;
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      // Send the full PetConfig back with the new providers list.
+      const next = await apiPet.put({ ...config, providers: order });
+      setConfig(next);
+      setNotice('优先级已保存');
+    } catch (err) {
+      setError(err?.detail || err?.message || '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section style={styles.orderBar} data-testid="provider-order-bar">
+      <div style={styles.orderHead}>
+        <span style={styles.orderTitle}>调用优先级</span>
+        <span style={styles.orderHint}>
+          宠物对话依次尝试各 provider；越靠左,优先级越高。
+        </span>
+      </div>
+      {loading && <div style={styles.muted}>加载中...</div>}
+      {!loading && (
+        <div style={styles.orderList} data-testid="provider-order-list">
+          {order.map((name, idx) => (
+            <div
+              key={name}
+              style={styles.orderItem}
+              data-testid={`provider-order-${idx}`}
+              data-name={name}
+            >
+              <span style={styles.orderRank}>{idx + 1}</span>
+              <span style={styles.orderName}>{PROVIDER_LABELS[name] || name}</span>
+              <button
+                type="button"
+                onClick={() => move(idx, -1)}
+                disabled={idx === 0 || saving}
+                style={styles.orderBtn}
+                title="上移"
+                data-testid={`provider-up-${name}`}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                onClick={() => move(idx, +1)}
+                disabled={idx === order.length - 1 || saving}
+                style={styles.orderBtn}
+                title="下移"
+                data-testid={`provider-down-${name}`}
+              >
+                ↓
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {!loading && (
+        <div style={styles.orderActions}>
+          {notice && <span style={styles.notice}>{notice}</span>}
+          {error && <span style={styles.error}>! {error}</span>}
+          <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={!dirty || saving}
+            style={styles.btnPrimary}
+            data-testid="provider-order-save"
+          >
+            {saving ? '保存中...' : '保存优先级'}
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -539,6 +683,66 @@ const styles = {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
     gap: 14,
+  },
+  orderBar: {
+    background: 'var(--bg-2)',
+    border: '1px solid var(--line)',
+    borderRadius: 6,
+    padding: '12px 16px',
+    marginBottom: 14,
+  },
+  orderHead: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 12,
+    marginBottom: 8,
+  },
+  orderTitle: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: 'var(--fg)',
+  },
+  orderHint: { fontSize: 11, color: 'var(--fg-3)' },
+  orderList: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  orderItem: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '4px 8px',
+    background: 'var(--bg-3)',
+    border: '1px solid var(--line-2)',
+    borderRadius: 4,
+    fontSize: 12,
+  },
+  orderRank: {
+    color: 'var(--accent)',
+    fontVariantNumeric: 'tabular-nums',
+    fontSize: 10,
+    fontWeight: 600,
+  },
+  orderName: { color: 'var(--fg)', marginRight: 4 },
+  orderBtn: {
+    background: 'transparent',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-2)',
+    padding: '0 6px',
+    borderRadius: 3,
+    fontFamily: 'inherit',
+    fontSize: 11,
+    cursor: 'pointer',
+    height: 18,
+    lineHeight: '14px',
+  },
+  orderActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 10,
+    fontSize: 11,
   },
   card: {
     background: 'var(--bg-2)',
