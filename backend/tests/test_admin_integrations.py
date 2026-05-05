@@ -343,3 +343,87 @@ async def test_put_deepseek_rejects_when_smoke_test_fails(client, admin_token, m
         json={"token": "bad-key", "model": "deepseek-v4-flash"},
     )
     assert r.status_code == 422
+
+
+# --- Task 27a: test-without-save endpoint ---
+
+
+async def test_test_anthropic_returns_ok_when_ping_succeeds(
+    client, admin_token, cleanup_integrations,
+):
+    with patch("app.services.pet_adapters.anthropic.ping", new=AsyncMock(return_value=True)):
+        r = await client.post(
+            "/api/admin/integrations/anthropic/test",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"api_key": "sk-good"},
+        )
+    assert r.status_code == 200
+    assert r.json() == {"ok": True, "error": None}
+    # Crucially: nothing persisted.
+    async with AsyncSessionLocal() as s:
+        rows = (await s.execute(Integration.__table__.select())).all()
+    assert rows == []
+
+
+async def test_test_anthropic_returns_err_when_ping_fails(
+    client, admin_token, cleanup_integrations,
+):
+    with patch("app.services.pet_adapters.anthropic.ping", new=AsyncMock(return_value=False)):
+        r = await client.post(
+            "/api/admin/integrations/anthropic/test",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"api_key": "sk-bad"},
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is False
+    assert body["error"]
+
+
+async def test_test_zhipu_runs_smoke_via_openai_compat(
+    client, admin_token, monkeypatch, cleanup_integrations,
+):
+    async def fake_chat(*_args, **_kwargs):
+        return "pong"
+    from app.services.pet_adapters import openai_compat
+    monkeypatch.setattr(openai_compat, "chat", fake_chat)
+    r = await client.post(
+        "/api/admin/integrations/zhipu/test",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"token": "z-key", "model": "glm-4-flash"},
+    )
+    assert r.status_code == 200
+    assert r.json() == {"ok": True, "error": None}
+
+
+async def test_test_unknown_provider_404(
+    client, admin_token, cleanup_integrations,
+):
+    r = await client.post(
+        "/api/admin/integrations/notreal/test",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"token": "x"},
+    )
+    assert r.status_code == 404
+
+
+async def test_test_anthropic_missing_key_returns_helpful_error(
+    client, admin_token, cleanup_integrations,
+):
+    r = await client.post(
+        "/api/admin/integrations/anthropic/test",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is False
+    assert "api_key" in body["error"]
+
+
+async def test_test_requires_auth(client, cleanup_integrations):
+    r = await client.post(
+        "/api/admin/integrations/anthropic/test",
+        json={"api_key": "x"},
+    )
+    assert r.status_code == 401

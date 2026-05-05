@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -328,3 +328,61 @@ async def put_deepseek(
     await write_event(s, type="integration.deepseek.tested", actor=_admin.email, meta={"model": model})
     await s.commit()
     return DeepseekIntegrationGet(configured=True, model=model)
+
+
+# --- Task 27a: test-without-save ---
+# POST /api/admin/integrations/{name}/test runs the same smoke that PUT
+# would, but without persisting. The owner uses this to validate a key
+# before committing it (otherwise the only way to test was to save).
+
+@router.post(
+    "/integrations/{name}/test",
+    dependencies=[Depends(require_scope("write"))],
+)
+async def test_integration(
+    name: str,
+    body: dict = Body(default_factory=dict),
+    _admin: Account = Depends(current_admin),
+) -> dict:
+    """Probe an integration without writing the secret to disk.
+
+    Body shape (per provider):
+      anthropic: {api_key, model?}
+      github:    {username, token}
+      <openai-compat>: {token, model?}    # zhipu, qwen, doubao, deepseek
+    Returns: {ok: bool, error: string | null}
+    """
+    if name == "anthropic":
+        api_key = (body.get("api_key") or "").strip()
+        if not api_key:
+            return {"ok": False, "error": "api_key required"}
+        model = (body.get("model") or "").strip() or "claude-haiku-4-5-20251001"
+        try:
+            ok = await anthropic_adapter.ping(api_key, model)
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)[:200]}
+        return {"ok": bool(ok), "error": None if ok else "ping returned false"}
+
+    if name == "github":
+        username = (body.get("username") or "").strip()
+        token = (body.get("token") or "").strip()
+        if not username or not token:
+            return {"ok": False, "error": "username and token required"}
+        try:
+            ok = await github_svc.ping(username, token)
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": str(e)[:200]}
+        return {"ok": bool(ok), "error": None if ok else "ping returned false"}
+
+    if name in pet_gateway.PROVIDER_REGISTRY:
+        token = (body.get("token") or "").strip()
+        if not token:
+            return {"ok": False, "error": "token required"}
+        cfg = pet_gateway.PROVIDER_REGISTRY[name]
+        model = (body.get("model") or "").strip() or cfg.get("default_model")
+        if not model:
+            return {"ok": False, "error": "model required (no default for this provider)"}
+        ok, err = await _smoke(name, token, model)
+        return {"ok": bool(ok), "error": err}
+
+    raise HTTPException(404, f"unknown provider: {name}")

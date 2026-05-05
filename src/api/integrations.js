@@ -58,6 +58,17 @@ export const apiIntegrations = {
       body: JSON.stringify({ api_key, model: model || null }),
     });
   },
+  // Task 27a: probe a candidate config without persisting it.
+  // Body shape varies by provider. Returns { ok: bool, error: string|null }.
+  //   anthropic: { api_key, model? }
+  //   github:    { username, token }
+  //   <openai-compat>: { token, model? }   // zhipu / qwen / doubao / deepseek
+  test(name, body) {
+    return req(`/integrations/${encodeURIComponent(name)}/test`, {
+      method: 'POST',
+      body: JSON.stringify(body || {}),
+    });
+  },
 };
 
 export default apiIntegrations;
