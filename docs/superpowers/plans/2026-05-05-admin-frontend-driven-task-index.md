@@ -1199,6 +1199,8 @@ Append-only. Every entry below means a real commit shipped.
 | 31 | Tags reference scan + 409 delete refusal | `f0eb20c` | `pytest tests/test_admin_taxonomy.py` 15/15 | `python /tmp/admin-rebuild/task-30/verify.py` PASSED | 2026-05-06 |
 | 32 | Frontmatter plain-scalar auto-quote | `0aa0d40` | `pytest tests/test_admin_posts.py` 10/10 | `python /tmp/admin-rebuild/task-32/verify.py` PASSED | 2026-05-06 |
 | 33 | PostDetail exposes lifecycle flags | `5ded359` | `pytest tests/test_admin_posts.py` 11/11 | live `curl` probe shows status/featured/private/comments_enabled/scheduled_at | 2026-05-06 |
+| 34 | queue inline runner lazy-load registry | `6929ab9` | `pytest -k 'queue or worker or arq_inline'` 13/13 | n/a (worker plumbing) | 2026-05-06 |
+| 35 | Localize remaining admin pages + mobile responsive | `017e930` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-35/verify.py` PASSED (14 pages) | 2026-05-06 |
 
 ---
 
@@ -1233,3 +1235,33 @@ Implementation note: helper only rewrites top-level `key: value` lines where the
 **Completed:** `5ded359`.
 
 Implementation note: the Pydantic v2 default `None` makes the new fields opt-out for any non-admin caller that never populates them, so this is backwards-compatible. Live `curl` against `/api/admin/posts/vps` now returns `{"status":"published","scheduled_at":null,"featured":false,"private":false,"comments_enabled":true}` — exactly what the editor's GUI strip needs.
+
+---
+
+### Task 34 — queue inline runner registry lazy-load
+
+**Status:** completed
+**Priority:** low (plumbing)
+**Existing capability:** `app/workers/queue.py::enqueue` dispatches to `_TASK_REGISTRY[name]` when `arq_inline=True`; populated by `app/workers/runner.py` via module-level `register()` calls.
+**Gap:** the FastAPI app process never imports `runner` (only the arq worker does), so when a request hit `enqueue` with `arq_inline=True` the registry was empty → `RuntimeError: task 'foo' not registered`.
+**Backend touch:** 5-line lazy import inside the `arq_inline` branch — only fires when the registry is empty so it stays a no-op for the worker process.
+**Commit message:** `fix(workers/queue): lazy-load runner registry in inline mode (Task 34)`
+**Completed:** `6929ab9`.
+
+Implementation note: import sits inside the `if not _TASK_REGISTRY:` so repeated dispatches don't re-import. The worker process already imports `runner` at startup, so this check is `False` there and the lazy load never runs — zero behavior change for arq mode.
+
+---
+
+### Task 35 — Localize remaining admin pages + mobile responsive
+
+**Status:** completed
+**Priority:** medium (consistency)
+**Existing capability:** Login (round 24), Posts/Comments/Tags/Media/Now/Inbox/Dashboard already had Chinese strings via SectionHead (Task 20) + earlier Tasks 1-23. Several deeper pages (Analytics, PostEditor, Profile, Settings, pet/Pet*, settings/*) still had English copy in error messages, headers, and form labels.
+**Gap:** mixed English/Chinese strings on a Chinese-first admin made the rebuild feel incoherent.
+**Frontend touch:** 13 `.jsx` files + 1 `.test.jsx` updated to use Chinese strings, plus `src/styles.css` adds three responsive overrides (`.admin-form-grid → 1fr` / `.admin-table-wrap → overflow-x:auto` / `.admin-search → width:100%`) under the existing 800px media query so mobile owners can use the admin without horizontal scrolling.
+**Automated tests:** Vitest 191/191 (no regression from the i18n strings — tests that asserted English copy were updated when needed; PetConversations.test.jsx had one selector adjusted).
+**Playwright:** smoke-checked all 14 admin pages render after the i18n changes — `/tmp/admin-rebuild/task-35/verify.py` PASSED (login → goto each page → assert at least an h1 / .section-head .label / Pet tab button is visible). 14/14 pages green.
+**Commit message:** `i18n(admin): localize remaining pages + mobile responsive tweaks (Task 35)`
+**Completed:** `017e930`.
+
+Implementation note: the i18n changes had been carried in the unstaged stash for many rounds — every loop they got re-stashed and popped, occasionally generating conflicts. Bundling them into a single explicit commit closes that overhead and serves the loop's "保持页面美观、一致、可长期使用" principle. The responsive tweaks are tiny and travel with the same UI surfaces, so they share the commit. Working tree is now empty for the first time since round 1.
