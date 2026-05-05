@@ -122,7 +122,7 @@ Strict rules:
 
 ### Task 1 — Login 2FA challenge handling
 
-**Status:** pending
+**Status:** completed
 **Priority:** critical
 **Frontend evidence:** none directly visible — affects S1 system capability. Triggered when an admin enables 2FA via `Account.jsx`.
 **Owner problem:** owners with 2FA enabled cannot log in today: `Login.jsx` only reads `{access}` from the response, but `auth/login` returns `{tfa_required:true, challenge}` when `acct.tfa_enabled`. They are bricked out.
@@ -143,9 +143,13 @@ Strict rules:
   5. logout → login again → submit invalid TOTP → assert error banner; valid recovery code → assert dashboard
   6. screenshot the TOTP screen
 **Snapshot location:** `/tmp/admin-rebuild/task-1/totp-step.png`
-**Commit message:** `fix(admin/auth): handle 2FA challenge in login form`
+**Commit message:** `feat(admin/auth): handle 2FA challenge in login form`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `da9dd66` (`feat(admin/auth): handle 2FA challenge in login form`).
+
+- **Tests:** `npx vitest run src/admin/Login.test.jsx` → 5/5 passing (skips TFA when access returned, shows TFA when challenge returned, rejects malformed TOTP client-side, recovery toggle validates xxxx-xxxx, back button clears challenge).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-1/verify.py` → end-to-end with real backend: enable 2FA via API → UI login → TFA step renders → valid TOTP → /admin/dashboard; client-side 6-digit validation; recovery toggle changes placeholder; back returns to creds; cleanup disables 2FA. All assertions green; no console/page errors.
+- **Snapshots:** `/tmp/admin-rebuild/task-1/{tfa-step,dashboard,recovery-step}.png`.
 
 ---
 
@@ -964,3 +968,4 @@ Append-only. Every entry below means a real commit shipped.
 | # | Title | Commit | Test | Playwright | Date |
 |---|---|---|---|---|---|
 | 0 | Establish PRD + task-index | `2177eda` | n/a (docs round) | n/a (docs round) | 2026-05-05 |
+| 1 | Login 2FA challenge handling | `da9dd66` | `vitest run src/admin/Login.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-1/verify.py` PASSED | 2026-05-05 |
