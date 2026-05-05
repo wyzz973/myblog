@@ -14,6 +14,9 @@ class PostSummary(BaseModel):
     read: str | None
     lang: str
     summary: str | None
+    # Total like count. Public list endpoints leave this at 0 (likes are
+    # not exposed on the home feed); admin list populates per-post.
+    likes: int = 0
 
 
 class PostDetail(PostSummary):

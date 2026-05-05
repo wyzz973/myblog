@@ -145,13 +145,14 @@ export default function Posts() {
                 <th style={styles.th}>date</th>
                 <th style={styles.th}>lang</th>
                 <th style={styles.th}>read</th>
+                <th style={{ ...styles.th, textAlign: 'right' }}>likes</th>
                 <th style={{ ...styles.th, textAlign: 'right' }}>actions</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={7} style={styles.empty}>
+                  <td colSpan={8} style={styles.empty}>
                     no posts
                   </td>
                 </tr>
@@ -172,6 +173,12 @@ export default function Posts() {
                   <td style={styles.td}>{p.date}</td>
                   <td style={styles.td}>{p.lang}</td>
                   <td style={styles.td}>{p.read || '—'}</td>
+                  <td
+                    style={{ ...styles.td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+                    data-testid={`likes-${p.id}`}
+                  >
+                    {typeof p.likes === 'number' ? p.likes : 0}
+                  </td>
                   <td style={{ ...styles.td, textAlign: 'right' }}>
                     <button
                       type="button"

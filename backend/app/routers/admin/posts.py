@@ -16,19 +16,21 @@ from app.services.post_ingest import IngestError, parse_or_infer_frontmatter, up
 router = APIRouter()
 
 
-def _summary(p: Post) -> PostSummary:
+def _summary(p: Post, like_count: int = 0) -> PostSummary:
     return PostSummary(
         id=p.id, n=p.n, title=p.title, subtitle=p.subtitle, tag=p.tag.slug,
         date=p.date, read=p.read, lang=p.lang, summary=p.summary,
+        likes=like_count,
     )
 
 
-def _detail(p: Post) -> PostDetail:
+async def _detail(s: AsyncSession, p: Post) -> PostDetail:
     return PostDetail(
         id=p.id, n=p.n, title=p.title, subtitle=p.subtitle, tag=p.tag.slug,
         date=p.date, read=p.read, lang=p.lang, summary=p.summary,
         tldr=p.tldr, body=p.body_json, body_md=p.body_md,
-        likes=0, word_count=p.word_count,
+        likes=await likes.get_count(s, post_id=p.id),
+        word_count=p.word_count,
     )
 
 
@@ -56,7 +58,11 @@ async def list_posts(
     rows = (
         await s.execute(stmt.order_by(Post.date.desc()).limit(limit).offset(offset))
     ).scalars().all()
-    return PostList(items=[_summary(p) for p in rows], total=int(total), limit=limit, offset=offset)
+    counts = await likes.get_counts(s, post_ids=[p.id for p in rows])
+    return PostList(
+        items=[_summary(p, like_count=counts.get(p.id, 0)) for p in rows],
+        total=int(total), limit=limit, offset=offset,
+    )
 
 
 @router.post("/posts", response_model=PostDetail, status_code=201, dependencies=[Depends(require_scope("write"))])
@@ -78,7 +84,7 @@ async def create_post(
     await s.flush()
     # reload with tag
     post = (await s.execute(select(Post).join(Tag).where(Post.id == fm.id))).scalar_one()
-    return _detail(post)
+    return await _detail(s, post)
 
 
 @router.get("/posts/{post_id}", response_model=PostDetail)
@@ -122,7 +128,7 @@ async def patch_post(
     await write_event(s, type="post.updated", actor=admin.email, target=post_id)
     await s.flush()
     post = (await s.execute(select(Post).join(Tag).where(Post.id == post_id))).scalar_one()
-    return _detail(post)
+    return await _detail(s, post)
 
 
 @router.delete("/posts/{post_id}", status_code=204, dependencies=[Depends(require_scope("write"))])

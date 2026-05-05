@@ -43,3 +43,22 @@ async def get_count(s: AsyncSession, *, post_id: str) -> int:
         select(func.count(LikeEvent.id)).where(LikeEvent.post_id == post_id)
     )
     return int(res.scalar() or 0)
+
+
+async def get_counts(
+    s: AsyncSession, *, post_ids: list[str]
+) -> dict[str, int]:
+    """Batch lookup so list-style admin/public endpoints can fill a likes
+    column without N+1 queries. Posts with zero likes are returned as 0.
+    """
+    if not post_ids:
+        return {}
+    res = await s.execute(
+        select(LikeEvent.post_id, func.count(LikeEvent.id))
+        .where(LikeEvent.post_id.in_(post_ids))
+        .group_by(LikeEvent.post_id)
+    )
+    counts: dict[str, int] = {pid: 0 for pid in post_ids}
+    for pid, n in res.all():
+        counts[pid] = int(n)
+    return counts

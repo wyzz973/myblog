@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSite, usePosts, usePost } from '../api/hooks.js';
+import { api } from '../api/client.js';
 import { sendHit } from '../utils/beacon.js';
 import CopyText from './CopyText.jsx';
 import Avatar from './Avatar.jsx';
@@ -89,10 +90,13 @@ export default function Reader({ post: postSummary, onBack, onOpenPost, onSelect
 
   useEffect(() => {
     if (!post) return;
-    const stored = parseInt(localStorage.getItem(`bl.likes.${post.id}`) || '0', 10);
-    setLikes(stored || 0);
+    // Server total is the source of truth; localStorage caches "this
+    // browser already liked" so the heart stays filled across refreshes.
+    const serverLikes = typeof post.likes === 'number' ? post.likes : null;
+    const cached = parseInt(localStorage.getItem(`bl.likes.${post.id}`) || '0', 10);
+    setLikes(serverLikes != null ? serverLikes : cached || 0);
     setLiked(!!localStorage.getItem(`bl.liked.${post.id}`));
-  }, [post?.id]);
+  }, [post?.id, post?.likes]);
 
   useEffect(() => {
     if (!post) return;
@@ -237,13 +241,25 @@ export default function Reader({ post: postSummary, onBack, onOpenPost, onSelect
     infra: 'var(--danger)',
   }[post.tag] || 'var(--accent)';
 
-  const onLike = () => {
+  const onLike = async () => {
     if (liked) return;
+    // Optimistic UI: flip heart + bump count immediately.
+    const optimistic = likes + 1;
     setLiked(true);
-    const n = likes + 1;
-    setLikes(n);
-    localStorage.setItem(`bl.likes.${post.id}`, String(n));
+    setLikes(optimistic);
     localStorage.setItem(`bl.liked.${post.id}`, '1');
+    localStorage.setItem(`bl.likes.${post.id}`, String(optimistic));
+    try {
+      const resp = await api.posts.like(post.id);
+      // Replace optimistic count with the authoritative server total.
+      const total = typeof resp?.likes === 'number' ? resp.likes : optimistic;
+      setLikes(total);
+      localStorage.setItem(`bl.likes.${post.id}`, String(total));
+    } catch {
+      // Network / 429 — keep the optimistic state; server-side dedupe
+      // means a retry on next refresh will reconcile the count.
+      /* swallow */
+    }
   };
 
   return (
