@@ -1,24 +1,46 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
 
+const RECOVERY_PATTERN = /^[a-z0-9]{4}-[a-z0-9]{4}$/i;
+const TOTP_PATTERN = /^\d{6}$/;
+
 export default function Login() {
-  const { login } = useAuth();
+  const { login, verifyTfa } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const redirectTo = location.state?.from || '/admin/dashboard';
+
+  // 'creds' = email + password; 'tfa' = TOTP / recovery challenge.
+  const [step, setStep] = useState('creds');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
-  async function onSubmit(e) {
+  const [challenge, setChallenge] = useState(null);
+  const [code, setCode] = useState('');
+  const [useRecovery, setUseRecovery] = useState(false);
+  const codeInputRef = useRef(null);
+
+  useEffect(() => {
+    if (step === 'tfa') codeInputRef.current?.focus();
+  }, [step, useRecovery]);
+
+  async function onSubmitCreds(e) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      await login(email.trim(), password);
+      const resp = await login(email.trim(), password);
+      if (resp?.tfa_required && resp?.challenge) {
+        setChallenge(resp.challenge);
+        setCode('');
+        setUseRecovery(false);
+        setStep('tfa');
+        return;
+      }
       navigate(redirectTo, { replace: true });
     } catch (err) {
       setError(err?.detail || err?.message || 'Login failed');
@@ -27,53 +49,139 @@ export default function Login() {
     }
   }
 
+  async function onSubmitTfa(e) {
+    e.preventDefault();
+    setError(null);
+    const trimmed = code.trim();
+    if (useRecovery) {
+      if (!RECOVERY_PATTERN.test(trimmed)) {
+        setError('Recovery code: xxxx-xxxx (4 + 4 chars)');
+        return;
+      }
+    } else if (!TOTP_PATTERN.test(trimmed)) {
+      setError('Authenticator code: 6 digits');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await verifyTfa(challenge, trimmed, email.trim());
+      navigate(redirectTo, { replace: true });
+    } catch (err) {
+      setError(err?.detail || err?.message || 'Verification failed');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function backToCreds() {
+    setStep('creds');
+    setChallenge(null);
+    setCode('');
+    setUseRecovery(false);
+    setError(null);
+  }
+
+  function toggleRecovery() {
+    setUseRecovery((v) => !v);
+    setCode('');
+    setError(null);
+  }
+
   return (
     <div style={styles.shell}>
-      <form style={styles.card} onSubmit={onSubmit} noValidate>
-        <div style={styles.brand}>
-          <span style={styles.brandDot} />
-          <span style={styles.brandText}>myblog · admin</span>
-        </div>
-        <h1 style={styles.title}>Sign in</h1>
-        <p style={styles.subtitle}>
-          Enter your administrator credentials to continue.
-        </p>
+      {step === 'creds' ? (
+        <form style={styles.card} onSubmit={onSubmitCreds} noValidate>
+          <div style={styles.brand}>
+            <span style={styles.brandDot} />
+            <span style={styles.brandText}>myblog · admin</span>
+          </div>
+          <h1 style={styles.title}>Sign in</h1>
+          <p style={styles.subtitle}>
+            Enter your administrator credentials to continue.
+          </p>
 
-        <label style={styles.label}>
-          <span style={styles.labelText}>email</span>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="username"
-            required
-            style={styles.input}
-            placeholder="you@example.com"
-          />
-        </label>
-        <label style={styles.label}>
-          <span style={styles.labelText}>password</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-            style={styles.input}
-            placeholder="••••••••"
-          />
-        </label>
+          <label style={styles.label}>
+            <span style={styles.labelText}>email</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="username"
+              required
+              style={styles.input}
+              placeholder="you@example.com"
+            />
+          </label>
+          <label style={styles.label}>
+            <span style={styles.labelText}>password</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+              style={styles.input}
+              placeholder="••••••••"
+            />
+          </label>
 
-        {error && <div style={styles.error}>! {error}</div>}
+          {error && <div style={styles.error}>! {error}</div>}
 
-        <button type="submit" disabled={submitting} style={styles.btn}>
-          {submitting ? 'signing in…' : 'sign in →'}
-        </button>
+          <button type="submit" disabled={submitting} style={styles.btn}>
+            {submitting ? 'signing in…' : 'sign in →'}
+          </button>
 
-        <div style={styles.footer}>
-          <a href="/" style={styles.footerLink}>← back to public site</a>
-        </div>
-      </form>
+          <div style={styles.footer}>
+            <a href="/" style={styles.footerLink}>← back to public site</a>
+          </div>
+        </form>
+      ) : (
+        <form style={styles.card} onSubmit={onSubmitTfa} noValidate data-testid="tfa-form">
+          <div style={styles.brand}>
+            <span style={styles.brandDot} />
+            <span style={styles.brandText}>myblog · admin · 2fa</span>
+          </div>
+          <h1 style={styles.title}>two-factor</h1>
+          <p style={styles.subtitle}>
+            {useRecovery
+              ? 'Paste a recovery code (xxxx-xxxx).'
+              : 'Enter the 6-digit code from your authenticator app.'}
+          </p>
+
+          <label style={styles.label}>
+            <span style={styles.labelText}>
+              {useRecovery ? 'recovery code' : 'code'}
+            </span>
+            <input
+              ref={codeInputRef}
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              autoComplete="one-time-code"
+              inputMode={useRecovery ? 'text' : 'numeric'}
+              maxLength={useRecovery ? 9 : 6}
+              required
+              style={{ ...styles.input, letterSpacing: '0.4em', textAlign: 'center', fontSize: 16 }}
+              placeholder={useRecovery ? 'abcd-efgh' : '••••••'}
+            />
+          </label>
+
+          {error && <div style={styles.error}>! {error}</div>}
+
+          <button type="submit" disabled={submitting} style={styles.btn}>
+            {submitting ? 'verifying…' : 'verify →'}
+          </button>
+
+          <div style={styles.linksRow}>
+            <button type="button" onClick={toggleRecovery} style={styles.linkBtn}>
+              {useRecovery ? 'use authenticator code' : 'use recovery code'}
+            </button>
+            <button type="button" onClick={backToCreds} style={styles.linkBtn}>
+              ← back
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
@@ -179,5 +287,21 @@ const styles = {
   footerLink: {
     color: 'var(--fg-3)',
     textDecoration: 'underline',
+  },
+  linksRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    fontSize: 11,
+  },
+  linkBtn: {
+    background: 'none',
+    border: 0,
+    color: 'var(--fg-3)',
+    textDecoration: 'underline',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: 11,
+    padding: 0,
   },
 };

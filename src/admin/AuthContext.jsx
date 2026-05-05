@@ -37,10 +37,7 @@ export function AuthProvider({ children }) {
     }
   });
 
-  const login = useCallback(async (emailInput, password) => {
-    const resp = await apiAdmin.login(emailInput, password);
-    const access = resp?.access;
-    if (!access) throw new Error('Login response missing "access" token');
+  const persistAccess = useCallback((access, emailInput) => {
     setToken(access);
     setTokenState(access);
     setEmail(emailInput);
@@ -49,8 +46,32 @@ export function AuthProvider({ children }) {
     } catch {
       /* ignore */
     }
-    return resp;
   }, []);
+
+  const login = useCallback(
+    async (emailInput, password) => {
+      const resp = await apiAdmin.login(emailInput, password);
+      // If 2FA is enabled, backend returns {tfa_required:true, challenge}
+      // and no access token yet — caller drives the second step.
+      if (resp?.tfa_required) return resp;
+      const access = resp?.access;
+      if (!access) throw new Error('Login response missing "access" token');
+      persistAccess(access, emailInput);
+      return resp;
+    },
+    [persistAccess],
+  );
+
+  const verifyTfa = useCallback(
+    async (challenge, code, emailInput) => {
+      const resp = await apiAdmin.verifyTfa(challenge, code);
+      const access = resp?.access;
+      if (!access) throw new Error('2FA response missing "access" token');
+      persistAccess(access, emailInput);
+      return resp;
+    },
+    [persistAccess],
+  );
 
   const logout = useCallback(() => {
     clearToken();
@@ -74,8 +95,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ token, email, login, logout, isAuthed: Boolean(token) }),
-    [token, email, login, logout],
+    () => ({ token, email, login, verifyTfa, logout, isAuthed: Boolean(token) }),
+    [token, email, login, verifyTfa, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

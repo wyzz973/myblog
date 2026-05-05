@@ -68,6 +68,13 @@ export const apiAdmin = {
     });
   },
 
+  verifyTfa(challenge, code) {
+    return adminRequest('/auth/2fa', {
+      method: 'POST',
+      body: JSON.stringify({ challenge, code }),
+    });
+  },
+
   // ---- Dashboard ----------------------------------------------------------
   dashboard() {
     return adminRequest('/dashboard');
