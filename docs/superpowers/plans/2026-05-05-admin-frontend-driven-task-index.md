@@ -791,7 +791,7 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 
 ### Task 21 — Pet species catalogue admin (extract `species.js` to backend)
 
-**Status:** in-progress (21a + 21b done; 21c CRUD router + 21d admin UI + 21e public swap pending)
+**Status:** in-progress (21a + 21b + 21c done; 21d admin UI + 21e public swap pending)
 **Priority:** medium
 **Frontend evidence:** `src/components/pet/species.js` — 28 entries, hardcoded. `AsciiPet.jsx` reads frames + behavior from it. S7.
 **Owner problem:** adding/tweaking a species requires a code edit + redeploy.
@@ -814,7 +814,7 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 **Snapshot location:** `/tmp/admin-rebuild/task-21/species-admin.png`, `/tmp/admin-rebuild/task-21/pet-bubble.png`
 **Commit message:** `feat(admin/pet): species catalogue editable from admin`
 **Definition of done:** standard checklist
-**Completed:** 21a + 21b — `2b68fd6` (`feat(admin/pet): pet_species table + model + schema (Task 21a)`), `64184c7` (`feat(admin/pet): seed pet_species from species.js (Task 21b)`). 21c (admin CRUD router + public read endpoint) + 21d (admin UI page) + 21e (replace frontend hardcode with fetch) still pending.
+**Completed:** 21a + 21b + 21c — `2b68fd6` (table+model+schema), `64184c7` (seed), `4b1af73` (`feat(admin/pet): pet_species CRUD router + public list endpoint (Task 21c)`). 21d (admin UI page) + 21e (replace frontend hardcode with fetch) still pending.
 
 #### Task 21a — pet_species table + model + schema (DONE)
 
@@ -832,6 +832,17 @@ Implementation note: split species schemas into their own `app/schemas/pet_speci
 - **Playwright:** none — no UI / public endpoint yet (lands in 21c/21d).
 
 Implementation note: ports the 27 species in `src/components/pet/species.js` verbatim — frames keep `{E}` markers untouched so the public API can serve them straight to `AsciiPet.jsx` without translation. Behavior keeps the camelCase `proactiveLevel/idleFrequency/localLines` shape for symmetry with the JS hardcode, so 21e can swap the import for a fetch with no transform layer. EN trait/personality/description copied into `*_zh` columns; the admin UI in 21d will let the owner localize. Stats merge `RARITY_STAT_BASE[rarity]` with per-species overrides exactly as the JS does. Migration uses `op.execute(sa.text(...))` with `:name` bindings (asyncpg requires `$N` or named bindings, not psycopg2 `%(name)s`) and `CAST(:frames AS jsonb)` for JSONB columns. Downgrade only deletes the seeded IDs so owner-added species via admin survive.
+
+#### Task 21c — pet_species CRUD router + public list endpoint (DONE)
+
+- **Tests:** `./.venv/bin/python -m pytest tests/test_pet_species_router.py tests/test_pet_species_model.py tests/test_pet_species_seed.py` → 26/26.
+- **Router endpoints (admin):** `GET /api/admin/pet/species` (list incl. hidden), `POST /api/admin/pet/species` (write scope, 409 on dup id, 422 on bad slug/rarity), `PATCH /api/admin/pet/species/{id}` (write scope, partial update, 404 on missing), `DELETE /api/admin/pet/species/{id}` (write scope, 409 if SiteMeta.pet_config.species references it, 404 missing).
+- **Router endpoint (public):** `GET /api/pet/species` (visible-only, ordered by sort_order, no auth).
+- **Live API smoke:** Logged in as wyzz973@gmail.com → POST/PATCH/DELETE on `t21c-live` round-tripped (200/200/204) against running uvicorn on :51820. Public list returns 27 seeded rows with first row `duck`/`common` and unique sort_orders.
+- **Snapshots:** `/tmp/admin-rebuild/task-21c/{public-species,admin-species}.json`.
+- **Playwright:** none — endpoints have no UI yet (lands in 21d). The owner-facing admin page on /admin/pet/species + the AsciiPet swap come in 21d/21e respectively.
+
+Implementation note: schema `frames` was originally typed `list[str]` but the seeded JS data is `list[list[str]]` (each frame = list of line strings). Fixed schema + model_validate test cases in 21a/21b. Admin router lives in its own `routers/admin/pet_species.py` next to `pet.py` (which still owns PetConfig — site-level pet behavior). Delete refusal looks at `SiteMeta.pet_config.species` because that's the only stable reference; visitor profile rows self-heal on next visit when their species disappears. Write endpoints accept session OR write-scope api-token; read endpoint accepts session OR any-scope token.
 
 ---
 
