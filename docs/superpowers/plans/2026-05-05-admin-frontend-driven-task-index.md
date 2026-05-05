@@ -116,7 +116,7 @@ Strict rules:
   - [x] commit created
   - [x] task-index entry below updated with commit hash
 
-**Completed:** `<commit hash here after commit>` — initial PRD covers 6 sections (frontend page map, experience goals, reverse-engineered admin capabilities, IA, visual principles, gap matrix); task-index lists Task 0 + 30 follow-up tasks with priorities.
+**Completed:** `2177eda93b7509e541094c62e5550a0d47e3598a` (`docs(prd): define frontend-driven admin rebuild plan`) — initial PRD covers 6 sections (frontend page map, experience goals, reverse-engineered admin capabilities, IA, visual principles, gap matrix); task-index lists Task 0 + 30 follow-up tasks with priorities. `.gitignore` narrowly whitelists these two tracking docs while keeping the rest of `docs/` untracked. **Tests:** none — round 1 is documentation-only per rebuild spec. **Playwright:** none — round 1 is documentation-only per rebuild spec; visual verification is irrelevant for prose.
 
 ---
 
@@ -963,4 +963,4 @@ Append-only. Every entry below means a real commit shipped.
 
 | # | Title | Commit | Test | Playwright | Date |
 |---|---|---|---|---|---|
-| 0 | Establish PRD + task-index | `<filled in this round>` | n/a (docs) | n/a (docs) | 2026-05-05 |
+| 0 | Establish PRD + task-index | `2177eda` | n/a (docs round) | n/a (docs round) | 2026-05-05 |
