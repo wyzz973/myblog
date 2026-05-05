@@ -98,6 +98,37 @@ export default function App() {
     });
   }, [reading, posts, focusIdx, activeTag, tagsData]);
 
+  // Apply backend-managed theme variables to the root element so admin
+  // theme edits land on the public site without a deploy. utils/accent.js
+  // still owns the per-visitor `green / amber / violet` overlay; the
+  // root vars below set the *defaults* that overlay sits on top of.
+  useEffect(() => {
+    if (!siteData) return;
+    const root = document.documentElement;
+    const map = {
+      '--accent': siteData.accent_color,
+      '--accent-2': siteData.accent2_color,
+      '--violet': siteData.violet_color,
+      '--danger': siteData.danger_color,
+    };
+    for (const [name, value] of Object.entries(map)) {
+      if (typeof value === 'string' && value.length > 0) {
+        root.style.setProperty(name, value);
+      }
+    }
+    if (typeof siteData.accent_color === 'string') {
+      root.style.setProperty(
+        '--accent-glow',
+        `color-mix(in oklab, ${siteData.accent_color} 40%, transparent)`,
+      );
+    }
+  }, [
+    siteData?.accent_color,
+    siteData?.accent2_color,
+    siteData?.violet_color,
+    siteData?.danger_color,
+  ]);
+
   // Sync the browser tab favicon to the configured GitHub avatar — auto-
   // updates whenever the user changes their avatar on github.com. The
   // handle is also cached so main.jsx can prime the favicon BEFORE React

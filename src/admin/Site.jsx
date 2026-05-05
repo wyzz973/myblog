@@ -1,61 +1,46 @@
-import { useEffect, useState } from 'react';
-import { apiSite } from '../api/site.js';
+// /admin/site is now the theme-only page (PRD §5.2 rename — site
+// identity moved to /admin/site-identity in Task 6). Replaces the
+// freeform oklch text inputs with a swatch-based picker that emits
+// canonical oklch() and a live preview pane mirroring the public hero.
 
-// Field set per backend `SiteIn` (routers/admin/site.py). The mission spec
-// mentions `bio_md` / `avatar_id` / `name`, but the admin /site endpoint
-// does NOT expose those — they live on /profile (handled by Profile.jsx).
-// We surface only the fields the backend actually accepts here.
-const SITE_FIELDS = [
-  { key: 'handle', label: 'handle', placeholder: 'wangyang', kind: 'text' },
-  { key: 'tagline', label: 'tagline', placeholder: 'a short one-liner', kind: 'text' },
-  { key: 'email', label: 'contact email', placeholder: 'you@example.com', kind: 'text' },
-  { key: 'github', label: 'github', placeholder: 'username', kind: 'text' },
-  { key: 'footer_note', label: 'footer note', placeholder: '', kind: 'text' },
-  {
-    key: 'default_theme',
-    label: 'default theme',
-    kind: 'select',
-    options: [
-      { value: 'dark', label: 'dark' },
-      { value: 'light', label: 'light' },
-    ],
-  },
-  { key: 'launched_at', label: 'launched at (ISO date)', placeholder: '2026-01-01', kind: 'text' },
-];
+import { useEffect, useMemo, useState } from 'react';
+import { apiSite } from '../api/site.js';
+import { formatOklch, parseOklch, THEME_DEFAULTS } from './oklch.js';
 
 const THEME_FIELDS = [
-  { key: 'accent_color', label: 'accent', placeholder: 'oklch(82% 0.17 152)' },
-  { key: 'accent2_color', label: 'accent 2', placeholder: 'oklch(80% 0.15 70)' },
-  { key: 'violet_color', label: 'violet', placeholder: 'oklch(72% 0.18 295)' },
-  { key: 'danger_color', label: 'danger', placeholder: 'oklch(70% 0.2 25)' },
+  { key: 'accent_color', label: 'accent', hint: 'main brand color — buttons, dot, focus rings' },
+  { key: 'accent2_color', label: 'accent 2', hint: 'secondary highlight (e.g. amber chips)' },
+  { key: 'violet_color', label: 'violet', hint: '#ai / #ml tag tint' },
+  { key: 'danger_color', label: 'danger', hint: 'destructive actions, error borders' },
 ];
 
+function norm(v) {
+  if (v == null) return '';
+  return String(v);
+}
+
 export default function Site() {
-  const [site, setSite] = useState(null);
-  const [siteDraft, setSiteDraft] = useState(null);
   const [theme, setTheme] = useState(null);
-  const [themeDraft, setThemeDraft] = useState(null);
+  const [draft, setDraft] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [savingSite, setSavingSite] = useState(false);
-  const [savingTheme, setSavingTheme] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
     let mounted = true;
     setLoading(true);
-    Promise.all([apiSite.getSite(), apiSite.getTheme()])
-      .then(([s, t]) => {
+    apiSite
+      .getTheme()
+      .then((t) => {
         if (!mounted) return;
-        setSite(s);
-        setSiteDraft({ ...s });
         setTheme(t);
-        setThemeDraft({ ...t });
+        setDraft({ ...t });
         setError(null);
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err?.detail || err?.message || 'failed to load');
+        setError(err?.detail || err?.message || '加载失败');
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -71,145 +56,101 @@ export default function Site() {
     return () => clearTimeout(id);
   }, [toast]);
 
-  function dirtySite() {
-    if (!site || !siteDraft) return false;
-    return SITE_FIELDS.some((f) => norm(site[f.key]) !== norm(siteDraft[f.key]));
-  }
-  function dirtyTheme() {
-    if (!theme || !themeDraft) return false;
-    return THEME_FIELDS.some((f) => norm(theme[f.key]) !== norm(themeDraft[f.key]));
+  const dirty = useMemo(() => {
+    if (!theme || !draft) return false;
+    return THEME_FIELDS.some((f) => norm(theme[f.key]) !== norm(draft[f.key]));
+  }, [theme, draft]);
+
+  function setField(k, v) {
+    setDraft((d) => ({ ...d, [k]: v }));
   }
 
-  function setSiteField(k, v) {
-    setSiteDraft((d) => ({ ...d, [k]: v }));
-  }
-  function setThemeField(k, v) {
-    setThemeDraft((d) => ({ ...d, [k]: v }));
+  function resetField(k) {
+    setField(k, THEME_DEFAULTS[k] || '');
   }
 
-  async function saveSite(e) {
+  async function save(e) {
     e?.preventDefault?.();
-    if (!siteDraft) return;
-    setSavingSite(true);
-    try {
-      // Send only changed fields → matches PUT /site (exclude_unset semantics).
-      const patch = {};
-      for (const f of SITE_FIELDS) {
-        if (norm(site[f.key]) !== norm(siteDraft[f.key])) {
-          patch[f.key] = siteDraft[f.key] === '' ? null : siteDraft[f.key];
-        }
-      }
-      const updated = await apiSite.putSite(patch);
-      setSite(updated);
-      setSiteDraft({ ...updated });
-      setToast('site saved');
-    } catch (err) {
-      setToast(`error: ${err?.detail || err.message}`);
-    } finally {
-      setSavingSite(false);
-    }
-  }
-
-  async function saveTheme(e) {
-    e?.preventDefault?.();
-    if (!themeDraft) return;
-    setSavingTheme(true);
+    if (!draft || !dirty) return;
+    setSaving(true);
     try {
       const patch = {};
       for (const f of THEME_FIELDS) {
-        if (norm(theme[f.key]) !== norm(themeDraft[f.key])) {
-          patch[f.key] = themeDraft[f.key] === '' ? null : themeDraft[f.key];
+        if (norm(theme[f.key]) !== norm(draft[f.key])) {
+          patch[f.key] = draft[f.key] === '' ? null : draft[f.key];
         }
       }
       const updated = await apiSite.putTheme(patch);
       setTheme(updated);
-      setThemeDraft({ ...updated });
-      setToast('theme saved');
+      setDraft({ ...updated });
+      setToast('已保存');
     } catch (err) {
-      setToast(`error: ${err?.detail || err.message}`);
+      setToast(`错误：${err?.detail || err.message}`);
     } finally {
-      setSavingTheme(false);
+      setSaving(false);
     }
   }
 
-  if (loading) return <div style={styles.muted}>loading site…</div>;
-  if (error) return <div style={styles.error}>error: {error}</div>;
+  if (loading) return <div style={styles.muted}>正在加载主题...</div>;
+  if (error) return <div style={styles.error}>错误：{error}</div>;
+  if (!draft) return <div style={styles.muted}>暂无数据</div>;
 
   return (
-    <div>
+    <div data-testid="theme-page">
       <header style={styles.header}>
-        <h1 style={styles.h1}>Site</h1>
+        <h1 style={styles.h1}>
+          <span style={styles.headN}>04</span>{' '}
+          <span style={styles.headSlash}>/</span> 主题
+        </h1>
         <p style={styles.lead}>
-          Site-level identity, contact channels, and theme tokens. Author bio
-          and avatar are managed in <code>Profile</code>.
+          调整公开站点的 OKLCH 颜色变量。每个色相用 <code>L / C / H</code>{' '}
+          滑块控制，也可直接粘贴 <code>oklch()</code> 字符串。预览块实时反映改动；
+          保存后 <code>PUT /api/admin/theme</code> 将值写入 site_meta。
         </p>
       </header>
 
-      <form onSubmit={saveSite} style={styles.panel}>
-        <div style={styles.panelHead}>
-          <span style={styles.panelTitle}>identity & metadata</span>
-          <span style={styles.panelHint}>PUT /site</span>
-        </div>
-        <div style={styles.panelBody}>
-          {SITE_FIELDS.map((f) => (
-            <Field
-              key={f.key}
-              field={f}
-              value={siteDraft?.[f.key] ?? ''}
-              onChange={(v) => setSiteField(f.key, v)}
-            />
-          ))}
-        </div>
-        <div style={styles.panelFoot}>
-          <button
-            type="submit"
-            style={styles.btnPrimary}
-            disabled={savingSite || !dirtySite()}
-          >
-            {savingSite ? 'saving…' : 'save site'}
-          </button>
-          <button
-            type="button"
-            style={styles.btn}
-            disabled={savingSite || !dirtySite()}
-            onClick={() => setSiteDraft({ ...site })}
-          >
-            reset
-          </button>
-        </div>
-      </form>
+      <form onSubmit={save}>
+        <section style={styles.panel}>
+          <div style={styles.panelHead}>
+            <span style={styles.panelTitle}>颜色</span>
+            <span style={styles.panelHint}>PUT /theme</span>
+          </div>
+          <div style={styles.panelBody}>
+            {THEME_FIELDS.map((f) => (
+              <ColorRow
+                key={f.key}
+                field={f}
+                value={draft[f.key] ?? ''}
+                onChange={(v) => setField(f.key, v)}
+                onReset={() => resetField(f.key)}
+                isDefault={draft[f.key] === THEME_DEFAULTS[f.key]}
+              />
+            ))}
+          </div>
+        </section>
 
-      <form onSubmit={saveTheme} style={styles.panel}>
-        <div style={styles.panelHead}>
-          <span style={styles.panelTitle}>theme tokens</span>
-          <span style={styles.panelHint}>PUT /theme</span>
-        </div>
-        <div style={styles.panelBody}>
-          {THEME_FIELDS.map((f) => (
-            <ThemeRow
-              key={f.key}
-              field={f}
-              value={themeDraft?.[f.key] ?? ''}
-              onChange={(v) => setThemeField(f.key, v)}
-            />
-          ))}
-        </div>
-        <div style={styles.panelFoot}>
+        <ThemePreview theme={draft} />
+
+        <div style={styles.actionRow}>
           <button
             type="submit"
             style={styles.btnPrimary}
-            disabled={savingTheme || !dirtyTheme()}
+            disabled={saving || !dirty}
+            data-testid="save-theme-btn"
           >
-            {savingTheme ? 'saving…' : 'save theme'}
+            {saving ? '保存中...' : '保存'}
           </button>
           <button
             type="button"
             style={styles.btn}
-            disabled={savingTheme || !dirtyTheme()}
-            onClick={() => setThemeDraft({ ...theme })}
+            disabled={saving || !dirty}
+            onClick={() => setDraft({ ...theme })}
           >
-            reset
+            重置改动
           </button>
+          <span style={styles.dirtyHint}>
+            {dirty ? '有未保存的更改' : '已与后端一致'}
+          </span>
         </div>
       </form>
 
@@ -218,77 +159,149 @@ export default function Site() {
   );
 }
 
-function Field({ field, value, onChange }) {
-  if (field.kind === 'select') {
-    return (
-      <label style={styles.label}>
-        <span style={styles.labelText}>{field.label}</span>
-        <select
-          value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          style={styles.input}
-        >
-          {field.options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
-    );
-  }
-  return (
-    <label style={styles.label}>
-      <span style={styles.labelText}>{field.label}</span>
-      <input
-        type="text"
-        value={value ?? ''}
-        placeholder={field.placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        style={styles.input}
-      />
-    </label>
-  );
-}
+function ColorRow({ field, value, onChange, onReset, isDefault }) {
+  const parsed = parseOklch(value) || { l: 70, c: 0.15, h: 200 };
 
-function ThemeRow({ field, value, onChange }) {
+  function setLCH(next) {
+    onChange(formatOklch(next));
+  }
+
   return (
-    <label style={styles.label}>
-      <span style={styles.labelText}>{field.label}</span>
-      <div style={styles.themeRow}>
-        <span
+    <div style={styles.colorRow} data-testid={`color-${field.key}`}>
+      <div style={styles.rowHead}>
+        <span style={styles.rowLabel}>{field.label}</span>
+        <span style={styles.rowHint}>{field.hint}</span>
+      </div>
+      <div style={styles.rowBody}>
+        <div
           style={{
             ...styles.swatch,
             background: value || 'transparent',
           }}
           aria-hidden
+          data-testid={`swatch-${field.key}`}
         />
-        <input
-          type="text"
-          value={value ?? ''}
-          placeholder={field.placeholder}
-          onChange={(e) => onChange(e.target.value)}
-          style={{ ...styles.input, flex: 1 }}
-        />
+        <div style={styles.controls}>
+          <Slider
+            label="L"
+            min={0}
+            max={100}
+            step={1}
+            value={parsed.l}
+            onChange={(l) => setLCH({ ...parsed, l })}
+            suffix="%"
+            testid={`slider-l-${field.key}`}
+          />
+          <Slider
+            label="C"
+            min={0}
+            max={0.4}
+            step={0.005}
+            value={parsed.c}
+            onChange={(c) => setLCH({ ...parsed, c })}
+            decimals={3}
+            testid={`slider-c-${field.key}`}
+          />
+          <Slider
+            label="H"
+            min={0}
+            max={360}
+            step={1}
+            value={parsed.h}
+            onChange={(h) => setLCH({ ...parsed, h })}
+            suffix="°"
+            testid={`slider-h-${field.key}`}
+          />
+          <div style={styles.rawRow}>
+            <input
+              type="text"
+              value={value ?? ''}
+              onChange={(e) => onChange(e.target.value)}
+              style={styles.rawInput}
+              placeholder="oklch(72% 0.18 295)"
+              data-testid={`raw-${field.key}`}
+              spellCheck={false}
+            />
+            <button
+              type="button"
+              onClick={onReset}
+              style={styles.rowResetBtn}
+              disabled={isDefault}
+              title={isDefault ? '已是默认' : '重置为默认值'}
+              data-testid={`reset-${field.key}`}
+            >
+              默认
+            </button>
+          </div>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function Slider({ label, min, max, step, value, onChange, suffix = '', decimals = 0, testid }) {
+  const display = decimals > 0 ? Number(value).toFixed(decimals) : Math.round(value);
+  return (
+    <label style={styles.sliderRow}>
+      <span style={styles.sliderLabel}>{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={styles.sliderInput}
+        data-testid={testid}
+      />
+      <span style={styles.sliderValue}>{display}{suffix}</span>
     </label>
   );
 }
 
-function norm(v) {
-  if (v == null) return '';
-  return String(v);
+function ThemePreview({ theme }) {
+  // Apply the candidate values via inline CSS variables so the preview
+  // pane reflects edits without touching the global stylesheet.
+  const previewVars = {
+    '--accent': theme.accent_color || THEME_DEFAULTS.accent_color,
+    '--accent-2': theme.accent2_color || THEME_DEFAULTS.accent2_color,
+    '--violet': theme.violet_color || THEME_DEFAULTS.violet_color,
+    '--danger': theme.danger_color || THEME_DEFAULTS.danger_color,
+  };
+  return (
+    <section style={styles.panel} data-testid="theme-preview">
+      <div style={styles.panelHead}>
+        <span style={styles.panelTitle}>预览</span>
+        <span style={styles.panelHint}>对照公开站 hero / button 样式</span>
+      </div>
+      <div style={{ ...styles.previewBox, ...previewVars }}>
+        <div style={styles.previewHero}>
+          <span style={styles.previewDot} />
+          <span style={styles.previewBrand}>myblog</span>
+          <span style={styles.previewMuted}>预览主题</span>
+        </div>
+        <div style={styles.previewButtons}>
+          <button type="button" style={styles.previewBtnAccent}>主按钮</button>
+          <button type="button" style={styles.previewBtnAccent2}>次要</button>
+          <span style={styles.previewTagViolet}>#ai</span>
+          <button type="button" style={styles.previewBtnDanger}>danger</button>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 const styles = {
   header: { marginBottom: 18 },
   h1: { fontSize: 20, margin: 0, fontWeight: 600, color: 'var(--fg)' },
-  lead: { fontSize: 12, color: 'var(--fg-3)', margin: '4px 0 0' },
+  headN: { color: 'var(--accent)', fontSize: 14, letterSpacing: '0.06em' },
+  headSlash: { color: 'var(--fg-4)' },
+  lead: { fontSize: 12, color: 'var(--fg-3)', margin: '4px 0 0', maxWidth: 720, lineHeight: 1.6 },
   panel: {
     background: 'var(--bg-2)',
     border: '1px solid var(--line)',
     borderRadius: 6,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   panelHead: {
     padding: '10px 14px',
@@ -304,44 +317,124 @@ const styles = {
     letterSpacing: '0.06em',
   },
   panelHint: { fontSize: 10, color: 'var(--fg-4)' },
-  panelBody: {
-    padding: 16,
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-    gap: 12,
-  },
-  panelFoot: {
-    padding: '10px 14px',
-    borderTop: '1px solid var(--line)',
+  panelBody: { padding: 14, display: 'flex', flexDirection: 'column', gap: 14 },
+  colorRow: {
+    border: '1px dashed var(--line-2)',
+    borderRadius: 4,
+    padding: 12,
     display: 'flex',
+    flexDirection: 'column',
     gap: 8,
-    alignItems: 'center',
   },
-  label: { display: 'flex', flexDirection: 'column', gap: 6 },
-  labelText: {
-    fontSize: 11,
-    color: 'var(--fg-3)',
-    textTransform: 'lowercase',
-    letterSpacing: '0.06em',
-  },
-  input: {
-    background: 'var(--bg)',
-    border: '1px solid var(--line-2)',
-    color: 'var(--fg)',
-    padding: '9px 11px',
-    fontFamily: 'inherit',
-    fontSize: 12,
-    borderRadius: 4,
-    outline: 'none',
-  },
-  themeRow: { display: 'flex', alignItems: 'center', gap: 8 },
+  rowHead: { display: 'flex', alignItems: 'baseline', gap: 8 },
+  rowLabel: { fontSize: 12, color: 'var(--fg)', letterSpacing: '0.04em' },
+  rowHint: { fontSize: 10, color: 'var(--fg-4)' },
+  rowBody: { display: 'flex', alignItems: 'flex-start', gap: 14 },
   swatch: {
-    width: 24,
-    height: 24,
-    borderRadius: 4,
+    width: 64,
+    height: 64,
+    borderRadius: 6,
     border: '1px solid var(--line-2)',
     flexShrink: 0,
   },
+  controls: { flex: 1, display: 'flex', flexDirection: 'column', gap: 6 },
+  sliderRow: {
+    display: 'grid',
+    gridTemplateColumns: '20px 1fr 60px',
+    alignItems: 'center',
+    gap: 10,
+    fontSize: 11,
+    color: 'var(--fg-3)',
+  },
+  sliderLabel: { color: 'var(--fg-2)', fontWeight: 600 },
+  sliderInput: {
+    width: '100%',
+    accentColor: 'var(--accent)',
+  },
+  sliderValue: { color: 'var(--fg-3)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' },
+  rawRow: { display: 'flex', gap: 6, marginTop: 4 },
+  rawInput: {
+    flex: 1,
+    background: 'var(--bg)',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg)',
+    padding: '5px 9px',
+    fontFamily: 'inherit',
+    fontSize: 11,
+    borderRadius: 3,
+    outline: 'none',
+  },
+  rowResetBtn: {
+    background: 'transparent',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-3)',
+    fontFamily: 'inherit',
+    fontSize: 10,
+    padding: '4px 10px',
+    borderRadius: 3,
+    cursor: 'pointer',
+  },
+  previewBox: {
+    padding: 18,
+    background: 'var(--bg)',
+    borderRadius: 4,
+    margin: 14,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
+  },
+  previewHero: { display: 'flex', alignItems: 'center', gap: 10 },
+  previewDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    background: 'var(--accent)',
+    boxShadow: '0 0 10px color-mix(in oklab, var(--accent) 40%, transparent)',
+  },
+  previewBrand: { fontSize: 13, color: 'var(--fg)', fontWeight: 600 },
+  previewMuted: { fontSize: 10, color: 'var(--fg-4)', letterSpacing: '0.08em' },
+  previewButtons: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  previewBtnAccent: {
+    background: 'var(--accent)',
+    color: '#0a0b0d',
+    border: 0,
+    padding: '6px 12px',
+    borderRadius: 4,
+    fontFamily: 'inherit',
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  previewBtnAccent2: {
+    background: 'transparent',
+    color: 'var(--accent-2)',
+    border: '1px solid color-mix(in oklab, var(--accent-2) 40%, transparent)',
+    padding: '5px 11px',
+    borderRadius: 4,
+    fontFamily: 'inherit',
+    fontSize: 11,
+    cursor: 'pointer',
+  },
+  previewTagViolet: {
+    color: 'var(--violet)',
+    background: 'color-mix(in oklab, var(--violet) 14%, transparent)',
+    border: '1px solid color-mix(in oklab, var(--violet) 40%, transparent)',
+    fontSize: 10,
+    padding: '3px 8px',
+    borderRadius: 999,
+  },
+  previewBtnDanger: {
+    background: 'transparent',
+    color: 'var(--danger)',
+    border: '1px solid color-mix(in oklab, var(--danger) 60%, transparent)',
+    padding: '5px 11px',
+    borderRadius: 4,
+    fontFamily: 'inherit',
+    fontSize: 11,
+    cursor: 'pointer',
+  },
+  actionRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '14px 0' },
+  dirtyHint: { color: 'var(--fg-4)', fontSize: 11 },
   btn: {
     background: 'var(--bg)',
     border: '1px solid var(--line-2)',
