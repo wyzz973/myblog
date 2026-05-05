@@ -981,7 +981,7 @@ Implementation note: new `media.references(s, media_id)` service scans `posts.bo
 
 ### Task 27 — Integrations: test-without-save + provider priority UI
 
-**Status:** in-progress (27a backend done, 27b UI pending)
+**Status:** in-progress (27a + 27b done; 27c provider-priority drag-reorder still pending)
 **Priority:** medium
 **Frontend evidence:** Pet integrations cost monitoring — provider order matters.
 **Owner problem:** "test connection" only fires on save (mutates state). Provider priority is a comma-string buried in Pet → Behavior.
@@ -1010,7 +1010,16 @@ Implementation note: new `media.references(s, media_id)` service scans `posts.bo
 - **Live probe:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-27a/verify.py` → login → POST /integrations/anthropic/test with junk → ok=false → POST /integrations/zhipu/test with junk → ok=false → POST /integrations/notreal/test → 404 → POST anthropic/test {} → ok=false with "api_key required" → unauthenticated probe → 401 → GET /integrations/anthropic before vs after is identical (zero side-effect).
 - **Snapshots:** none (backend-only).
 
-Implementation note: single generic `POST /integrations/{name}/test` endpoint dispatches per-provider. anthropic/github use their existing `ping` adapters; openai-compat providers (zhipu/qwen/doubao/deepseek) use the existing `_smoke` helper. The endpoint always returns 200 with `{ok, error}` for known providers (so the UI can render inline feedback) and 404 only for unknown names. Errors are truncated to 200 chars to keep responses small. The frontend API client gains `apiIntegrations.test(name, body)`. Task 27b (UI: 测试连接 button next to 保存 + drag-reorder provider list) remains pending.
+Implementation note: single generic `POST /integrations/{name}/test` endpoint dispatches per-provider. anthropic/github use their existing `ping` adapters; openai-compat providers (zhipu/qwen/doubao/deepseek) use the existing `_smoke` helper. The endpoint always returns 200 with `{ok, error}` for known providers (so the UI can render inline feedback) and 404 only for unknown names. Errors are truncated to 200 chars to keep responses small. The frontend API client gains `apiIntegrations.test(name, body)`.
+
+#### Task 27b — Integrations 测试连接 button per card (DONE)
+
+- **Tests:** Vitest 191/191 (no dedicated unit test for the new button — covered by full Playwright path).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-27b/verify.py` → login → /admin/settings → Integrations tab → fill Anthropic API key with junk → click 测试连接 → assert `[data-testid=test-anthropic-result][data-ok=false]` rendered → fill Zhipu token with junk → click 测试连接 → assert `[data-testid=test-zhipu-result][data-ok=false]` rendered → GET /api/admin/integrations/anthropic before vs after is identical (zero side-effect).
+- **Snapshots:** `/tmp/admin-rebuild/task-27b/anthropic-test.png`, `/zhipu-test.png`.
+- **Commit:** `c4cf3f1` (`feat(admin/integrations): test connection button + multi-provider cards (Task 27b)`).
+
+Implementation note: each card (GithubCard / AnthropicCard / ProviderCard for zhipu·qwen·doubao·deepseek) gains a 测试连接 button beside 保存. Per-card `testing` + `testResult` state. The result line appears between the existing notice/error block and the actions row, styled with `styles.notice` (green) for `ok=true` and `styles.error` (red) for `ok=false`; carries `data-testid=test-{name}-result` + `data-ok="true|false"` for stable test selectors. The button itself has `data-testid=test-{name}` and respects the same `disabled` rules as 保存 (no token / missing required model). The commit also pulls in the prior multi-provider card UI (zhipu·qwen·doubao·deepseek) that had been sitting in the unstaged work pool — they're functionally tied to the test-connection feature and ship together. Task 27c (provider priority drag-reorder writing to `PetConfig.providers`) remains pending.
 
 ---
 
@@ -1138,3 +1147,4 @@ Append-only. Every entry below means a real commit shipped.
 | 22a | Now editor markdown preview toggle | `56ab725` | `vitest run src/admin/nowMarkdown.test.js` 9/9 | `python /tmp/admin-rebuild/task-22a/verify.py` PASSED | 2026-05-06 |
 | 22b | HomeA /now public panel | `4cf1753` | `vitest run src/components/NowPanel.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-22b/verify.py` PASSED | 2026-05-06 |
 | 27a | Integrations test-without-save endpoint | `8418544` | `pytest tests/test_admin_integrations.py` 26/26 | `python /tmp/admin-rebuild/task-27a/verify.py` PASSED | 2026-05-06 |
+| 27b | Integrations 测试连接 button + multi-provider cards | `c4cf3f1` | `vitest run` 191/191 | `python /tmp/admin-rebuild/task-27b/verify.py` PASSED | 2026-05-06 |
