@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { postsApi } from '../api/posts.js';
 import PostEditor from './PostEditor.jsx';
 import { shouldIgnoreEvent } from './keyboardShortcuts.js';
+import useSyncedSearchParams from './useSyncedSearchParams.js';
+import { intParser } from './searchParamsState.js';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'all' },
@@ -13,17 +15,23 @@ const STATUS_FILTERS = [
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
 
+// querystring schema — kept module-level so the hook's deps stay stable.
+const URL_SCHEMA = [
+  { key: 'status', defaultValue: 'all' },
+  { key: 'q', defaultValue: '' },
+  { key: 'page', defaultValue: 1, parse: intParser(1, 1) },
+  { key: 'pageSize', defaultValue: 20, parse: intParser(1, 20) },
+];
+
 export default function Posts() {
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [q, setQ] = useState('');
+  const [filters, setFilters] = useSyncedSearchParams(URL_SCHEMA);
+  const { status: statusFilter, q, page, pageSize } = filters;
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null); // null | "__new__" | id
   const [reloadTick, setReloadTick] = useState(0);
-  const [pageSize, setPageSize] = useState(20);
-  const [page, setPage] = useState(1); // 1-based
   const [focusedIdx, setFocusedIdx] = useState(-1);
   const rowRefs = useRef([]);
 
@@ -32,18 +40,18 @@ export default function Posts() {
   // Side-door for ⌘K: the command palette navigates here with
   // `state.editPost` set to either an id or "__new__". We pop it once and
   // clear the state so a Back/Forward doesn't re-open the editor.
+  // Preserve the current querystring so URL-synced filters survive.
   const location = useLocation();
   const navigate = useNavigate();
   useEffect(() => {
     const want = location.state?.editPost;
     if (!want) return;
     setEditing(want);
-    navigate(location.pathname, { replace: true, state: null });
+    navigate(
+      { pathname: location.pathname, search: location.search },
+      { replace: true, state: null },
+    );
   }, [location, navigate]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [statusFilter, q, pageSize]);
 
   useEffect(() => {
     if (editing !== null) return;
@@ -76,8 +84,8 @@ export default function Posts() {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const onPage = useCallback(
-    (n) => setPage(Math.min(Math.max(1, n), totalPages)),
-    [totalPages],
+    (n) => setFilters({ page: Math.min(Math.max(1, n), totalPages) }),
+    [setFilters, totalPages],
   );
 
   // Reset row focus whenever the visible item set changes.
@@ -173,7 +181,7 @@ export default function Posts() {
               <button
                 key={f.key}
                 type="button"
-                onClick={() => setStatusFilter(f.key)}
+                onClick={() => setFilters({ status: f.key, page: 1 })}
                 style={{ ...styles.chip, ...(active ? styles.chipActive : null) }}
               >
                 {f.label}
@@ -185,7 +193,7 @@ export default function Posts() {
           type="search"
           placeholder="search title / body…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => setFilters({ q: e.target.value, page: 1 })}
           style={styles.search}
         />
       </div>
@@ -280,7 +288,7 @@ export default function Posts() {
               <span style={styles.dim}>per page</span>
               <select
                 value={pageSize}
-                onChange={(e) => setPageSize(Number(e.target.value))}
+                onChange={(e) => setFilters({ pageSize: Number(e.target.value), page: 1 })}
                 style={styles.pagerSelect}
               >
                 {PAGE_SIZE_OPTIONS.map((n) => (
