@@ -1,11 +1,15 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.jsx';
+import CommandPalette from './CommandPalette.jsx';
+import { postsApi } from '../api/posts.js';
+import { getToken } from '../api/admin.js';
 
 // Six workflow groups, mirroring the public site's `01 / 02 / 03` numbered
 // section motif (HomeA.jsx). Routes are unchanged in this rebuild step;
 // future tasks split / merge specific pages (e.g. Profile + Site → 站点身份,
 // Settings sub-tabs → top-level entries).
-const NAV_GROUPS = [
+export const NAV_GROUPS = [
   {
     n: '01',
     label: '运营中枢',
@@ -90,14 +94,70 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const crumb = findCrumb(location.pathname);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   function onLogout() {
     logout();
     navigate('/admin', { replace: true });
   }
 
+  // ⌘K / Ctrl+K toggles the palette. The shortcut is suppressed while the
+  // user is composing inside an editable surface (textarea, contenteditable),
+  // so PostEditor / Now composer keep their normal typing behavior.
+  useEffect(() => {
+    function onKey(e) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key !== 'k' && e.key !== 'K') return;
+      const t = e.target;
+      const tag = t?.tagName;
+      const editable =
+        tag === 'TEXTAREA' ||
+        (tag === 'INPUT' && /^(text|search|email|password|url)$/i.test(t.type || 'text')) ||
+        t?.isContentEditable;
+      // ⌘K should still work even from editor inputs — it overrides browser
+      // history search. We simply do not insert a "k" character.
+      e.preventDefault();
+      e.stopPropagation();
+      void editable;
+      setPaletteOpen((o) => !o);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const loadPosts = useCallback(
+    () => postsApi.list({ limit: 100 }).then((r) => r?.items || []),
+    [],
+  );
+
+  const runners = useMemo(
+    () => ({
+      go: (path) => navigate(path),
+      newPost: () => navigate('/admin/posts', { state: { editPost: '__new__' } }),
+      openPost: (id) => navigate('/admin/posts', { state: { editPost: id } }),
+      copyToken: async () => {
+        try {
+          await navigator.clipboard?.writeText?.(getToken() || '');
+        } catch {
+          /* clipboard may be blocked — silent */
+        }
+      },
+      openPublic: () => window.open('/', '_blank', 'noopener,noreferrer'),
+      logout: onLogout,
+    }),
+    [navigate], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   return (
     <div className="admin-shell" style={styles.shell}>
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        navGroups={NAV_GROUPS}
+        currentPath={location.pathname}
+        runners={runners}
+        loadPosts={loadPosts}
+      />
       <aside className="admin-sidebar" style={styles.sidebar}>
         <div className="admin-brand" style={styles.brand}>
           <span className="admin-brand-dot" style={styles.brandDot} />

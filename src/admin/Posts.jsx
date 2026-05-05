@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { postsApi } from '../api/posts.js';
 import PostEditor from './PostEditor.jsx';
 
@@ -24,6 +25,18 @@ export default function Posts() {
   const [page, setPage] = useState(1); // 1-based
 
   const reload = useCallback(() => setReloadTick((t) => t + 1), []);
+
+  // Side-door for ⌘K: the command palette navigates here with
+  // `state.editPost` set to either an id or "__new__". We pop it once and
+  // clear the state so a Back/Forward doesn't re-open the editor.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const want = location.state?.editPost;
+    if (!want) return;
+    setEditing(want);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location, navigate]);
 
   useEffect(() => {
     setPage(1);
