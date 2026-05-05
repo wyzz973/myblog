@@ -222,7 +222,7 @@ Implementation note: a new `src/admin/frontmatter.js` module hosts the GUI ↔ Y
 
 ### Task 4 — Sidebar IA regrouped per PRD §5.2
 
-**Status:** pending
+**Status:** completed
 **Priority:** high
 **Frontend evidence:** all admin pages (cross-cutting). Aligns with public site's `01/02/03` numbered section motif.
 **Owner problem:** flat 13-item sidebar buries inbox-style work behind authoring. Six groups + numbered headings expose workflow boundaries.
@@ -244,7 +244,13 @@ Implementation note: a new `src/admin/frontmatter.js` module hosts the GUI ↔ Y
 **Snapshot location:** `/tmp/admin-rebuild/task-4/sidebar.png`
 **Commit message:** `refactor(admin/layout): regroup sidebar into 6 numbered workflow modules`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `e30dbae` (`refactor(admin/layout): regroup sidebar into 6 numbered workflow modules`).
+
+- **Tests:** `npx vitest run src/admin/Layout.test.jsx` → 5/5 passing (6 group heads, every existing route reachable, breadcrumb at `/admin/posts`, sub-path `/admin/posts/__new__` still resolves to its group, unknown route renders bare shell). Combined `npx vitest run src/admin/Layout.test.jsx src/admin/frontmatter.test.js src/api/admin.test.js src/admin/Login.test.jsx` → 28/28 (no Task 1/2/3 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-4/verify.py` → login → assert all 6 numbered group heads visible with correct labels → navigate to `/admin/dashboard`, `/admin/posts`, `/admin/settings` → assert breadcrumb shows "<num> · <group> / <leaf>" each time. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-4/{sidebar,breadcrumb-posts}.png`.
+
+Implementation note: only existing routes were grouped; no new pages built. Pet sub-tabs and Settings sub-tabs remain monolithic in this task (deferred to Task 7 / future tasks). The active link adopts a 2px accent left-border + bold + 14% accent tint, matching the public site's accent system.
 
 ---
 
@@ -981,3 +987,4 @@ Append-only. Every entry below means a real commit shipped.
 | 1 | Login 2FA challenge handling | `da9dd66` | `vitest run src/admin/Login.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-1/verify.py` PASSED | 2026-05-05 |
 | 2 | Refresh-token rotation wired in AuthContext | `30f4db3` | `vitest run src/api/admin.test.js src/admin/Login.test.jsx` 12/12 | `python /tmp/admin-rebuild/task-2/verify.py` PASSED | 2026-05-05 |
 | 3 | Posts editor GUI for lifecycle fields | `b08f712` | `vitest run src/admin/frontmatter.test.js` 11/11 | `python /tmp/admin-rebuild/task-3/verify.py` PASSED | 2026-05-05 |
+| 4 | Sidebar IA regrouped + breadcrumb | `e30dbae` | `vitest run src/admin/Layout.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-4/verify.py` PASSED | 2026-05-05 |
