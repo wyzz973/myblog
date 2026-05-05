@@ -1,11 +1,49 @@
 import { useEffect, useState } from 'react';
 import { apiIntegrations } from '../../api/integrations.js';
 
+const PROVIDERS = [
+  {
+    name: 'zhipu',
+    title: '智谱 AI',
+    subtitle: '宠物对话备用模型',
+    tokenPlaceholder: '请输入智谱 API Key',
+    modelPlaceholder: 'glm-4-flash',
+    modelRequired: false,
+  },
+  {
+    name: 'qwen',
+    title: '通义千问',
+    subtitle: 'OpenAI 兼容模型',
+    tokenPlaceholder: '请输入 DashScope API Key',
+    modelPlaceholder: 'qwen-turbo',
+    modelRequired: false,
+  },
+  {
+    name: 'doubao',
+    title: '豆包',
+    subtitle: '火山方舟 Endpoint ID',
+    tokenPlaceholder: '请输入火山方舟 API Key',
+    modelPlaceholder: '请输入 Endpoint ID',
+    modelRequired: true,
+  },
+  {
+    name: 'deepseek',
+    title: 'DeepSeek',
+    subtitle: 'OpenAI 兼容模型',
+    tokenPlaceholder: '请输入 DeepSeek API Key',
+    modelPlaceholder: 'deepseek-v4-flash',
+    modelRequired: false,
+  },
+];
+
 export default function Integrations() {
   return (
     <div style={styles.grid}>
       <GithubCard />
       <AnthropicCard />
+      {PROVIDERS.map((provider) => (
+        <ProviderCard key={provider.name} provider={provider} />
+      ))}
     </div>
   );
 }
@@ -20,6 +58,21 @@ function GithubCard() {
 
   const [username, setUsername] = useState('');
   const [token, setToken] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  async function onTest() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await apiIntegrations.test('github', { username, token });
+      setTestResult(res);
+    } catch (err) {
+      setTestResult({ ok: false, error: err?.detail || err?.message || '测试失败' });
+    } finally {
+      setTesting(false);
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -32,7 +85,7 @@ function GithubCard() {
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err?.detail || err?.message || 'failed to load');
+        setError(err?.detail || err?.message || '加载失败');
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -54,9 +107,9 @@ function GithubCard() {
       });
       setData(res);
       setToken('');
-      setNotice('Saved + first sync triggered.');
+      setNotice('已保存，并已触发首次同步。');
     } catch (err) {
-      setError(err?.detail || err?.message || 'save failed');
+      setError(err?.detail || err?.message || '保存失败');
     } finally {
       setSaving(false);
     }
@@ -70,17 +123,17 @@ function GithubCard() {
       await apiIntegrations.syncGithub();
       const fresh = await apiIntegrations.getGithub();
       setData(fresh);
-      setNotice('Sync complete.');
+      setNotice('同步完成。');
     } catch (err) {
-      setError(err?.detail || err?.message || 'sync failed');
+      setError(err?.detail || err?.message || '同步失败');
     } finally {
       setSyncing(false);
     }
   }
 
   return (
-    <Card title="GitHub" subtitle="contribution graph + repos">
-      {loading && <div style={styles.muted}>loading…</div>}
+    <Card title="GitHub" subtitle="贡献图和仓库同步">
+      {loading && <div style={styles.muted}>加载中...</div>}
       {!loading && (
         <>
           <StatusRow
@@ -91,7 +144,7 @@ function GithubCard() {
           />
           <form onSubmit={onSave} style={styles.form} noValidate>
             <label style={styles.label}>
-              <span style={styles.labelText}>username</span>
+              <span style={styles.labelText}>用户名</span>
               <input
                 type="text"
                 value={username}
@@ -102,12 +155,12 @@ function GithubCard() {
               />
             </label>
             <label style={styles.label}>
-              <span style={styles.labelText}>personal access token</span>
+              <span style={styles.labelText}>访问令牌</span>
               <input
                 type="password"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
-                placeholder={data?.username ? '•••••••• (re-enter to update)' : 'ghp_…'}
+                placeholder={data?.username ? '已保存，重新输入可更新' : 'ghp_...'}
                 style={styles.input}
                 autoComplete="new-password"
                 required
@@ -115,9 +168,27 @@ function GithubCard() {
             </label>
             {notice && <div style={styles.notice}>{notice}</div>}
             {error && <div style={styles.error}>! {error}</div>}
+            {testResult && (
+              <div
+                style={testResult.ok ? styles.notice : styles.error}
+                data-testid="test-github-result"
+                data-ok={testResult.ok ? 'true' : 'false'}
+              >
+                {testResult.ok ? '✓ 连接正常' : `✗ ${testResult.error || '失败'}`}
+              </div>
+            )}
             <div style={styles.actions}>
               <button type="submit" disabled={saving || !token} style={styles.btnPrimary}>
-                {saving ? 'saving…' : 'save'}
+                {saving ? '保存中...' : '保存'}
+              </button>
+              <button
+                type="button"
+                onClick={onTest}
+                disabled={testing || !username || !token}
+                style={styles.btnSecondary}
+                data-testid="test-github"
+              >
+                {testing ? '测试中...' : '测试连接'}
               </button>
               <button
                 type="button"
@@ -125,7 +196,7 @@ function GithubCard() {
                 disabled={syncing || !data?.username}
                 style={styles.btnSecondary}
               >
-                {syncing ? 'syncing…' : 'sync now'}
+                {syncing ? '同步中...' : '立即同步'}
               </button>
             </div>
           </form>
@@ -144,6 +215,24 @@ function AnthropicCard() {
 
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  async function onTest() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await apiIntegrations.test('anthropic', {
+        api_key: apiKey,
+        model: model.trim() || null,
+      });
+      setTestResult(res);
+    } catch (err) {
+      setTestResult({ ok: false, error: err?.detail || err?.message || '测试失败' });
+    } finally {
+      setTesting(false);
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -156,7 +245,7 @@ function AnthropicCard() {
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err?.detail || err?.message || 'failed to load');
+        setError(err?.detail || err?.message || '加载失败');
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -178,17 +267,17 @@ function AnthropicCard() {
       });
       setData(res);
       setApiKey('');
-      setNotice('Saved + verified.');
+      setNotice('已保存并验证通过。');
     } catch (err) {
-      setError(err?.detail || err?.message || 'save failed');
+      setError(err?.detail || err?.message || '保存失败');
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Card title="Anthropic" subtitle="LLM for Pet conversations">
-      {loading && <div style={styles.muted}>loading…</div>}
+    <Card title="Anthropic" subtitle="宠物对话主模型">
+      {loading && <div style={styles.muted}>加载中...</div>}
       {!loading && (
         <>
           <StatusRow
@@ -198,19 +287,19 @@ function AnthropicCard() {
           />
           <form onSubmit={onSave} style={styles.form} noValidate>
             <label style={styles.label}>
-              <span style={styles.labelText}>api key</span>
+              <span style={styles.labelText}>API Key</span>
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={data?.model ? '•••••••• (re-enter to update)' : 'sk-ant-…'}
+                placeholder={data?.model ? '已保存，重新输入可更新' : 'sk-ant-...'}
                 style={styles.input}
                 autoComplete="new-password"
                 required
               />
             </label>
             <label style={styles.label}>
-              <span style={styles.labelText}>model (optional)</span>
+              <span style={styles.labelText}>模型（可选）</span>
               <input
                 type="text"
                 value={model}
@@ -221,9 +310,173 @@ function AnthropicCard() {
             </label>
             {notice && <div style={styles.notice}>{notice}</div>}
             {error && <div style={styles.error}>! {error}</div>}
+            {testResult && (
+              <div
+                style={testResult.ok ? styles.notice : styles.error}
+                data-testid="test-anthropic-result"
+                data-ok={testResult.ok ? 'true' : 'false'}
+              >
+                {testResult.ok ? '✓ 连接正常' : `✗ ${testResult.error || '失败'}`}
+              </div>
+            )}
             <div style={styles.actions}>
               <button type="submit" disabled={saving || !apiKey} style={styles.btnPrimary}>
-                {saving ? 'saving…' : 'save'}
+                {saving ? '保存中...' : '保存'}
+              </button>
+              <button
+                type="button"
+                onClick={onTest}
+                disabled={testing || !apiKey}
+                style={styles.btnSecondary}
+                data-testid="test-anthropic"
+              >
+                {testing ? '测试中...' : '测试连接'}
+              </button>
+            </div>
+          </form>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function ProviderCard({ provider }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState(null);
+
+  const [token, setToken] = useState('');
+  const [model, setModel] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  async function onTest() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await apiIntegrations.test(provider.name, {
+        token,
+        model: model.trim() || null,
+      });
+      setTestResult(res);
+    } catch (err) {
+      setTestResult({ ok: false, error: err?.detail || err?.message || '测试失败' });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  useEffect(() => {
+    let mounted = true;
+    apiIntegrations
+      .getProvider(provider.name)
+      .then((res) => {
+        if (!mounted) return;
+        setData(res);
+        setModel(res?.model || '');
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(err?.detail || err?.message || '加载失败');
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [provider.name]);
+
+  async function onSave(e) {
+    e.preventDefault();
+    setNotice(null);
+    setError(null);
+    setSaving(true);
+    try {
+      const res = await apiIntegrations.putProvider(provider.name, {
+        token,
+        model: model.trim() || null,
+      });
+      setData(res);
+      setToken('');
+      setModel(res?.model || model);
+      setNotice('已保存并验证通过。');
+    } catch (err) {
+      setError(err?.detail || err?.message || '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const missingRequiredModel = provider.modelRequired && !model.trim();
+
+  return (
+    <Card title={provider.title} subtitle={provider.subtitle}>
+      {loading && <div style={styles.muted}>加载中...</div>}
+      {!loading && (
+        <>
+          <StatusRow
+            connected={Boolean(data?.configured)}
+            status={data?.last_status}
+            lastAt={data?.last_synced_at}
+            error={data?.last_error}
+          />
+          <form onSubmit={onSave} style={styles.form} noValidate>
+            <label style={styles.label}>
+              <span style={styles.labelText}>API Key</span>
+              <input
+                type="password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder={data?.configured ? '已保存，重新输入可更新' : provider.tokenPlaceholder}
+                style={styles.input}
+                autoComplete="new-password"
+                required
+              />
+            </label>
+            <label style={styles.label}>
+              <span style={styles.labelText}>{provider.modelRequired ? '模型 / Endpoint ID' : '模型（可选）'}</span>
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder={provider.modelPlaceholder}
+                style={styles.input}
+                required={provider.modelRequired}
+              />
+            </label>
+            {provider.modelRequired && (
+              <div style={styles.hint}>豆包需要填写火山方舟 Endpoint ID，不能使用默认模型。</div>
+            )}
+            {notice && <div style={styles.notice}>{notice}</div>}
+            {error && <div style={styles.error}>! {error}</div>}
+            {testResult && (
+              <div
+                style={testResult.ok ? styles.notice : styles.error}
+                data-testid={`test-${provider.name}-result`}
+                data-ok={testResult.ok ? 'true' : 'false'}
+              >
+                {testResult.ok ? '✓ 连接正常' : `✗ ${testResult.error || '失败'}`}
+              </div>
+            )}
+            <div style={styles.actions}>
+              <button
+                type="submit"
+                disabled={saving || !token || missingRequiredModel}
+                style={styles.btnPrimary}
+              >
+                {saving ? '保存中...' : '保存并验证'}
+              </button>
+              <button
+                type="button"
+                onClick={onTest}
+                disabled={testing || !token || missingRequiredModel}
+                style={styles.btnSecondary}
+                data-testid={`test-${provider.name}`}
+              >
+                {testing ? '测试中...' : '测试连接'}
               </button>
             </div>
           </form>
@@ -251,19 +504,19 @@ function StatusRow({ connected, status, lastAt, error }) {
     : connected
     ? 'var(--accent)'
     : 'var(--fg-4)';
-  const label = error ? 'error' : connected ? 'connected' : 'not connected';
+  const label = error ? '异常' : connected ? '已配置' : '未配置';
   return (
     <div style={styles.statusRow}>
       <span style={{ ...styles.statusDot, background: color, boxShadow: `0 0 6px ${color}` }} />
       <span style={{ color: 'var(--fg-2)' }}>{label}</span>
       {status && (
         <span style={styles.statusMeta}>
-          status: <span style={{ color: 'var(--fg-2)' }}>{status}</span>
+          状态: <span style={{ color: 'var(--fg-2)' }}>{status}</span>
         </span>
       )}
       {lastAt && (
         <span style={styles.statusMeta}>
-          last sync: <span style={{ color: 'var(--fg-2)' }}>{fmtDate(lastAt)}</span>
+          上次同步: <span style={{ color: 'var(--fg-2)' }}>{fmtDate(lastAt)}</span>
         </span>
       )}
       {error && <span style={styles.statusErr}>{error}</span>}
@@ -375,5 +628,6 @@ const styles = {
     borderRadius: 4,
     background: 'color-mix(in oklab, var(--danger) 10%, transparent)',
   },
+  hint: { color: 'var(--fg-4)', fontSize: 11, lineHeight: 1.6 },
   muted: { color: 'var(--fg-3)', fontSize: 12 },
 };
