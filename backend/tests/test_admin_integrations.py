@@ -427,3 +427,98 @@ async def test_test_requires_auth(client, cleanup_integrations):
         json={"api_key": "x"},
     )
     assert r.status_code == 401
+
+
+# --- Task 24a: GitHub repo listing endpoint ---
+
+
+async def test_github_repos_404_when_not_configured(
+    client, admin_token, cleanup_integrations,
+):
+    r = await client.get(
+        "/api/admin/integrations/github/repos",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 404
+
+
+async def test_github_repos_returns_items_when_configured(
+    client, admin_token, cleanup_integrations,
+):
+    # Seed a configured github integration
+    with patch("app.services.github.ping", new=AsyncMock(return_value="alice")):
+        save = await client.put(
+            "/api/admin/integrations/github",
+            json={"username": "alice", "token": "ghp_abc"},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert save.status_code == 200, save.text
+
+    fake_repos = [
+        {
+            "name": "myblog",
+            "description": "personal site",
+            "lang": "Python",
+            "stars": 42,
+            "archived": False,
+            "url": "https://github.com/alice/myblog",
+        },
+        {
+            "name": "old-thing",
+            "description": "",
+            "lang": "",
+            "stars": 0,
+            "archived": True,
+            "url": "https://github.com/alice/old-thing",
+        },
+    ]
+    with patch("app.services.github.fetch_repos", new=AsyncMock(return_value=fake_repos)):
+        r = await client.get(
+            "/api/admin/integrations/github/repos",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["username"] == "alice"
+    assert len(body["items"]) == 2
+    assert body["items"][0]["name"] == "myblog"
+    assert body["items"][0]["stars"] == 42
+    assert body["items"][1]["archived"] is True
+
+
+async def test_github_repos_requires_auth(client, cleanup_integrations):
+    r = await client.get("/api/admin/integrations/github/repos")
+    assert r.status_code == 401
+
+
+async def test_github_fetch_repos_caches_per_login(client, cleanup_integrations):
+    """Direct service-level test: identical calls hit the live API once.
+    Resets the module-local cache before each invocation."""
+    from app.services import github as github_svc
+    github_svc._repos_cache_clear()
+
+    fake = [{"name": "r1", "description": "", "lang": "", "stars": 0, "archived": False, "url": ""}]
+
+    call_count = 0
+    async def fake_post(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+
+        class FakeResp:
+            status_code = 200
+            def json(self):
+                return {"data": {"user": {"repositories": {"nodes": [
+                    {"name": "r1", "description": None, "isArchived": False,
+                     "isFork": False, "stargazerCount": 0, "url": "",
+                     "primaryLanguage": None}
+                ]}}}}
+            text = ""
+        return FakeResp()
+
+    with patch("httpx.AsyncClient.post", new=fake_post):
+        a = await github_svc.fetch_repos("tok", "alice", limit=10)
+        b = await github_svc.fetch_repos("tok", "alice", limit=10)
+    assert a == b
+    assert call_count == 1, "second call should hit cache"
+    assert a[0]["name"] == "r1"
+    github_svc._repos_cache_clear()

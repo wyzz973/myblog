@@ -92,6 +92,24 @@ async def put_github(
     )
 
 
+# Task 24a: list the owner's public repos so the Projects admin page can
+# offer one-click import. Service-side cache (10 min) absorbs reopening
+# of the import modal so we don't hammer GitHub's rate limit.
+@router.get("/integrations/github/repos")
+async def list_github_repos(
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> dict:
+    row = await svc.get(s, name="github")
+    if row is None or not row.username:
+        raise HTTPException(404, "github integration not configured")
+    secret = await svc.get_secret(s, name="github")
+    if not secret:  # secret missing or row gone — refuse rather than 500
+        raise HTTPException(404, "github integration not configured")
+    repos = await github_svc.fetch_repos(secret, row.username, limit=100)
+    return {"items": repos, "username": row.username}
+
+
 @router.post("/integrations/github/sync", dependencies=[Depends(require_scope("write"))])
 async def sync_github(
     _admin: Account = Depends(current_admin),
