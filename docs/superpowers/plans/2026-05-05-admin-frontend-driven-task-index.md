@@ -973,7 +973,7 @@ Implementation note: rather than extend the backend service signatures (which wo
 
 ### Task 26 — Pet usage charts
 
-**Status:** in-progress (26a daily stacked bar done; per-mode pie + cost line still pending)
+**Status:** in-progress (26a daily stacked bar + 26b per-mode pie done; 26c cost line still pending)
 **Priority:** low
 **Frontend evidence:** `AsciiPet.jsx` summon stream → token costs accumulate.
 **Owner problem:** flat day×mode×source table tells nothing about trends.
@@ -1001,7 +1001,16 @@ Implementation note: rather than extend the backend service signatures (which wo
 - **Playwright:** `/tmp/admin-rebuild/task-26a/verify.py` PASSED → login → /admin/pet?tab=usage → wait for `[data-testid=pet-usage-chart]` OR `[data-testid=pet-usage-chart-empty]` → on chart, assert ≥1 `[data-testid^=pet-usage-bar-]` + ≥1 `[data-testid^=pet-usage-legend-]` entry. Live DB had 5 bar segments + 3 legend entries (provider / cache_hit / other).
 - **Snapshots:** `/tmp/admin-rebuild/task-26a/chart.png`.
 
-Implementation note: pure helpers in `src/admin/pet/petUsageChart.js` (`groupByDay`, `buildBars`, `legendFromData`, `SOURCE_COLORS`, `SOURCE_LABELS`) keep all the SVG geometry math out of React. SOURCE_ORDER fixes the stack order (provider → cache_hit → fallback → rate_limited → other) so colors stay stable across reloads. Unknown sources land in the "other" bucket. `<UsageChart>` in `PetUsage.jsx` renders inline SVG + a top legend with colored swatches. Each `<rect>` carries `data-testid=pet-usage-bar-{day}-{source}` and a `<title>` tooltip showing day + source label + call count. Per-mode pie + cost line (the other two charts in the original spec) remain pending as 26b.
+Implementation note: pure helpers in `src/admin/pet/petUsageChart.js` (`groupByDay`, `buildBars`, `legendFromData`, `SOURCE_COLORS`, `SOURCE_LABELS`) keep all the SVG geometry math out of React. SOURCE_ORDER fixes the stack order (provider → cache_hit → fallback → rate_limited → other) so colors stay stable across reloads. Unknown sources land in the "other" bucket. `<UsageChart>` in `PetUsage.jsx` renders inline SVG + a top legend with colored swatches. Each `<rect>` carries `data-testid=pet-usage-bar-{day}-{source}` and a `<title>` tooltip showing day + source label + call count.
+
+#### Task 26b — per-mode pie chart (DONE)
+
+- **Tests:** `npx vitest run src/admin/pet/petUsageChart.test.js` → 16/16 (7 from 26a + 9 new for 26b: groupByMode aggregates / sorts desc / skips zero / handles null; modeColor stable + palette tokens; buildPieSlices fractions sum to 1 + every slice has path + label inside donut + empty-input handling + single-slice full-circle case). Combined `npx vitest run` → 212/212 (no regression).
+- **Playwright:** `/tmp/admin-rebuild/task-26b/verify.py` PASSED → /admin/pet?tab=usage → wait for `[data-testid=pet-usage-pie]` OR `[data-testid=pet-usage-pie-empty]` → on chart, assert ≥1 `[data-testid^=pet-usage-pie-slice-]` + matching `[data-testid^=pet-usage-pie-legend-]` rows. Live DB had 8 slices.
+- **Snapshots:** `/tmp/admin-rebuild/task-26b/pie.png`.
+- **Commit:** `506c8a0` (`feat(admin/pet): per-mode pie chart on usage page (Task 26b)`).
+
+Implementation note: same pure-helper pattern as 26a. `groupByMode(rows)` aggregates `mode → calls` and sorts descending so the pie reads largest-first. `modeColor(mode)` uses a hash-into-palette so admin-introduced template modes (greet / summary / pet_care / code_assist / etc.) get deterministic colors without an explicit registry. `buildPieSlices(modes, {cx, cy, r, inner})` walks angles starting at 12 o'clock, builds an SVG `<path d>` per slice (handles inner-radius for donut), and computes a label position halfway between r and inner; single-slice case falls back to a full-circle path since SVG arcs collapse when start=end. `<ModePieChart>` in PetUsage.jsx renders the donut with a center total label + a side legend listing every mode's calls. The bar chart and pie sit side-by-side via flexbox (`flex-wrap` so the pie drops below the bar on narrow screens). 26c (estimated cost line — needs configurable provider rates, probably co-located on Integrations page) still pending.
 
 ---
 
@@ -1235,6 +1244,7 @@ Append-only. Every entry below means a real commit shipped.
 | 26a | PetUsage daily stacked bar chart | `81ab961` | `vitest run src/admin/pet/petUsageChart.test.js` 7/7 | `python /tmp/admin-rebuild/task-26a/verify.py` PASSED | 2026-05-06 |
 | 25b | Analytics custom since-date picker | `a7e7e0a` | `vitest run src/api/analytics.test.js` 5/5 | `python /tmp/admin-rebuild/task-25b/verify.py` PASSED | 2026-05-06 |
 | 29 | API tokens usage_count counter + UI | `cae0a56` | `pytest tests/test_api_tokens.py` 12/12 | `python /tmp/admin-rebuild/task-29/verify.py` PASSED | 2026-05-06 |
+| 26b | PetUsage per-mode pie chart | `506c8a0` | `vitest run src/admin/pet/petUsageChart.test.js` 16/16 | `python /tmp/admin-rebuild/task-26b/verify.py` PASSED | 2026-05-06 |
 
 ---
 
