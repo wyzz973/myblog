@@ -791,7 +791,7 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 
 ### Task 21 — Pet species catalogue admin (extract `species.js` to backend)
 
-**Status:** in-progress (21a + 21b + 21c done; 21d admin UI + 21e public swap pending)
+**Status:** in-progress (21a + 21b + 21c + 21d done; 21e public swap pending)
 **Priority:** medium
 **Frontend evidence:** `src/components/pet/species.js` — 28 entries, hardcoded. `AsciiPet.jsx` reads frames + behavior from it. S7.
 **Owner problem:** adding/tweaking a species requires a code edit + redeploy.
@@ -814,7 +814,7 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 **Snapshot location:** `/tmp/admin-rebuild/task-21/species-admin.png`, `/tmp/admin-rebuild/task-21/pet-bubble.png`
 **Commit message:** `feat(admin/pet): species catalogue editable from admin`
 **Definition of done:** standard checklist
-**Completed:** 21a + 21b + 21c — `2b68fd6` (table+model+schema), `64184c7` (seed), `4b1af73` (`feat(admin/pet): pet_species CRUD router + public list endpoint (Task 21c)`). 21d (admin UI page) + 21e (replace frontend hardcode with fetch) still pending.
+**Completed:** 21a + 21b + 21c + 21d — `2b68fd6` (table+model+schema), `64184c7` (seed), `4b1af73` (CRUD router + public list), `35fc1b5` (`feat(admin/pet): species editor tab on Pet page (Task 21d)`). 21e (replace frontend hardcode with fetch) still pending.
 
 #### Task 21a — pet_species table + model + schema (DONE)
 
@@ -843,6 +843,15 @@ Implementation note: ports the 27 species in `src/components/pet/species.js` ver
 - **Playwright:** none — endpoints have no UI yet (lands in 21d). The owner-facing admin page on /admin/pet/species + the AsciiPet swap come in 21d/21e respectively.
 
 Implementation note: schema `frames` was originally typed `list[str]` but the seeded JS data is `list[list[str]]` (each frame = list of line strings). Fixed schema + model_validate test cases in 21a/21b. Admin router lives in its own `routers/admin/pet_species.py` next to `pet.py` (which still owns PetConfig — site-level pet behavior). Delete refusal looks at `SiteMeta.pet_config.species` because that's the only stable reference; visitor profile rows self-heal on next visit when their species disappears. Write endpoints accept session OR write-scope api-token; read endpoint accepts session OR any-scope token.
+
+#### Task 21d — admin pet species editor tab (DONE)
+
+- **Tests:** `npx vitest run src/admin/pet/PetSpeciesEditor.test.jsx` → 6/6 (group + row render, dirty marking, PATCH sends only changed fields, 409 surfacing, add-new flow, frame badge). Combined regression `npx vitest run` → 218/218 (no Task 1-23 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-21d/verify.py` → login → /admin/pet?tab=species → editor mounts → 通用/legendary 分组可见 → 改 duck.name → save → row de-dirtied → DB shows new name → "3 frames" badge present → add `t21d-tmp` via UI → delete via UI → row detaches → 还原 duck.name.
+- **Snapshots:** `/tmp/admin-rebuild/task-21d/species-editor.png` (full page).
+- **Endpoints used:** existing 21c `/api/admin/pet/species[/<id>]` for list/PATCH/POST/DELETE.
+
+Implementation note: new `Species` tab in `src/admin/Pet.jsx` next to Behavior/Personas/Templates/Conversations/Usage; per-row save instead of bulk save because the catalogue is N rows owned independently and 409 conflicts on one row shouldn't block edits to others. Frame editing intentionally not exposed in this tab — frames are 3-frame ASCII with strict layout rules and deserve a dedicated frame composer (likely follow-up 21f). Delete uses `window.confirm` to keep blast radius local; the admin shell's ConfirmModal can replace it later for visual consistency. New `src/api/petSpecies.js` mirrors the rest of the api/ folder (token from localStorage, 204 → null, JSON-decode detail on error). CSS additions live in `src/styles.css` under `.admin-pet .species-row` / `.species-grid` and reuse existing `--accent` / `--bg-2` / `--line` tokens for consistency.
 
 ---
 
