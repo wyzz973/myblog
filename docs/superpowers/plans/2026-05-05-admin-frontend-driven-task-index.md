@@ -523,7 +523,7 @@ Implementation note: helpers split into `markdownInsert.js` (pure functions for 
 
 ### Task 13 — Pet visitor profile inspector
 
-**Status:** pending
+**Status:** completed
 **Priority:** medium
 **Frontend evidence:** `AsciiPet.jsx` — visitor identity bound to IP+UA, `/api/pet/forget` exists. O2.
 **Owner problem:** when a visitor mentions in chat that the pet "forgot them", owner has no way to see what the pet remembered.
@@ -544,7 +544,13 @@ Implementation note: helpers split into `markdownInsert.js` (pure functions for 
 **Snapshot location:** `/tmp/admin-rebuild/task-13/profile-panel.png`
 **Commit message:** `feat(admin/pet): visitor profile inspector on conversation detail`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `4f8f8e7` (`feat(admin/pet): visitor profile inspector on conversation detail`).
+
+- **Tests:** `npx vitest run src/admin/pet/VisitorProfileSidebar.test.jsx` → 5/5 (empty placeholder, full field render with chips + post links, unmute button only when muted_until in future, unmute click calls patchProfile + onMutated, reset confirm step gates the call). Combined regression `npx vitest run` → 107/107 (no Task 1-12 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-13/verify.py` → find existing visitor or summon pet to seed → login → /admin/pet/conversations/<hash> → assert sidebar mounts with profile fields → click 重置档案 → confirm step appears. All assertions green.
+- **Snapshots:** `/tmp/admin-rebuild/task-13/profile-sidebar.png`.
+
+Implementation note: backend extends the existing detail GET with a `profile` field (one extra primary-key lookup, no schema change) plus a new `PATCH /pet/profiles/{visitor_hash}` endpoint accepting `{action: "unmute" | "reset"}`. Reset is gated by an inline confirm step in the sidebar — explicitly NOT a one-click data wipe — and the parent `onMutated` callback re-fetches the conversation so the sidebar reflects backend state immediately.
 
 ---
 
@@ -1044,3 +1050,4 @@ Append-only. Every entry below means a real commit shipped.
 | 10 | Comments per-post filter + bulk moderation | `87a8875` | `vitest run src/admin/Comments.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-10/verify.py` PASSED | 2026-05-06 |
 | 11 | Theme color picker + live preview | `bcdd8ca` | `vitest run src/admin/oklch.test.js` 8/8 | `python /tmp/admin-rebuild/task-11/verify.py` PASSED | 2026-05-06 |
 | 12 | Posts editor media picker | `5d3d3e9` | `vitest run src/admin/markdownInsert.test.js` 9/9 | `python /tmp/admin-rebuild/task-12/verify.py` PASSED | 2026-05-06 |
+| 13 | Pet visitor profile sidebar | `4f8f8e7` | `vitest run src/admin/pet/VisitorProfileSidebar.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-13/verify.py` PASSED | 2026-05-06 |
