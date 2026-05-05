@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiPet } from '../../api/pet.js';
+import VisitorProfileSidebar from './VisitorProfileSidebar.jsx';
 
 export default function PetConversationDetail() {
   const { visitorHash } = useParams();
   const nav = useNavigate();
   const [items, setItems] = useState([]);
+  const [profile, setProfile] = useState(null);
   const [cursor, setCursor] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -20,6 +22,9 @@ export default function PetConversationDetail() {
       setItems((prev) => (reset ? r.items : [...prev, ...r.items]));
       setCursor(r.next_cursor);
       setHasMore(!!r.next_cursor);
+      // The detail endpoint includes the visitor's profile snapshot.
+      // Keep it on every fetch so a "load older" doesn't drop the sidebar.
+      if (r.profile !== undefined) setProfile(r.profile);
       setError(null);
     } catch (e) {
       setError(e?.detail || e?.message || 'failed to load');
@@ -47,7 +52,8 @@ export default function PetConversationDetail() {
   if (error) return <div className="err pad">{error}</div>;
 
   return (
-    <div className="form pad">
+    <div className="form pad" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 16 }}>
+      <div style={{ minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
         <h2 style={{ margin: 0, fontSize: 14 }}>
           {visitorHash} · {items.length > 0 && items[0].species} · {items.length} messages
@@ -110,6 +116,12 @@ export default function PetConversationDetail() {
           {loading ? 'loading…' : 'load older'}
         </button>
       )}
+      </div>
+      <VisitorProfileSidebar
+        profile={profile}
+        visitorHash={visitorHash}
+        onMutated={() => loadPage(true)}
+      />
     </div>
   );
 }

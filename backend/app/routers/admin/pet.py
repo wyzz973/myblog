@@ -211,7 +211,85 @@ async def get_conversation_detail(
             "created_at": r.created_at.isoformat(),
         })
     next_cursor = items[-1]["id"] if len(rows) > limit and items else None
-    return {"items": items, "next_cursor": next_cursor}
+
+    # Include the visitor's profile so the admin detail page can render
+    # the sidebar inspector without an extra round-trip. Returns null
+    # when the visitor exists in pet_message but no profile row was ever
+    # built (rare — happens for legacy conversations).
+    prof_row = (
+        await s.execute(
+            select(PetVisitorProfile).where(
+                PetVisitorProfile.visitor_hash == visitor_hash
+            )
+        )
+    ).scalar_one_or_none()
+    profile: dict[str, Any] | None = None
+    if prof_row is not None:
+        profile = {
+            "visitor_hash": prof_row.visitor_hash,
+            "species": prof_row.species,
+            "locale": prof_row.locale,
+            "preferred_language": prof_row.preferred_language,
+            "interest_tags": prof_row.interest_tags or [],
+            "recent_post_ids": prof_row.recent_post_ids or [],
+            "interaction_count": prof_row.interaction_count,
+            "last_seen_at": prof_row.last_seen_at.isoformat() if prof_row.last_seen_at else None,
+            "last_interaction_at": (
+                prof_row.last_interaction_at.isoformat()
+                if prof_row.last_interaction_at
+                else None
+            ),
+            "style_summary": prof_row.style_summary,
+            "memory_summary": prof_row.memory_summary,
+            "proactive_muted_until": (
+                prof_row.proactive_muted_until.isoformat()
+                if prof_row.proactive_muted_until
+                else None
+            ),
+        }
+    return {"items": items, "next_cursor": next_cursor, "profile": profile}
+
+
+@router.patch(
+    "/pet/profiles/{visitor_hash}",
+    dependencies=[Depends(require_scope("write"))],
+)
+async def patch_visitor_profile(
+    visitor_hash: str,
+    body: dict[str, Any],
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Admin-side profile mutations beyond the messages themselves.
+
+    Body shape: `{action: "unmute" | "reset"}`.
+    - unmute: clears `proactive_muted_until` so proactive prompts run again.
+    - reset:  clears style_summary / memory_summary / interest_tags /
+              recent_post_ids / interaction_count without touching message
+              history.
+    """
+    action = body.get("action")
+    if action not in {"unmute", "reset"}:
+        return {"ok": False, "error": "invalid action"}
+    prof = (
+        await s.execute(
+            select(PetVisitorProfile).where(
+                PetVisitorProfile.visitor_hash == visitor_hash
+            )
+        )
+    ).scalar_one_or_none()
+    if prof is None:
+        return {"ok": False, "error": "profile not found"}
+    if action == "unmute":
+        prof.proactive_muted_until = None
+    else:
+        prof.style_summary = None
+        prof.memory_summary = None
+        prof.interest_tags = []
+        prof.recent_post_ids = []
+        prof.interaction_count = 0
+    await s.commit()
+    return {"ok": True, "action": action}
 
 
 @router.delete(

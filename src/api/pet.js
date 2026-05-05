@@ -87,6 +87,13 @@ export const apiPet = {
       { method: 'DELETE' },
     );
   },
+  // action ∈ "unmute" | "reset"
+  patchProfile(visitorHash, action) {
+    return request(
+      `/pet/profiles/${encodeURIComponent(visitorHash)}`,
+      { method: 'PATCH', body: JSON.stringify({ action }) },
+    );
+  },
   getUsage() {
     return request('/pet/usage');
   },
