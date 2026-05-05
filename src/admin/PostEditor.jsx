@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { postsApi } from '../api/posts.js';
+import {
+  parseFrontmatter,
+  serializeFrontmatter,
+  setFmField,
+  STATUS_VALUES,
+} from './frontmatter.js';
 
 const NEW_POST_TEMPLATE = `---
 id: my-new-post
@@ -41,24 +47,33 @@ export default function PostEditor({ id, onClose, onSaved }) {
       .get(id)
       .then((p) => {
         if (!mounted) return;
-        const fmLines = [
-          '---',
-          `id: ${p.id}`,
-          `n: "${p.n ?? ''}"`,
-          `title: ${jsonish(p.title)}`,
-          p.subtitle != null ? `subtitle: ${jsonish(p.subtitle)}` : null,
-          `tag: ${p.tag}`,
-          `date: ${p.date}`,
-          `lang: ${p.lang}`,
-          p.read != null ? `read: ${jsonish(p.read)}` : null,
-          p.summary != null ? `summary: ${jsonish(p.summary)}` : null,
-          p.tldr != null ? `tldr: ${jsonish(p.tldr)}` : null,
-          '---',
-          '',
-        ]
-          .filter(Boolean)
-          .join('\n');
-        setMarkdown(fmLines + (p.body_md ?? ''));
+        // Build the initial markdown from the canonical fields. Lifecycle
+        // fields (status / scheduled_at / featured / private /
+        // comments_enabled) are surfaced in GUI controls; they round-trip
+        // through frontmatter the same as everything else.
+        const fm = {
+          id: p.id,
+          n: p.n,
+          title: p.title,
+          subtitle: p.subtitle,
+          tag: p.tag,
+          date: p.date,
+          lang: p.lang,
+          read: p.read,
+          summary: p.summary,
+          tldr: p.tldr,
+          status: p.status,
+          scheduled_at: p.scheduled_at,
+          featured: p.featured,
+          private: p.private,
+          comments_enabled: p.comments_enabled,
+        };
+        // Drop nulls and falsy booleans — serializer filters them, but
+        // dropping here keeps the live state object compact.
+        Object.keys(fm).forEach((k) => {
+          if (fm[k] == null) delete fm[k];
+        });
+        setMarkdown(serializeFrontmatter(fm, [], p.body_md ?? ''));
         setLoadError(null);
       })
       .catch((err) => {
@@ -99,10 +114,38 @@ export default function PostEditor({ id, onClose, onSaved }) {
     };
   }, [markdown]);
 
+  // Derived GUI state — single source of truth is the markdown text.
+  const fm = useMemo(() => parseFrontmatter(markdown).fm, [markdown]);
+
+  function updateField(name, value) {
+    setMarkdown((prev) => setFmField(prev, name, value));
+  }
+
+  // datetime-local needs `YYYY-MM-DDTHH:MM`. Backend round-trips full ISO,
+  // so accept both shapes when populating the input.
+  const scheduledLocal = useMemo(() => {
+    const v = fm.scheduled_at;
+    if (!v) return '';
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return v;
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }, [fm.scheduled_at]);
+
   async function onSave() {
     setSaving(true);
     setSaveError(null);
     try {
+      // Validate scheduled posts before round-tripping through the
+      // backend so the user gets a fast, specific error.
+      if (fm.status === 'scheduled') {
+        if (!fm.scheduled_at) {
+          throw new Error('scheduled posts need a scheduled_at date');
+        }
+        const at = new Date(fm.scheduled_at).getTime();
+        if (Number.isNaN(at)) throw new Error('scheduled_at is not a valid date');
+        if (at <= Date.now()) throw new Error('scheduled_at must be in the future');
+      }
       if (isNew) {
         await postsApi.create(markdown, { overwrite });
       } else {
@@ -116,10 +159,7 @@ export default function PostEditor({ id, onClose, onSaved }) {
     }
   }
 
-  const fmInfo = useMemo(() => {
-    if (!preview || !preview.frontmatter) return null;
-    return preview.frontmatter;
-  }, [preview]);
+  const fmInfo = preview?.frontmatter || null;
 
   return (
     <div>
@@ -150,6 +190,57 @@ export default function PostEditor({ id, onClose, onSaved }) {
 
       {loadError && <div style={styles.error}>! {loadError}</div>}
       {saveError && <div style={styles.error}>! {saveError}</div>}
+
+      <div style={styles.fieldsStrip} data-testid="post-fields-strip">
+        <label style={styles.fieldGroup}>
+          <span style={styles.fieldLabel}>status</span>
+          <select
+            value={fm.status || ''}
+            onChange={(e) => updateField('status', e.target.value)}
+            style={styles.select}
+            data-testid="status-select"
+          >
+            {!fm.status && <option value="">—</option>}
+            {STATUS_VALUES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {fm.status === 'scheduled' && (
+          <label style={styles.fieldGroup}>
+            <span style={styles.fieldLabel}>scheduled_at</span>
+            <input
+              type="datetime-local"
+              value={scheduledLocal}
+              onChange={(e) => updateField('scheduled_at', e.target.value)}
+              style={styles.dateInput}
+              data-testid="scheduled-at-input"
+            />
+          </label>
+        )}
+
+        <ToggleField
+          name="featured"
+          checked={fm.featured === true}
+          onChange={(v) => updateField('featured', v)}
+        />
+        <ToggleField
+          name="private"
+          checked={fm.private === true}
+          onChange={(v) => updateField('private', v)}
+        />
+        <ToggleField
+          name="comments_enabled"
+          checked={fm.comments_enabled !== false}
+          onChange={(v) => updateField('comments_enabled', v ? null : false)}
+          // comments_enabled defaults to true; we represent the "off" state
+          // explicitly, the "on" state implicitly (omitted line).
+          tristate
+        />
+      </div>
 
       {isNew && (
         <label style={styles.overwriteRow}>
@@ -215,6 +306,20 @@ export default function PostEditor({ id, onClose, onSaved }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function ToggleField({ name, checked, onChange }) {
+  return (
+    <label style={styles.fieldGroup} data-testid={`toggle-${name}`}>
+      <span style={styles.fieldLabel}>{name}</span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        style={styles.toggle}
+      />
+    </label>
   );
 }
 
@@ -338,13 +443,6 @@ function renderInlines(children) {
   });
 }
 
-function jsonish(v) {
-  if (v == null) return '""';
-  const s = String(v);
-  if (/[:#"'\\]|^\s|\s$/.test(s)) return JSON.stringify(s);
-  return s;
-}
-
 const styles = {
   header: {
     display: 'flex',
@@ -377,6 +475,54 @@ const styles = {
     fontSize: 12,
     fontFamily: 'inherit',
     cursor: 'pointer',
+  },
+  fieldsStrip: {
+    display: 'flex',
+    gap: 16,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    padding: '10px 12px',
+    border: '1px solid var(--line)',
+    borderRadius: 4,
+    background: 'var(--bg-2)',
+    marginBottom: 12,
+  },
+  fieldGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 11,
+    color: 'var(--fg-3)',
+  },
+  fieldLabel: {
+    fontSize: 10,
+    color: 'var(--fg-4)',
+    textTransform: 'lowercase',
+    letterSpacing: '0.06em',
+  },
+  select: {
+    background: 'var(--bg)',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg)',
+    padding: '4px 8px',
+    fontFamily: 'inherit',
+    fontSize: 12,
+    borderRadius: 3,
+    outline: 'none',
+  },
+  dateInput: {
+    background: 'var(--bg)',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg)',
+    padding: '4px 8px',
+    fontFamily: 'inherit',
+    fontSize: 12,
+    borderRadius: 3,
+    outline: 'none',
+  },
+  toggle: {
+    cursor: 'pointer',
+    accentColor: 'var(--accent)',
   },
   overwriteRow: {
     display: 'flex',
