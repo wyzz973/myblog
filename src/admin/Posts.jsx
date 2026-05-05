@@ -5,6 +5,7 @@ import PostEditor from './PostEditor.jsx';
 import { shouldIgnoreEvent } from './keyboardShortcuts.js';
 import useSyncedSearchParams from './useSyncedSearchParams.js';
 import { intParser } from './searchParamsState.js';
+import { useConfirm, useToast } from './ui/UIProvider.jsx';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'all' },
@@ -130,15 +131,23 @@ export default function Posts() {
     }
   }, [focusedIdx]);
 
+  const confirm = useConfirm();
+  const toast = useToast();
+
   async function onDelete(id) {
-    // eslint-disable-next-line no-alert
-    if (!confirm(`Delete post "${id}"? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: '删除文章',
+      message: `确定删除 “${id}” 吗？此操作不可撤销。`,
+      confirmLabel: '删除',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await postsApi.remove(id);
+      toast.success(`已删除 ${id}`);
       reload();
     } catch (err) {
-      // eslint-disable-next-line no-alert
-      alert(`Delete failed: ${err?.detail || err?.message}`);
+      toast.error(`删除失败：${err?.detail || err?.message || '未知错误'}`);
     }
   }
 

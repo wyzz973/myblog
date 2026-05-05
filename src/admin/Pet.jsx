@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiPet } from '../api/pet.js';
+import { useConfirm } from './ui/UIProvider.jsx';
 
 import PetBehavior from './pet/PetBehavior.jsx';
 import PetConversations from './pet/PetConversations.jsx';
@@ -23,6 +24,7 @@ export default function Pet() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const confirm = useConfirm();
   const [saving, setSaving] = useState(false);
   const [savedTick, setSavedTick] = useState(0);
 
@@ -56,7 +58,13 @@ export default function Pet() {
   }
 
   async function resetSection(section) {
-    if (!confirm(`Reset all ${section} to defaults? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: `重置 ${section}`,
+      message: `确定将所有 ${section} 重置为默认值吗？此操作不可撤销。`,
+      confirmLabel: '重置',
+      destructive: true,
+    });
+    if (!ok) return;
     setSaving(true);
     try {
       const next = await apiPet.resetSection(section);

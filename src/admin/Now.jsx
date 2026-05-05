@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiNow } from '../api/now.js';
+import { useConfirm, useToast } from './ui/UIProvider.jsx';
 
 // Admin timeline of "now" entries.
 // Single is_current at any time — backend auto-flips others off when one
@@ -9,6 +10,8 @@ export default function Now() {
   const [rows, setRows] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const [draft, setDraft] = useState(emptyDraft());
   const [creating, setCreating] = useState(false);
@@ -60,7 +63,7 @@ export default function Now() {
     if (!e) return;
     // body_md cannot be empty on save
     if ('body_md' in e && !e.body_md.trim()) {
-      alert('body cannot be empty');
+      toast.error('内容不能为空');
       return;
     }
     setBusyId(row.id);
@@ -72,8 +75,9 @@ export default function Now() {
         delete next[row.id];
         return next;
       });
+      toast.success('已保存');
     } catch (err) {
-      alert(`save failed: ${err?.detail || err.message}`);
+      toast.error(`保存失败：${err?.detail || err.message}`);
     } finally {
       setBusyId(null);
     }
@@ -86,20 +90,27 @@ export default function Now() {
       // backend flips others off — reload to stay consistent
       await load();
     } catch (err) {
-      alert(`toggle failed: ${err?.detail || err.message}`);
+      toast.error(`切换失败：${err?.detail || err.message}`);
     } finally {
       setBusyId(null);
     }
   }
 
   async function deleteRow(row) {
-    if (!confirm('delete this now entry?')) return;
+    const ok = await confirm({
+      title: '删除近况',
+      message: '确定删除这条近况吗？',
+      confirmLabel: '删除',
+      destructive: true,
+    });
+    if (!ok) return;
     setBusyId(row.id);
     try {
       await apiNow.remove(row.id);
       setRows((prev) => prev.filter((r) => r.id !== row.id));
+      toast.success('已删除');
     } catch (err) {
-      alert(`delete failed: ${err?.detail || err.message}`);
+      toast.error(`删除失败：${err?.detail || err.message}`);
     } finally {
       setBusyId(null);
     }
@@ -118,8 +129,9 @@ export default function Now() {
       });
       setDraft(emptyDraft());
       await load();
+      toast.success('近况已发布');
     } catch (err) {
-      alert(`create failed: ${err?.detail || err.message}`);
+      toast.error(`发布失败：${err?.detail || err.message}`);
     } finally {
       setCreating(false);
     }

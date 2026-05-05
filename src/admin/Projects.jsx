@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiProjects } from '../api/projects.js';
+import { useConfirm, useToast } from './ui/UIProvider.jsx';
 
 // Admin screen for the /projects portfolio list.
 // Backend ProjectIn fields: name, description, lang, stars, status, sort_order, visible.
@@ -14,6 +15,8 @@ export default function Projects() {
 
   const [edits, setEdits] = useState({}); // { [name]: partial }
   const [savingName, setSavingName] = useState(null);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   async function load() {
     setLoading(true);
@@ -59,7 +62,7 @@ export default function Projects() {
         return next;
       });
     } catch (err) {
-      alert(`save failed: ${err?.detail || err.message}`);
+      toast.error(`保存失败：${err?.detail || err.message}`);
     } finally {
       setSavingName(null);
     }
@@ -73,20 +76,27 @@ export default function Projects() {
       });
       setRows((prev) => prev.map((r) => (r.name === row.name ? updated : r)));
     } catch (err) {
-      alert(`toggle failed: ${err?.detail || err.message}`);
+      toast.error(`切换失败：${err?.detail || err.message}`);
     } finally {
       setSavingName(null);
     }
   }
 
   async function deleteRow(row) {
-    if (!confirm(`delete project ${row.name}?`)) return;
+    const ok = await confirm({
+      title: '删除项目',
+      message: `确定删除项目 ${row.name} 吗？`,
+      confirmLabel: '删除',
+      destructive: true,
+    });
+    if (!ok) return;
     setSavingName(row.name);
     try {
       await apiProjects.remove(row.name);
       setRows((prev) => prev.filter((r) => r.name !== row.name));
+      toast.success('已删除');
     } catch (err) {
-      alert(`delete failed: ${err?.detail || err.message}`);
+      toast.error(`删除失败：${err?.detail || err.message}`);
     } finally {
       setSavingName(null);
     }
@@ -104,7 +114,7 @@ export default function Projects() {
       await apiProjects.reorder(next.map((r) => r.name));
       load();
     } catch (err) {
-      alert(`reorder failed: ${err?.detail || err.message}`);
+      toast.error(`排序失败：${err?.detail || err.message}`);
       load();
     }
   }
@@ -126,8 +136,9 @@ export default function Projects() {
       });
       setDraft(emptyDraft());
       load();
+      toast.success('项目已创建');
     } catch (err) {
-      alert(`create failed: ${err?.detail || err.message}`);
+      toast.error(`创建失败：${err?.detail || err.message}`);
     } finally {
       setCreating(false);
     }

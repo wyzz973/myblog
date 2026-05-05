@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiTokens } from '../../api/apiTokens.js';
+import { useConfirm } from '../ui/UIProvider.jsx';
 
 export default function ApiTokens() {
   const [rows, setRows] = useState(null);
@@ -12,6 +13,7 @@ export default function ApiTokens() {
 
   const [secret, setSecret] = useState(null); // ApiTokenCreateResponse on success
   const [revokingId, setRevokingId] = useState(null);
+  const confirm = useConfirm();
 
   async function refresh() {
     setLoading(true);
@@ -64,7 +66,13 @@ export default function ApiTokens() {
   }
 
   async function onRevoke(id) {
-    if (!confirm(`Revoke token #${id}? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: '吊销 token',
+      message: `确定吊销 token #${id} 吗？此操作不可撤销。`,
+      confirmLabel: '吊销',
+      destructive: true,
+    });
+    if (!ok) return;
     setRevokingId(id);
     setError(null);
     try {

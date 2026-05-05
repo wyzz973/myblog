@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiPet } from '../../api/pet.js';
 import VisitorProfileSidebar from './VisitorProfileSidebar.jsx';
+import { useConfirm, useToast } from '../ui/UIProvider.jsx';
 
 export default function PetConversationDetail() {
   const { visitorHash } = useParams();
@@ -12,6 +13,8 @@ export default function PetConversationDetail() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   async function loadPage(reset = false) {
     setLoading(true);
@@ -39,11 +42,19 @@ export default function PetConversationDetail() {
   }, [visitorHash]);
 
   async function handleDelete() {
-    if (!confirm(`Delete ALL messages for ${visitorHash}? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: '删除整条对话',
+      message: `确定删除 ${visitorHash} 的所有消息吗？此操作不可撤销。`,
+      confirmLabel: '删除',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await apiPet.deleteConversation(visitorHash);
+      toast.success('对话已删除');
       nav('/admin/pet?tab=conversations');
     } catch (e) {
+      toast.error(`删除失败：${e?.detail || e?.message || '未知错误'}`);
       setError(e?.detail || e?.message || 'delete failed');
     }
   }

@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext.jsx';
 import CommandPalette from './CommandPalette.jsx';
 import ShortcutsHelp from './ShortcutsHelp.jsx';
 import useGlobalShortcuts from './useGlobalShortcuts.js';
+import UIProvider from './ui/UIProvider.jsx';
 import { postsApi } from '../api/posts.js';
 import { getToken } from '../api/admin.js';
 
@@ -154,6 +155,7 @@ export default function Layout() {
   );
 
   return (
+    <UIProvider>
     <div className="admin-shell" style={styles.shell}>
       <CommandPalette
         open={paletteOpen}
@@ -229,6 +231,7 @@ export default function Layout() {
         </main>
       </div>
     </div>
+    </UIProvider>
   );
 }
 

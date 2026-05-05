@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { commentsApi } from '../api/comments.js';
+import { useConfirm, useToast } from './ui/UIProvider.jsx';
 
 // Backend status enum is pending|approved|spam; "all" is a frontend-only
 // pseudo-filter that omits the status query param.
@@ -22,6 +23,8 @@ export default function Comments() {
   const [replyText, setReplyText] = useState('');
   const [selected, setSelected] = useState(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const reload = useCallback(() => setReloadTick((t) => t + 1), []);
 
@@ -71,23 +74,26 @@ export default function Comments() {
   async function bulkAction(action) {
     if (selected.size === 0) return;
     const verb = { approve: '通过', spam: '标垃圾', pending: '退回待审', delete: '删除' }[action];
-    // eslint-disable-next-line no-alert
-    if (!confirm(`确定${verb} ${selected.size} 条评论？`)) return;
+    const ok = await confirm({
+      title: `${verb}评论`,
+      message: `确定${verb} ${selected.size} 条评论吗？`,
+      confirmLabel: verb,
+      destructive: action === 'delete',
+    });
+    if (!ok) return;
     setBulkBusy(true);
     try {
       const ids = [...selected];
       const res = await commentsApi.bulk(action, ids);
-      // After server confirms, reload from source so per-tab membership is correct.
       setSelected(new Set());
       reload();
-      // Optionally surface affected count somewhere; reuse alert for now.
       if (typeof res?.affected === 'number' && res.affected !== ids.length) {
-        // eslint-disable-next-line no-alert
-        alert(`已处理 ${res.affected}/${ids.length} 条`);
+        toast.info(`已处理 ${res.affected}/${ids.length} 条`);
+      } else {
+        toast.success(`已${verb} ${ids.length} 条评论`);
       }
     } catch (err) {
-      // eslint-disable-next-line no-alert
-      alert(`批量操作失败：${err?.detail || err?.message}`);
+      toast.error(`批量操作失败：${err?.detail || err?.message}`);
     } finally {
       setBulkBusy(false);
     }
@@ -114,25 +120,29 @@ export default function Comments() {
       }
     } catch (err) {
       setItems(prev);
-      // eslint-disable-next-line no-alert
-      alert(`update failed: ${err?.detail || err?.message}`);
+      toast.error(`更新失败：${err?.detail || err?.message}`);
     } finally {
       setBusyId(null);
     }
   }
 
   async function onDelete(c) {
-    // eslint-disable-next-line no-alert
-    if (!confirm(`Delete comment by "${c.who}"? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: '删除评论',
+      message: `确定删除 “${c.who}” 的评论吗？此操作不可撤销。`,
+      confirmLabel: '删除',
+      destructive: true,
+    });
+    if (!ok) return;
     setBusyId(c.id);
     const prev = items;
     setItems((arr) => arr.filter((x) => x.id !== c.id));
     try {
       await commentsApi.remove(c.id);
+      toast.success('已删除');
     } catch (err) {
       setItems(prev);
-      // eslint-disable-next-line no-alert
-      alert(`delete failed: ${err?.detail || err?.message}`);
+      toast.error(`删除失败：${err?.detail || err?.message}`);
     } finally {
       setBusyId(null);
     }
@@ -146,10 +156,10 @@ export default function Comments() {
       await commentsApi.patch(c.id, { reply_body: text });
       setReplyOpen(null);
       setReplyText('');
+      toast.success('已回复');
       reload();
     } catch (err) {
-      // eslint-disable-next-line no-alert
-      alert(`reply failed: ${err?.detail || err?.message}`);
+      toast.error(`回复失败：${err?.detail || err?.message}`);
     } finally {
       setBusyId(null);
     }

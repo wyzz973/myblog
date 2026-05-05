@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiContacts } from '../api/contacts.js';
+import { useConfirm, useToast } from './ui/UIProvider.jsx';
 
 // Admin screen for the social-link contacts strip.
 // - Lists rows in sort_order
@@ -18,6 +19,8 @@ export default function Contacts() {
 
   // dirty editing state keyed by id: { id: { label, value, href } }
   const [edits, setEdits] = useState({});
+  const confirm = useConfirm();
+  const toast = useToast();
   const [savingId, setSavingId] = useState(null);
 
   async function load() {
@@ -66,7 +69,7 @@ export default function Contacts() {
         return next;
       });
     } catch (err) {
-      alert(`save failed: ${err?.detail || err.message}`);
+      toast.error(`保存失败：${err?.detail || err.message}`);
     } finally {
       setSavingId(null);
     }
@@ -80,20 +83,27 @@ export default function Contacts() {
       });
       setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
     } catch (err) {
-      alert(`toggle failed: ${err?.detail || err.message}`);
+      toast.error(`切换失败：${err?.detail || err.message}`);
     } finally {
       setSavingId(null);
     }
   }
 
   async function deleteRow(row) {
-    if (!confirm(`delete ${row.label}?`)) return;
+    const ok = await confirm({
+      title: '删除联系方式',
+      message: `确定删除 ${row.label} 吗？`,
+      confirmLabel: '删除',
+      destructive: true,
+    });
+    if (!ok) return;
     setSavingId(row.id);
     try {
       await apiContacts.remove(row.id);
       setRows((prev) => prev.filter((r) => r.id !== row.id));
+      toast.success('已删除');
     } catch (err) {
-      alert(`delete failed: ${err?.detail || err.message}`);
+      toast.error(`删除失败：${err?.detail || err.message}`);
     } finally {
       setSavingId(null);
     }
@@ -113,7 +123,7 @@ export default function Contacts() {
       // refresh sort_order values from backend
       load();
     } catch (err) {
-      alert(`reorder failed: ${err?.detail || err.message}`);
+      toast.error(`排序失败：${err?.detail || err.message}`);
       load();
     }
   }
@@ -133,8 +143,9 @@ export default function Contacts() {
       });
       setDraft(emptyDraft());
       load();
+      toast.success('已新建联系方式');
     } catch (err) {
-      alert(`create failed: ${err?.detail || err.message}`);
+      toast.error(`新建失败：${err?.detail || err.message}`);
     } finally {
       setCreating(false);
     }

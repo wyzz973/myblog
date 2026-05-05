@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiMedia, mediaUrl } from '../api/media.js';
+import { useConfirm } from './ui/UIProvider.jsx';
 
 export default function Media() {
   const [items, setItems] = useState([]);
@@ -9,6 +10,7 @@ export default function Media() {
   const [uploading, setUploading] = useState(false);
   const [uploadFails, setUploadFails] = useState([]);
   const [toast, setToast] = useState(null);
+  const confirm = useConfirm();
   const fileRef = useRef(null);
   const dropRef = useRef(null);
   const [dragActive, setDragActive] = useState(false);
@@ -98,7 +100,13 @@ export default function Media() {
   }
 
   async function onDelete(id) {
-    if (!confirm('Delete this media item? This cannot be undone.')) return;
+    const ok = await confirm({
+      title: '删除媒体',
+      message: '确定删除这个媒体文件吗？此操作不可撤销。',
+      confirmLabel: '删除',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await apiMedia.remove(id);
       setItems((prev) => prev.filter((m) => m.id !== id));

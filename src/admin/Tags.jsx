@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { tagsApi } from '../api/tags.js';
+import { useConfirm, useToast } from './ui/UIProvider.jsx';
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,31}$/;
 const DEFAULT_NEW = { slug: '', name: '', color: '#7dd3a4', sort_order: 0 };
@@ -12,6 +13,8 @@ export default function Tags() {
   const [editingDraft, setEditingDraft] = useState(null);
   const [newDraft, setNewDraft] = useState(null); // null when not creating
   const [busy, setBusy] = useState(false);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const load = useCallback(() => {
     let mounted = true;
@@ -53,8 +56,7 @@ export default function Tags() {
   async function saveEdit() {
     if (!editingDraft) return;
     if (!SLUG_RE.test(editingDraft.slug)) {
-      // eslint-disable-next-line no-alert
-      alert('slug must match ^[a-z0-9][a-z0-9-]{1,31}$');
+      toast.error('slug 必须匹配 ^[a-z0-9][a-z0-9-]{1,31}$');
       return;
     }
     setBusy(true);
@@ -62,25 +64,30 @@ export default function Tags() {
       await tagsApi.patch(editingId, editingDraft);
       setEditingId(null);
       setEditingDraft(null);
+      toast.success('已保存');
       load();
     } catch (err) {
-      // eslint-disable-next-line no-alert
-      alert(`save failed: ${err?.detail || err?.message}`);
+      toast.error(`保存失败：${err?.detail || err?.message || '未知错误'}`);
     } finally {
       setBusy(false);
     }
   }
 
   async function onDelete(t) {
-    // eslint-disable-next-line no-alert
-    if (!confirm(`Delete tag "${t.slug}"?`)) return;
+    const ok = await confirm({
+      title: '删除标签',
+      message: `确定删除 “${t.slug}” 吗？`,
+      confirmLabel: '删除',
+      destructive: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await tagsApi.remove(t.id);
+      toast.success(`已删除 ${t.slug}`);
       load();
     } catch (err) {
-      // eslint-disable-next-line no-alert
-      alert(`delete failed: ${err?.detail || err?.message}`);
+      toast.error(`删除失败：${err?.detail || err?.message || '未知错误'}`);
     } finally {
       setBusy(false);
     }
@@ -89,18 +96,17 @@ export default function Tags() {
   async function createNew() {
     if (!newDraft) return;
     if (!SLUG_RE.test(newDraft.slug)) {
-      // eslint-disable-next-line no-alert
-      alert('slug must match ^[a-z0-9][a-z0-9-]{1,31}$');
+      toast.error('slug 必须匹配 ^[a-z0-9][a-z0-9-]{1,31}$');
       return;
     }
     setBusy(true);
     try {
       await tagsApi.create(newDraft);
       setNewDraft(null);
+      toast.success('标签已创建');
       load();
     } catch (err) {
-      // eslint-disable-next-line no-alert
-      alert(`create failed: ${err?.detail || err?.message}`);
+      toast.error(`创建失败：${err?.detail || err?.message || '未知错误'}`);
     } finally {
       setBusy(false);
     }
@@ -115,8 +121,7 @@ export default function Tags() {
     try {
       await tagsApi.reorder(next.map((t) => t.id));
     } catch (err) {
-      // eslint-disable-next-line no-alert
-      alert(`reorder failed: ${err?.detail || err?.message}`);
+      toast.error(`排序失败：${err?.detail || err?.message || '未知错误'}`);
       load();
     }
   }

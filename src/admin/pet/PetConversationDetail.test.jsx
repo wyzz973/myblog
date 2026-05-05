@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import PetConversationDetail from './PetConversationDetail.jsx';
+import UIProvider from '../ui/UIProvider.jsx';
 
 vi.mock('../../api/pet.js', () => ({
   apiPet: {
@@ -38,35 +39,34 @@ beforeEach(async () => {
   apiPet.deleteConversation.mockResolvedValue(null);
 });
 
-describe('PetConversationDetail', () => {
-  it('renders messages oldest first', async () => {
-    render(
+function withProvider(ui) {
+  return (
+    <UIProvider>
       <MemoryRouter initialEntries={['/admin/pet/conversations/abc']}>
         <Routes>
-          <Route path="/admin/pet/conversations/:visitorHash" element={<PetConversationDetail />} />
+          <Route path="/admin/pet/conversations/:visitorHash" element={ui} />
         </Routes>
-      </MemoryRouter>,
-    );
+      </MemoryRouter>
+    </UIProvider>
+  );
+}
+
+describe('PetConversationDetail', () => {
+  it('renders messages oldest first', async () => {
+    render(withProvider(<PetConversationDetail />));
     await waitFor(() => screen.getByText(/meow hi/));
     const replies = screen.getAllByTestId('reply-text');
     expect(replies[0]).toHaveTextContent('meow hi');
     expect(replies[1]).toHaveTextContent('interesting article');
   });
 
-  it('delete button prompts confirm and calls api', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('delete button opens ConfirmModal and calls api on 删除', async () => {
     const { apiPet } = await import('../../api/pet.js');
-    render(
-      <MemoryRouter initialEntries={['/admin/pet/conversations/abc']}>
-        <Routes>
-          <Route path="/admin/pet/conversations/:visitorHash" element={<PetConversationDetail />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    render(withProvider(<PetConversationDetail />));
     await waitFor(() => screen.getByText(/meow hi/));
     fireEvent.click(screen.getByText(/delete all/i));
-    expect(confirmSpy).toHaveBeenCalled();
-    expect(apiPet.deleteConversation).toHaveBeenCalledWith('abc');
-    confirmSpy.mockRestore();
+    const ok = await screen.findByTestId('confirm-ok');
+    fireEvent.click(ok);
+    await waitFor(() => expect(apiPet.deleteConversation).toHaveBeenCalledWith('abc'));
   });
 });
