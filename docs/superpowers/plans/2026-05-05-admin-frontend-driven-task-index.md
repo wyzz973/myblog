@@ -186,7 +186,7 @@ Strict rules:
 
 ### Task 3 — Posts editor: status / scheduled_at / featured / private / comments_enabled GUI
 
-**Status:** pending
+**Status:** completed
 **Priority:** high
 **Frontend evidence:** every public post on `/p/:id` (`Reader.jsx`) — `post.status / featured / private / comments_enabled` directly drive whether and how it renders. Today the editor only edits these via raw YAML.
 **Owner problem:** publishing a post requires knowing YAML and remembering the field name — typos demote the post to draft (we hit this exact bug last loop). C1 capability.
@@ -208,9 +208,15 @@ Strict rules:
   4. visit `/p/<id>` on public → assert it 404s (because not published)
   5. flip back to published → save → public renders → screenshot
 **Snapshot location:** `/tmp/admin-rebuild/task-3/editor-fields.png`, `/tmp/admin-rebuild/task-3/public-after.png`
-**Commit message:** `feat(admin/posts): GUI controls for status / scheduled_at / lifecycle flags`
+**Commit message:** `feat(admin/posts): GUI controls for status, scheduled_at, lifecycle flags`
 **Definition of done:** standard checklist
-**Completed:** —
+**Completed:** `b08f712` (`feat(admin/posts): GUI controls for status, scheduled_at, lifecycle flags`).
+
+- **Tests:** `npx vitest run src/admin/frontmatter.test.js` → 11/11 passing (parse + serialize round-trip, body separator preserved, quote-on-colon, setFmField add / flip / remove, boolean-omit-when-false, unknown-key round-trip). Combined `npx vitest run src/api/admin.test.js src/admin/Login.test.jsx src/admin/frontmatter.test.js` → 23/23 (no Task 1/2 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-3/verify.py` → end-to-end with real backend: login → open vps editor → GUI status select reflects persisted status → flip status via select → YAML rewrites → save → backend persists → public `/api/posts/vps` 404s when not published → restore → toggle featured via GUI → backend persists → restore. All assertions green; vps post finally restored to status=published, featured=false.
+- **Snapshots:** `/tmp/admin-rebuild/task-3/{editor-fields,after-featured-toggle,restored}.png`.
+
+Implementation note: a new `src/admin/frontmatter.js` module hosts the GUI ↔ YAML round-trip helpers (parse, serialize, setFmField). The editor stays a single source of truth — the markdown text — with GUI controls mutating it via `setFmField` and a `useMemo` deriving the current `fm` for control state. Subsumes a prior frontmatter-rebuild fix (`.filter(Boolean)` regression that dropped the body separator).
 
 ---
 
@@ -974,3 +980,4 @@ Append-only. Every entry below means a real commit shipped.
 | 0 | Establish PRD + task-index | `2177eda` | n/a (docs round) | n/a (docs round) | 2026-05-05 |
 | 1 | Login 2FA challenge handling | `da9dd66` | `vitest run src/admin/Login.test.jsx` 5/5 | `python /tmp/admin-rebuild/task-1/verify.py` PASSED | 2026-05-05 |
 | 2 | Refresh-token rotation wired in AuthContext | `30f4db3` | `vitest run src/api/admin.test.js src/admin/Login.test.jsx` 12/12 | `python /tmp/admin-rebuild/task-2/verify.py` PASSED | 2026-05-05 |
+| 3 | Posts editor GUI for lifecycle fields | `b08f712` | `vitest run src/admin/frontmatter.test.js` 11/11 | `python /tmp/admin-rebuild/task-3/verify.py` PASSED | 2026-05-05 |
