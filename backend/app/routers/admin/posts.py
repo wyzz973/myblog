@@ -95,6 +95,34 @@ async def create_post(
     return await _detail(s, post)
 
 
+# Task 49: must be declared BEFORE /posts/{post_id} so the literal slug
+# "next-n" doesn't get swallowed by the path parameter route.
+@router.get("/posts/next-n")
+async def next_post_number(
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    """Suggest the next 3-digit `n` for a new post.
+
+    Looks at all posts (regardless of status) and returns max(n)+1 zero-
+    padded to 3 digits. Skips rows whose `n` isn't numeric. Returns
+    "001" when the table is empty.
+    """
+    rows = (await s.execute(select(Post.n))).scalars().all()
+    max_n = 0
+    for raw in rows:
+        try:
+            v = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if v > max_n:
+            max_n = v
+    next_n = max_n + 1
+    if next_n > 999:
+        return {"n": str(next_n)}
+    return {"n": f"{next_n:03d}"}
+
+
 @router.get("/posts/{post_id}", response_model=PostDetail)
 async def get_post(
     post_id: str,
@@ -321,3 +349,5 @@ async def export_all_posts(
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
     )
+
+

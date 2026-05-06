@@ -93,7 +93,35 @@ export default function PostEditor({ id, onClose, onSaved }) {
       if (draft && draft.markdown !== NEW_POST_TEMPLATE) {
         setDraftCandidate(draft);
       }
-      return;
+      // Task 49: ask the backend for the next free 3-digit `n`. We only
+      // overwrite the template if the user hasn't typed yet (dirtyRef)
+      // and hasn't elected to recover a stale draft — otherwise their
+      // input wins.
+      let mounted = true;
+      postsApi
+        .nextN()
+        .then((res) => {
+          if (!mounted || dirtyRef.current) return;
+          const n = res?.n;
+          if (typeof n !== 'string' || n === '001') return;
+          setMarkdown((cur) => {
+            // Only substitute if the editor still holds the pristine
+            // template — the user may have already pasted something or
+            // recovered a draft while the request was in flight.
+            if (cur !== NEW_POST_TEMPLATE) return cur;
+            try {
+              return setFmField(cur, 'n', n);
+            } catch {
+              return cur;
+            }
+          });
+        })
+        .catch(() => {
+          /* keep the "001" default — backend will 409 if it's taken */
+        });
+      return () => {
+        mounted = false;
+      };
     }
     let mounted = true;
     setLoading(true);

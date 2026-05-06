@@ -240,3 +240,72 @@ async def test_export_tar_round_trips_through_upload(client, auth):
 async def test_export_tar_requires_session(client):
     r = await client.get("/api/admin/posts.tar")
     assert r.status_code == 401
+
+
+# --- Task 49: next-n suggestion ---
+
+
+async def test_next_n_returns_string_with_3_digit_zero_padding(client, auth):
+    r = await client.get("/api/admin/posts/next-n", headers=auth)
+    assert r.status_code == 200, r.text
+    n = r.json()["n"]
+    assert isinstance(n, str)
+    # Either 3-digit zero-padded or numeric overflow string.
+    assert n.isdigit()
+
+
+async def test_next_n_increments_after_create(client, auth):
+    """Create a post with n="100"; next-n should bump to "101"."""
+    await client.delete("/api/admin/posts/t49-next-a", headers=auth)
+    seed = (
+        '---\nid: t49-next-a\nn: "100"\ntitle: t49a\ntag: devtools\n'
+        'date: 2026-04-25\nlang: en\nstatus: draft\n---\n\nbody\n'
+    )
+    create = await client.post(
+        "/api/admin/posts", json={"markdown": seed}, headers=auth,
+    )
+    assert create.status_code == 201, create.text
+    try:
+        r = await client.get("/api/admin/posts/next-n", headers=auth)
+        n = r.json()["n"]
+        # Expect 101 — but the suite may have a higher-numbered post lying
+        # around; the only firm guarantee is `int(n) > 100`.
+        assert int(n) > 100, n
+        assert len(n) >= 3, n
+    finally:
+        await client.delete("/api/admin/posts/t49-next-a", headers=auth)
+
+
+async def test_next_n_unauth_401(client):
+    r = await client.get("/api/admin/posts/next-n")
+    assert r.status_code == 401
+
+
+async def test_next_n_skips_non_numeric_rows(client, auth):
+    """A post with n="abc" must not break the max(int(n)) calc."""
+    await client.delete("/api/admin/posts/t49-next-bogus", headers=auth)
+    # Create through DB since the API would reject n="abc" via PostFrontmatter pattern.
+    from datetime import date, datetime, UTC
+    from sqlalchemy import select
+    from app.db import AsyncSessionLocal
+    from app.models import Post, Tag
+    async with AsyncSessionLocal() as s:
+        tag = (await s.execute(select(Tag).limit(1))).scalar_one()
+        s.add(Post(
+            id="t49-next-bogus", n="abc", title="bogus n", subtitle=None,
+            tag_id=tag.id, date=date(2026, 1, 1), lang="en",
+            body_md="x", body_json=[], word_count=0,
+            status="draft", featured=False, private=False, comments_enabled=True,
+            created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+        ))
+        await s.commit()
+    try:
+        r = await client.get("/api/admin/posts/next-n", headers=auth)
+        assert r.status_code == 200
+        # Should return a valid digit string regardless of the bogus row.
+        assert r.json()["n"].isdigit()
+    finally:
+        from sqlalchemy import delete
+        async with AsyncSessionLocal() as s:
+            await s.execute(delete(Post).where(Post.id == "t49-next-bogus"))
+            await s.commit()

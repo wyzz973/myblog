@@ -109,6 +109,11 @@ export const postsApi = {
     err.detail = detail;
     throw err;
   },
+  // Task 49: ask the backend for the next 3-digit `n` so the editor can
+  // pre-fill the new-post template without colliding with an existing row.
+  nextN() {
+    return adminRequest('/posts/next-n');
+  },
   // Task 42: download every post as a single tar archive — round-trips
   // through bulkUpload for full backup/restore.
   async downloadTar() {
