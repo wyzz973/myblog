@@ -1999,3 +1999,23 @@ Implementation note: drafts/scheduled posts intentionally still render the link 
 **Commit:** `b020503` (`feat(admin/posts): 状态 pill column on list rows (Task 51)`).
 
 Implementation note: status pills use `color-mix(in oklab, var(--<color>) NN%, transparent)` for borders so the pills inherit the user's theme color shifts (Palette.jsx swaps the accent token at runtime). This is the same pattern the rest of the admin already uses for borderless mid-tones — pills look right under any palette without hardcoding hex values.
+
+---
+
+### Task 52 — public footer renders editable footer_note ✅
+
+**Frontend dependency:** PRD §7 last gap "Hardcoded: footer copy editable or auto-derived" was still open. The SiteMeta.footer_note column has existed since alembic 0001, the admin SiteIdentity page already edits it, and `/api/site` returns it — but `App.jsx`'s footer ignored the field and rendered a static `"hand-coded · no trackers · powered by coffee"` line.
+
+**Backend:** none — `/api/admin/site` PUT and `/api/site` already round-trip `footer_note`.
+
+**Frontend:** the footer in `App.jsx` now reads `siteData.footer_note` (when non-empty after trim) and falls back to the original hardcoded copy otherwise. The year is also derived from `new Date().getFullYear()` so the visible "© 2026" no longer freezes the codebase to a particular year.
+
+**Tests:** vitest sweep `npx vitest run` → **265/265** unchanged. No new vitest test — the home App.jsx isn't covered by an existing render-only suite, and the field's behavior is already covered by `backend/tests/test_admin_site.py` (PUT round-trip) + `backend/tests/test_public_misc.py` (public payload includes the field).
+
+**Playwright:** `/Users/sd3/anaconda3/bin/python /tmp/admin-rebuild/task-52/verify.py` PASSED — round-trip via PUT /api/admin/site, assert public /api/site echoes, then UI smoke verifying both states (custom phrase rendered with hardcoded fallback hidden; blank value brings the fallback back). Restores the original footer_note (with `[task5-…]` markers stripped) at the end so the dev DB stays clean.
+
+**Snapshot:** `/tmp/admin-rebuild/task-52/footer-with-custom-note.png`.
+
+**Commit:** `7918791` (`feat(public/footer): render editable footer_note (Task 52)`).
+
+Implementation note: the verify pass also accidentally demonstrated that the dev DB had been accumulating `[task5-1777994316]`-style debris in `footer_note` from earlier loop rounds. The cleanup is a side effect of the restore step — the next public homepage visit will show the clean phrase. Fixing the upstream test that wrote those markers (likely an integration scenario in `task-5/` that didn't restore on success) is a separate hygiene item; this task is just about making the field's downstream rendering work.
