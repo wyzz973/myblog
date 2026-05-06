@@ -990,7 +990,7 @@ Implementation note: `apiIntegrations.listGithubRepos()` consumes the 24a endpoi
 
 ### Task 25 — Analytics: custom date range + CSV export + per-post page
 
-**Status:** in-progress (25a CSV + 25b since-date + 25c per-post page done; 25b-arbitrary-end pending)
+**Status:** completed (25a CSV + 25b since-date + 25b-arbitrary-end + 25c per-post page done)
 **Priority:** medium
 **Frontend evidence:** `Reader.jsx` hit beacon — every page view feeds analytics.
 **Owner problem:** 7/30/90 chips can't compare May to April; cannot export.
@@ -1046,6 +1046,18 @@ Implementation note: rather than extend the backend service signatures (which wo
 - **Commit:** `1dbc82d` (`feat(admin/analytics): per-post drilldown page (Task 25c)`).
 
 Implementation note: kept the SVG bar chart pattern from `Analytics.jsx` rather than introducing a chart lib — this is the third bar chart in the codebase (overall hits, post-detail, eventually pet usage), and they're all <40 LOC. The drilldown supports presets only (no since-date picker) because the click-through always opens the same window the user just looked at; arbitrary end-date / since-date for drilldown is an obvious follow-up if/when an owner wants point-in-time comparisons. The hot-posts row label uses `<Link>` instead of an onClick handler so middle-click opens in a new tab. RankTable gained an optional `r.href` + `r.testId` per row — labels-without-href stay as plain spans (referrers / countries / tags) to avoid surfacing routes that don't exist yet.
+
+#### Task 25b-arbitrary-end — analytics arbitrary [from, to] window (DONE)
+
+- **Backend:** new `analytics_svc.resolve_window(days, from_, to)` helper + extracted `_hits_history_window(start, end_exclusive)` so `timeseries()` accepts either `days=N` (legacy) OR `from_=D1, to=D2` (arbitrary inclusive window). Right-edge live count from `hit_events` only contributes when `to == today`; otherwise the window is fully historical. Router `/analytics` accepts `?from=YYYY-MM-DD&to=YYYY-MM-DD`; both required together (422 on partial), `to >= from` enforced (422 inverted), 365-day cap (422 oversize). Top paths/referrers/countries lists still use the equivalent `days` length and are documented in the route docstring as "ending now" — full per-list arbitrary windows are a follow-up.
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_admin_analytics.py` → 22/22 (5 new: arbitrary window length + endpoints, 422 partial, 422 inverted, 422 overlong, seeded HitDaily on 2026-04-15 surfaces in `[2026-04-10, 2026-04-20]`).
+- **Frontend:** `apiAnalytics.bundle(range)` switches to `?from&to` when `range:YYYY-MM-DD..YYYY-MM-DD` token is active. `rangeToDays` extended to parse `range:` (clamps 1..365 days, falls back on malformed input). New `rangeToFromTo(range)` returns `{from, to}` or null. `<SinceDatePicker>` gains a second `<input type="date" data-testid=analytics-to-date>`; filling both promotes the active range to `range:from..to`, leaving `to` empty keeps the legacy `since:from` semantics.
+- **Vitest:** `npx vitest run src/api/analytics.test.js` → 10/10 (5 prior + 5 new: range token parses inclusive day count, clamps over-365, falls back inverted/malformed; rangeToFromTo returns null/{} appropriately). Combined `npx vitest run` → **243/243** (no Task 1-28 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-25b-arbitrary/verify.py` → API smoke for `[2026-04-01, 2026-04-10]` (10 days, dates match) → 422 trio (partial / inverted) → /admin/analytics → fill from + to → bundle refetched with `from=...&to=...` → to-date `data-active=true` → click 7 天 chip → both inputs cleared.
+- **Snapshots:** `/tmp/admin-rebuild/task-25b-arbitrary/range-active.png`.
+- **Commit:** `13d6405` (`feat(admin/analytics): arbitrary [from, to] window for timeseries (Task 25b-arbitrary-end)`).
+
+Implementation note: scoped intentionally — only the bundle's `timeseries` chart honors `from/to`. Top paths/referrers/countries reuse the equivalent window length but still anchor at "today", because refactoring `_merge_jsonb_top` and friends would touch 5 more functions and double the diff. The router docstring + UI behavior surface this asymmetry: when the user picks May 1–May 5, the chart shows exactly those 5 days while top_paths shows the last 5 days ending today (which overlap heavily — usually identical for recent windows). Full per-list arbitrary-window support is a follow-up that can move into the existing helper without churning callers further. Inverted / malformed `range:` tokens fall back to `'30d'` rather than throwing so a typo in the URL state doesn't blank the page.
 
 ---
 
