@@ -87,6 +87,37 @@ export const apiPet = {
       { method: 'DELETE' },
     );
   },
+  // Task 41: download whole-conversation archive in JSON or Markdown.
+  // Bearer auth is required, so we go via authenticated fetch + Blob URL
+  // rather than a plain <a download> link (admin tokens live in localStorage,
+  // not cookies). Returns the suggested filename so callers can surface a
+  // small confirmation toast.
+  async downloadConversation(visitorHash, format = 'json') {
+    const path = `/pet/conversations/${encodeURIComponent(visitorHash)}/export.${format}`;
+    const token = getToken();
+    const r = await fetch(`${BASE}/api/admin${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) {
+      const detail = await r.text().catch(() => `${r.status}`);
+      const err = new Error(`${r.status} ${detail}`);
+      err.status = r.status;
+      throw err;
+    }
+    const blob = await r.blob();
+    const cd = r.headers.get('content-disposition') || '';
+    const m = cd.match(/filename="([^"]+)"/);
+    const filename = m ? m[1] : `pet-conversation.${format}`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { filename };
+  },
   // action ∈ "unmute" | "reset"
   patchProfile(visitorHash, action) {
     return request(

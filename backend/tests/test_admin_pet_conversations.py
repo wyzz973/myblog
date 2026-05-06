@@ -252,3 +252,69 @@ async def test_delete_nonexistent_returns_204(client, admin_token):
         headers=_hdr(admin_token),
     )
     assert r.status_code == 204
+
+
+# Task 41: full-conversation export
+
+
+async def test_export_json_returns_all_messages_for_visitor(
+    client, admin_token, seed_pet_messages,
+):
+    r = await client.get(
+        "/api/admin/pet/conversations/alice000000000aa/export.json",
+        headers=_hdr(admin_token),
+    )
+    assert r.status_code == 200, r.text
+    assert "application/json" in r.headers["content-type"]
+    cd = r.headers.get("content-disposition", "")
+    assert "pet-conversation-alice0000000" in cd, cd
+
+    import json as _json
+    body = _json.loads(r.text)
+    assert body["visitor_hash"] == "alice000000000aa"
+    assert "exported_at" in body
+    items = body["items"]
+    # alice has 2 seeded turns, ordered oldest first
+    assert len(items) == 2
+    assert items[0]["reply"] == "alice-1"
+    assert items[1]["reply"] == "alice-2"
+
+
+async def test_export_md_renders_human_readable_transcript(
+    client, admin_token, seed_pet_messages,
+):
+    r = await client.get(
+        "/api/admin/pet/conversations/alice000000000aa/export.md",
+        headers=_hdr(admin_token),
+    )
+    assert r.status_code == 200, r.text
+    assert "text/markdown" in r.headers["content-type"]
+    body = r.text
+    # Heading + the two turns appear in order
+    assert "# Pet conversation" in body
+    assert "alice0000000" in body  # short hash in heading
+    # Both replies present
+    assert "alice-1" in body
+    assert "alice-2" in body
+    # Mode names appear as h3 headings
+    assert "### greet" in body
+    assert "### summary_react" in body
+
+
+async def test_export_unknown_visitor_returns_empty_archive(client, admin_token):
+    """No 404 for unknown hashes — exports stay 200 with an empty items
+    array so the UI can show 'no messages yet' rather than 'error'."""
+    r = await client.get(
+        "/api/admin/pet/conversations/no-such-visitor-hash-x/export.json",
+        headers=_hdr(admin_token),
+    )
+    assert r.status_code == 200, r.text
+    import json as _json
+    assert _json.loads(r.text)["items"] == []
+
+
+async def test_export_requires_session(client):
+    r = await client.get(
+        "/api/admin/pet/conversations/anything/export.json",
+    )
+    assert r.status_code == 401

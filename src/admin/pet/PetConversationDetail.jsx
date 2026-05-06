@@ -41,6 +41,15 @@ export default function PetConversationDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visitorHash]);
 
+  async function handleExport(format) {
+    try {
+      const { filename } = await apiPet.downloadConversation(visitorHash, format);
+      toast.success(`已导出 ${filename}`);
+    } catch (e) {
+      toast.error(`导出失败：${e?.detail || e?.message || '未知错误'}`);
+    }
+  }
+
   async function handleDelete() {
     const ok = await confirm({
       title: '删除整条对话',
@@ -70,6 +79,16 @@ export default function PetConversationDetail() {
           {visitorHash} · {items.length > 0 && items[0].species} · {items.length} messages
         </h2>
         <span className="grow" />
+        <button
+          type="button"
+          onClick={() => handleExport('json')}
+          data-testid="conv-export-json"
+        >导出 JSON</button>
+        <button
+          type="button"
+          onClick={() => handleExport('md')}
+          data-testid="conv-export-md"
+        >导出 Markdown</button>
         <button type="button" onClick={handleDelete} className="danger">
           Delete all
         </button>

@@ -1,5 +1,6 @@
 import base64
-from datetime import datetime
+import json
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 import structlog
@@ -255,6 +256,126 @@ async def get_conversation_detail(
             ),
         }
     return {"items": items, "next_cursor": next_cursor, "profile": profile}
+
+
+# Task 41: full-conversation export. Two formats:
+#   .json — complete PetMessage rows (machine-readable backup)
+#   .md   — human-readable transcript (visitor → pet, mode tags, replies)
+# Both ungated by pagination — owner is taking an archive snapshot.
+
+def _conv_filename(visitor_hash: str, ext: str) -> str:
+    short = visitor_hash[:12] if visitor_hash else "unknown"
+    stamp = datetime.now(UTC).strftime("%Y%m%d")
+    return f"pet-conversation-{short}-{stamp}.{ext}"
+
+
+async def _load_full_conversation(
+    s: AsyncSession, visitor_hash: str
+) -> list[PetMessage]:
+    return (
+        await s.execute(
+            select(PetMessage)
+            .where(PetMessage.visitor_hash == visitor_hash)
+            .order_by(PetMessage.created_at, PetMessage.id)
+        )
+    ).scalars().all()
+
+
+@router.get("/pet/conversations/{visitor_hash}/export.json")
+async def export_conversation_json(
+    visitor_hash: str,
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> Response:
+    """Whole-conversation JSON dump for archival/backup."""
+    rows = await _load_full_conversation(s, visitor_hash)
+    items = [
+        {
+            "id": r.id,
+            "visitor_hash": r.visitor_hash,
+            "species": r.species,
+            "mode": r.mode,
+            "post_id": r.post_id,
+            "title": r.title,
+            "tag_slug": r.tag_slug,
+            "summary": r.summary,
+            "selection": r.selection,
+            "message": r.message,
+            "intent": r.intent,
+            "system_prompt": r.system_prompt,
+            "reply": r.reply,
+            "source": r.source,
+            "estimated_total_tokens": r.estimated_total_tokens,
+            "fallback_level": r.fallback_level,
+            "created_at": r.created_at.isoformat(),
+        }
+        for r in rows
+    ]
+    body = json.dumps(
+        {"visitor_hash": visitor_hash, "exported_at": datetime.now(UTC).isoformat(),
+         "items": items},
+        ensure_ascii=False, indent=2,
+    )
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{_conv_filename(visitor_hash, "json")}"'
+            ),
+        },
+    )
+
+
+@router.get("/pet/conversations/{visitor_hash}/export.md")
+async def export_conversation_markdown(
+    visitor_hash: str,
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> Response:
+    """Whole-conversation Markdown transcript — easier for the owner to skim
+    than the raw JSON. Each turn is a `### mode · timestamp` heading + the
+    visitor's message and the pet's reply, with optional context (post
+    title / selection / summary) when present."""
+    rows = await _load_full_conversation(s, visitor_hash)
+    short = visitor_hash[:12] if visitor_hash else "unknown"
+    parts: list[str] = [
+        f"# Pet conversation · `{short}…`",
+        "",
+        f"_Exported {datetime.now(UTC).isoformat()} · {len(rows)} turns_",
+        "",
+    ]
+    for r in rows:
+        parts.append("---")
+        parts.append(f"### {r.mode} · {r.created_at.isoformat()}")
+        if r.species:
+            parts.append(f"_species: {r.species} · source: {r.source}_")
+        if r.post_id and r.title:
+            parts.append("")
+            parts.append(f"**post:** [{r.title}](/p/{r.post_id})")
+        if r.selection:
+            parts.append("")
+            parts.append(f"> _selection:_ {r.selection}")
+        if r.summary:
+            parts.append("")
+            parts.append(f"> _summary:_ {r.summary}")
+        if r.message:
+            parts.append("")
+            parts.append(f"**visitor:** {r.message}")
+        if r.reply:
+            parts.append("")
+            parts.append(f"**pet:** {r.reply}")
+        parts.append("")
+    body = "\n".join(parts)
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{_conv_filename(visitor_hash, "md")}"'
+            ),
+        },
+    )
 
 
 @router.patch(
