@@ -108,6 +108,32 @@ async def test_admin_list_includes_drafts(client, auth):
     await client.delete("/api/admin/posts/test-draft-1", headers=auth)
 
 
+# --- Task 51: status column on admin list ---
+
+
+async def test_admin_list_summary_carries_status(client, auth):
+    """Admin _summary must populate the lifecycle status so the UI can
+    render a 草稿/已发布/计划 pill per row."""
+    await client.delete("/api/admin/posts/t51-status-draft", headers=auth)
+    draft = (
+        GOOD_MD.replace("status: published", "status: draft")
+        .replace("test-post-1", "t51-status-draft")
+    )
+    create = await client.post(
+        "/api/admin/posts", json={"markdown": draft}, headers=auth,
+    )
+    assert create.status_code == 201, create.text
+    try:
+        r = await client.get("/api/admin/posts?limit=100", headers=auth)
+        assert r.status_code == 200
+        rows = r.json()["items"]
+        by_id = {row["id"]: row for row in rows}
+        assert "t51-status-draft" in by_id, list(by_id)[:5]
+        assert by_id["t51-status-draft"]["status"] == "draft"
+    finally:
+        await client.delete("/api/admin/posts/t51-status-draft", headers=auth)
+
+
 async def test_upload_single_md(client, auth):
     await client.delete("/api/admin/posts/upload-test-1", headers=auth)
     md = GOOD_MD.replace("test-post-1", "upload-test-1")

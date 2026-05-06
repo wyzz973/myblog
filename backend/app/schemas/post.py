@@ -17,6 +17,10 @@ class PostSummary(BaseModel):
     # Total like count. Public list endpoints leave this at 0 (likes are
     # not exposed on the home feed); admin list populates per-post.
     likes: int = 0
+    # Lifecycle status — set by the admin list endpoint so the admin UI
+    # can render 草稿 / 已发布 / 计划 pills. Public list endpoints omit it
+    # (only published rows are visible there) so the field stays None.
+    status: str | None = None
 
 
 class PostDetail(PostSummary):

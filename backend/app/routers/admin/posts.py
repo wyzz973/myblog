@@ -25,6 +25,10 @@ def _summary(p: Post, like_count: int = 0) -> PostSummary:
         id=p.id, n=p.n, title=p.title, subtitle=p.subtitle, tag=p.tag.slug,
         date=p.date, read=p.read, lang=p.lang, summary=p.summary,
         likes=like_count,
+        # Task 51: surface lifecycle status so the admin list can render a
+        # 草稿 / 已发布 / 计划 pill per row. Public summaries leave this
+        # None — they only ever return published rows.
+        status=p.status,
     )
 
 

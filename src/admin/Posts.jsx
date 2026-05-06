@@ -240,6 +240,7 @@ export default function Posts() {
                 <th style={styles.th}>日期</th>
                 <th style={styles.th}>语言</th>
                 <th style={styles.th}>阅读</th>
+                <th style={styles.th}>状态</th>
                 <th style={{ ...styles.th, textAlign: 'right' }}>点赞</th>
                 <th style={{ ...styles.th, textAlign: 'right' }}>操作</th>
               </tr>
@@ -247,7 +248,7 @@ export default function Posts() {
             <tbody>
               {items.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={8} style={styles.empty}>
+                  <td colSpan={9} style={styles.empty}>
                     暂无文章
                   </td>
                 </tr>
@@ -278,6 +279,11 @@ export default function Posts() {
                   <td style={styles.td}>{p.date}</td>
                   <td style={styles.td}>{p.lang}</td>
                   <td style={styles.td}>{p.read || '—'}</td>
+                  <td style={styles.td} data-testid={`status-${p.id}`}>
+                    <span style={statusPillStyle(p.status)}>
+                      {statusLabel(p.status)}
+                    </span>
+                  </td>
                   <td
                     style={{ ...styles.td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
                     data-testid={`likes-${p.id}`}
@@ -358,6 +364,54 @@ export default function Posts() {
       )}
     </div>
   );
+}
+
+// Task 51: render the lifecycle status as a small pill. Colors lean on
+// existing CSS variables — danger (red) for drafts to make "still hidden"
+// pop, accent (theme color) for scheduled/in-flight, ok (green) for
+// published. Unknown / null falls back to a neutral grey so the column
+// never renders a blank cell.
+function statusLabel(status) {
+  switch (status) {
+    case 'published': return '已发布';
+    case 'draft': return '草稿';
+    case 'scheduled': return '计划';
+    default: return status || '—';
+  }
+}
+
+function statusPillStyle(status) {
+  const base = {
+    display: 'inline-block',
+    padding: '2px 8px',
+    fontSize: 10,
+    borderRadius: 3,
+    letterSpacing: '0.04em',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-3)',
+  };
+  if (status === 'published') {
+    return {
+      ...base,
+      borderColor: 'color-mix(in oklab, var(--ok, #2b8a3e) 60%, transparent)',
+      color: 'var(--ok, #2b8a3e)',
+    };
+  }
+  if (status === 'draft') {
+    return {
+      ...base,
+      borderColor: 'color-mix(in oklab, var(--danger) 50%, transparent)',
+      color: 'var(--danger)',
+    };
+  }
+  if (status === 'scheduled') {
+    return {
+      ...base,
+      borderColor: 'color-mix(in oklab, var(--accent, #2563eb) 60%, transparent)',
+      color: 'var(--accent, var(--fg-2))',
+    };
+  }
+  return base;
 }
 
 const styles = {
