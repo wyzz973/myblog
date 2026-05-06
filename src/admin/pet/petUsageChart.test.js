@@ -190,6 +190,28 @@ describe('rowCostUSD', () => {
     expect(rowCostUSD(null)).toBe(0);
     expect(rowCostUSD(undefined)).toBe(0);
   });
+
+  // Task 36
+  it('honors a custom rates map when provided', () => {
+    const customRates = {
+      anthropic: { in_per_m: 100, out_per_m: 200 },
+      default: { in_per_m: 5, out_per_m: 10 },
+    };
+    // anthropic row: 1000 in × 100 / 1e6 + 500 out × 200 / 1e6 = 0.1 + 0.1 = 0.2
+    expect(rowCostUSD(COST_ROWS[0], customRates)).toBeCloseTo(0.2, 6);
+    // unknown source uses customRates.default not the bundled PROVIDER_RATES.default
+    const unk = { source: 'mystery', estimated_input_tokens: 1000, estimated_output_tokens: 0 };
+    expect(rowCostUSD(unk, customRates)).toBeCloseTo(0.005, 6);
+  });
+
+  it('groupCostByDay accepts the custom rates map', () => {
+    const customRates = { anthropic: { in_per_m: 0, out_per_m: 0 }, default: { in_per_m: 0, out_per_m: 0 } };
+    const daily = groupCostByDay(COST_ROWS, customRates);
+    // Every paid row collapses to 0 under zero rates
+    for (const d of daily) {
+      expect(d.cost).toBe(0);
+    }
+  });
 });
 
 describe('groupCostByDay', () => {

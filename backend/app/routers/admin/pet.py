@@ -13,8 +13,15 @@ from app.db import get_session
 from app.deps import current_admin, require_scope
 from app.models import Account, PetMessage, PetUsageEvent, PetVisitorProfile, SiteMeta
 from app.redis import get_redis
-from app.schemas.pet import PetConfig, PetModeTemplates, PetPersonas
-from app.services import pet_context
+from app.schemas.pet import (
+    CostRateItem,
+    CostRateUpdateRequest,
+    CostRatesResponse,
+    PetConfig,
+    PetModeTemplates,
+    PetPersonas,
+)
+from app.services import pet_context, pet_cost_rates
 
 log = structlog.get_logger(__name__)
 
@@ -359,3 +366,50 @@ async def get_pet_usage(
         for row in rows
     ]
     return {"items": items}
+
+
+# Task 36: configurable LLM cost rates.
+@router.get("/pet/cost-rates", response_model=CostRatesResponse)
+async def get_cost_rates(
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> CostRatesResponse:
+    rates = await pet_cost_rates.get_all(s)
+    return CostRatesResponse(
+        rates={k: CostRateItem(**v) for k, v in rates.items()},
+    )
+
+
+@router.put(
+    "/pet/cost-rates",
+    response_model=CostRatesResponse,
+    dependencies=[Depends(require_scope("write"))],
+)
+async def put_cost_rate(
+    body: CostRateUpdateRequest,
+    admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> CostRatesResponse:
+    from fastapi import HTTPException
+    from app.services.event_log import write_event
+    try:
+        await pet_cost_rates.set_rate(
+            s,
+            provider=body.provider,
+            in_per_m=body.in_per_m,
+            out_per_m=body.out_per_m,
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    await write_event(
+        s, type="pet.cost_rates.updated",
+        actor=admin.email,
+        meta={"provider": body.provider, "in_per_m": body.in_per_m, "out_per_m": body.out_per_m},
+    )
+    await s.commit()
+    rates = await pet_cost_rates.get_all(s)
+    return CostRatesResponse(
+        rates={k: CostRateItem(**v) for k, v in rates.items()},
+    )

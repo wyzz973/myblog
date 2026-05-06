@@ -267,3 +267,20 @@ class PublicPetConfig(_Strict):
     tint: str
     enabled: bool
     visitor_can_change: bool
+
+
+# Task 36: configurable LLM cost rates.
+class CostRateItem(_Strict):
+    """One provider's USD-per-1M-token rate pair."""
+    in_per_m: float = Field(ge=0)
+    out_per_m: float = Field(ge=0)
+
+
+class CostRatesResponse(_Strict):
+    rates: dict[str, CostRateItem]
+
+
+class CostRateUpdateRequest(_Strict):
+    provider: Literal["anthropic", "zhipu", "qwen", "doubao", "deepseek"]
+    in_per_m: float = Field(ge=0)
+    out_per_m: float = Field(ge=0)

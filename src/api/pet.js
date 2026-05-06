@@ -97,6 +97,21 @@ export const apiPet = {
   getUsage() {
     return request('/pet/usage');
   },
+  // Task 36: configurable cost rates (USD per 1M tokens). Returns
+  // {rates: {provider: {in_per_m, out_per_m}}}. Includes a "default"
+  // entry for unknown sources.
+  getCostRates() {
+    return request('/pet/cost-rates');
+  },
+  // Task 36: PUT one provider's rate pair. Backend writes into the
+  // provider's existing Integration.extra_json so the API key and rates
+  // share a row.
+  setCostRate({ provider, in_per_m, out_per_m }) {
+    return request('/pet/cost-rates', {
+      method: 'PUT',
+      body: JSON.stringify({ provider, in_per_m, out_per_m }),
+    });
+  },
 };
 
 export default apiPet;

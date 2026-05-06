@@ -212,20 +212,20 @@ export const PROVIDER_RATES = {
 
 const ZERO_COST_SOURCES = new Set(['cache_hit', 'fallback', 'rate_limited']);
 
-export function rowCostUSD(row) {
+export function rowCostUSD(row, rates = PROVIDER_RATES) {
   if (!row) return 0;
   if (ZERO_COST_SOURCES.has(row.source)) return 0;
-  const rate = PROVIDER_RATES[row.source] || PROVIDER_RATES.default;
+  const rate = (rates && rates[row.source]) || (rates && rates.default) || PROVIDER_RATES.default;
   const inTok = Number(row.estimated_input_tokens || 0);
   const outTok = Number(row.estimated_output_tokens || 0);
   return (inTok * rate.in_per_m + outTok * rate.out_per_m) / 1_000_000;
 }
 
-export function groupCostByDay(rows) {
+export function groupCostByDay(rows, rates = PROVIDER_RATES) {
   const days = new Map();
   for (const r of rows || []) {
     if (!r.day) continue;
-    days.set(r.day, (days.get(r.day) || 0) + rowCostUSD(r));
+    days.set(r.day, (days.get(r.day) || 0) + rowCostUSD(r, rates));
   }
   return Array.from(days.entries())
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
