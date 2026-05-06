@@ -219,13 +219,14 @@ export default function Tags() {
               <th style={styles.th}>name</th>
               <th style={styles.th}>color</th>
               <th style={{ ...styles.th, width: 80 }}>sort</th>
+              <th style={{ ...styles.th, width: 70, textAlign: 'right' }}>文章数</th>
               <th style={{ ...styles.th, textAlign: 'right' }}>actions</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 && !loading && (
               <tr>
-                <td colSpan={6} style={styles.empty}>
+                <td colSpan={7} style={styles.empty}>
                   no tags yet
                 </td>
               </tr>
@@ -316,6 +317,17 @@ export default function Tags() {
                       <span style={styles.dim}>{t.sort_order}</span>
                     )}
                   </td>
+                  <td
+                    style={{
+                      ...styles.td,
+                      textAlign: 'right',
+                      fontVariantNumeric: 'tabular-nums',
+                      color: (t.post_count || 0) > 0 ? 'var(--fg-2)' : 'var(--fg-4)',
+                    }}
+                    data-testid={`tag-postcount-${t.slug}`}
+                  >
+                    {t.post_count ?? 0}
+                  </td>
                   <td style={{ ...styles.td, textAlign: 'right' }}>
                     {isEditing ? (
                       <>
@@ -360,7 +372,13 @@ export default function Tags() {
                           type="button"
                           style={styles.btnDanger}
                           onClick={() => onDelete(t)}
-                          disabled={busy}
+                          disabled={busy || (t.post_count || 0) > 0}
+                          title={
+                            (t.post_count || 0) > 0
+                              ? `此标签下有 ${t.post_count} 篇文章。请先迁移或删除。`
+                              : '删除标签'
+                          }
+                          data-testid={`tag-delete-${t.slug}`}
                         >
                           delete
                         </button>
