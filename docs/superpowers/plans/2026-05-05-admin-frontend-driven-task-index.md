@@ -1839,3 +1839,34 @@ Implementation note: ILIKE rather than full-text-search keeps the migration foot
 - **Commit:** `3592e3f` (`feat(admin/activity): substring search across actor+target (Task 45)`).
 
 Implementation note: same ILIKE pattern as Task 44 — zero migration footprint, sub-millisecond on event_log volumes a single-author site emits. Search and chip filter compose with AND so an owner can narrow first by type then refine by actor (the test proves both predicates stick together). Search box sits *above* the chip row instead of beside it because chips wrap to multiple rows in dense logs and a sibling input would visually drift. Same `data-testid=activity-search` / `activity-search-clear` selector pattern as Comments search keeps Playwright tooling consistent.
+
+---
+
+### Task 46 — visitor-hash search on pet conversations list
+
+**Status:** completed
+**Priority:** medium (operational gap — same pattern as Tasks 44/45)
+**Frontend evidence:** `/admin/pet?tab=conversations` lists conversations grouped by visitor_hash with a species filter + cursor pagination. Owners often paste a hash they saw in logs / a Task 41 export filename and want to land on that visitor — there was no way to do so without scrolling.
+**Owner problem:** "I have visitor `388cd0b07caa…` from a log line; show me their conversations" — required eyeballing.
+**Existing capability:** `/api/admin/pet/conversations?species&since&cursor&limit` (Task 13).
+**Gap:** no hash search.
+**Backend touch:**
+  - extend `/pet/conversations` router with `q: str | None`
+  - apply `WHERE visitor_hash ILIKE 'prefix%'` (prefix match — visitor hashes are opaque hex; substring would be slower without index help). Whitespace-only `q` is ignored (Task 44/45 convention).
+  - composes with `species` and `since` via AND
+**Frontend API client:** `apiPet.listConversations({...q})` propagates the new param.
+**UI / interaction:** new `<input type=search data-testid=conv-search>` next to the species input on the Conversations tab. Hash prefix from the export filename (12 chars) is the natural input.
+**Automated tests:** pytest +4 (prefix match isolates one visitor, blank q ignored, q+species AND, no-match → []).
+**Playwright acceptance path:**
+  1. API: pick first 4 chars of an existing visitor hash; `q=<prefix>` returns rows starting with that prefix only; `q=zzzzz-no-match` returns []; `q=spaces` same as no q
+  2. UI: input renders, fill with prefix → hash starts with prefix, clear button empties input
+  3. No cleanup needed (read-only)
+**Snapshot location:** `/tmp/admin-rebuild/task-46/conv-search.png`
+
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_admin_pet_conversations.py -k "_q_"` → 4/4.
+- **Vitest:** combined `npx vitest run` → **261/261** (no regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-46/verify.py` PASSED — every step green against live `388cd0b07caa…` visitor.
+- **Snapshots:** `/tmp/admin-rebuild/task-46/conv-search.png`.
+- **Commit:** `7361d3f` (`feat(admin/pet): visitor-hash prefix search on conversations list (Task 46)`).
+
+Implementation note: prefix (`'q%'`) rather than substring (`'%q%'`) on visitor_hash — visitor hashes are opaque hex strings, owners always have the start of the hash (from logs, export filenames, etc.), and prefix matching can use the implicit btree index. Substring would force a seq scan with no operational benefit. Same `q=blank → ignore` convention as Tasks 44/45 keeps the URL-state encoding consistent across all admin search inputs. Search composes with the existing `species`/`since` filters via AND so an owner can narrow the species first then prefix-match by hash.
