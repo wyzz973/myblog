@@ -1500,3 +1500,31 @@ Implementation note: the i18n changes had been carried in the unstaged stash for
 - **Snapshots:** `/tmp/admin-rebuild/task-36/rates-panel.png`.
 
 Implementation note: storing rates inside each provider's existing `Integration.extra_json` keeps the surface tiny — no migration, no separate model, and the API key + price travel together. When the owner hasn't configured a provider yet, PUT returns 404 with a clear hint ("integration X not configured") rather than silently creating an orphan rate row. The bundled `DEFAULT_RATES` in `pet_cost_rates.py` mirrors `PROVIDER_RATES` in `petUsageChart.js` exactly so the chart's pre-fetch first-paint matches the post-fetch render. The editor is collapsed by default behind `⚙` so it doesn't compete with the charts for attention; per-row save lets the owner update zhipu without touching anthropic. write_event log row records every rate change for audit.
+
+---
+
+### Task 25b-companion-lists — top_paths/posts/tags arbitrary window
+
+**Status:** completed
+**Priority:** medium (closes Task 25b-arbitrary-end follow-up)
+**Frontend evidence:** Analytics page picks `[from, to]` → main timeseries chart already honored the window, but the companion lists (top paths / referrers / countries / posts / tags) silently fell back to "ending now". Asymmetry was confusing when comparing historical windows.
+**Owner problem:** "May 1–May 5" range showed top_paths for the last 5 days ending today, not the seleted window.
+**Existing capability:** /analytics, /analytics/posts, /analytics/tags accepted `days=N`; /analytics also accepted `from/to` for the timeseries (Task 25b-arbitrary-end).
+**Gap:** the four top-list services (`top_paths`, `top_referrers`, `top_countries`, `per_post`, `per_tag`) plus the shared `_merge_jsonb_top` helper were `days`-only. Bundle endpoint shoehorned a derived `days_for_lists` rather than passing the actual window.
+**Backend touch:**
+  - new `_window_pieces(days, from_, to)` helper returns `(start, history_end_exclusive, today_start_dt | None)` — the `None` branch fires when the window is fully historical (end < today) so the live HitEvent merge is skipped
+  - `_merge_jsonb_top` signature now takes `(start, history_end_exclusive)` instead of `days=N`
+  - `top_paths`, `top_referrers`, `top_countries`, `per_post`, `per_tag` all accept the same trio `(days, from_, to)` keyword set; backwards-compat with existing `days=N` callers is preserved
+  - `/analytics` router passes `from_/to` straight to companion calls when present (no more `days_for_lists` shim)
+  - `/analytics/posts` + `/analytics/tags` accept `?from=&to=` with the same 422 paired/inverted/over-365 validation as `/analytics`
+**Frontend API client:** `apiAnalytics.posts(range)` + `apiAnalytics.tags(range)` route to `?from&to` when the range token is `range:`; otherwise legacy `?days=N`.
+**Automated tests:** pytest +4 (companion accepts from/to, partial 422, bundle filters by window across two seeded HitDaily rows on 4-5 and 4-25).
+**Playwright acceptance path:** API smoke seeded /p25b-comp-IN on 2026-04-05 + /p25b-comp-OUT on 2026-04-25, then asserted `/analytics?from=2026-04-01&to=2026-04-10` top_paths included only IN (4-1..4-10) and `/analytics?from=2026-04-20&to=2026-04-30` flipped to OUT.
+**Snapshot location:** none (API-only; UI flow already covered by Task 25b-arbitrary-end's snapshot).
+
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_admin_analytics.py` → 26/26 (4 new on top of 22).
+- **Vitest:** combined `npx vitest run` → **254/254** (no regression).
+- **Playwright (API):** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-25b-companion/verify.py` PASSED — seeded IN+OUT HitDaily rows, both windows isolate the right path, /posts and /tags accept from/to + 422 partial, cleanup restores DB.
+- **Commit:** `2376276` (`feat(admin/analytics): companion lists honor [from, to] window (Task 25b-companion)`).
+
+Implementation note: `_window_pieces` decouples "which HitDaily dates to read" from "should we add today's HitEvent live count". A historical-only window (end < today) returns `today_start_dt = None`, so callers skip the second SELECT. This is a minor performance win on top of correctness — historical windows do one query instead of two. Backwards compat: every call site that still passes `days=N` continues to work because `_window_pieces` accepts the same shape that `resolve_window` already does. The Task 25b-arbitrary-end implementation note's TODO ("`top_paths` and friends still anchor at today") is now resolved — the analytics bundle is fully consistent under any window.
