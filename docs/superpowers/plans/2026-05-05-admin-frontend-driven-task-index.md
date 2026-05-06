@@ -1528,3 +1528,37 @@ Implementation note: storing rates inside each provider's existing `Integration.
 - **Commit:** `2376276` (`feat(admin/analytics): companion lists honor [from, to] window (Task 25b-companion)`).
 
 Implementation note: `_window_pieces` decouples "which HitDaily dates to read" from "should we add today's HitEvent live count". A historical-only window (end < today) returns `today_start_dt = None`, so callers skip the second SELECT. This is a minor performance win on top of correctness — historical windows do one query instead of two. Backwards compat: every call site that still passes `days=N` continues to work because `_window_pieces` accepts the same shape that `resolve_window` already does. The Task 25b-arbitrary-end implementation note's TODO ("`top_paths` and friends still anchor at today") is now resolved — the analytics bundle is fully consistent under any window.
+
+---
+
+### Task 25b-csv-drilldown — CSV + per-post drilldown honor [from, to]
+
+**Status:** completed
+**Priority:** medium (closes the last 25b-arbitrary-end follow-up)
+**Frontend evidence:** Analytics page picks `[from, to]` → main bundle + companion lists already honored the window (Task 25b-companion). But:
+  - 导出 CSV button still emitted a `days=N` URL → CSV reflected ending-now window, not the active selection
+  - hot-post click-through preserved `range=...` query but the drilldown dropped non-preset tokens (`range:`, `since:`) and silently fell back to 30d
+  - drilldown's chart fetched `?days=` only, so even when the URL token was honored the API call was wrong shape
+**Owner problem:** "I picked May 1–May 5, then exported CSV — got ending-now data" / "I clicked into a post drilldown — chart spans the wrong window".
+**Existing capability:** `/analytics/posts.csv?days=N` and `/analytics/posts/{id}/timeseries?days=N` worked; companion endpoints already accepted from/to (Task 25b-companion).
+**Gap:** csv + per-post timeseries router endpoints didn't accept from/to; drilldown UI didn't recognize `range:` / `since:` tokens.
+**Backend touch:**
+  - `analytics_svc.per_post_timeseries` extended to accept `(days, from_, to)` via the same `resolve_window` helper used by `timeseries`
+  - `/analytics/posts.csv` accepts `?from=&to=` with paired/inverted/over-365 422 validation; filename now embeds `2026-04-01_to_2026-04-07` (or `7d` legacy) so multi-window exports don't collide
+  - `/analytics/posts/{id}/timeseries` same from/to params + 422 trio
+**Frontend API client:** `apiAnalytics.postTimeseries(id, range)` + `apiAnalytics.downloadPostsCsv(range)` route to `?from&to` when the range token matches `range:`
+**UI / interaction:**
+  - `AnalyticsPostDetail` accepts `range:from..to` and `since:YYYY-MM-DD` from URL state (was: only `7d|30d|90d`)
+  - Custom-range label `2026-04-01 → 2026-04-10` (or `自 YYYY-MM-DD`) renders next to the chips so the user can see what window the chart is showing
+  - Click-through from parent already passed `range=<active>`; combined with the wider acceptance, the drilldown chart now matches the parent
+**Automated tests:** pytest +4 (timeseries from/to, posts.csv from/to + filename, both 422 partial) + vitest +2 (drilldown range-pass-through for `range:` + `since:`).
+**Playwright acceptance path:** /admin/analytics → fill from + to → click hot-post → drilldown URL preserves `range:`, custom-range label visible, network request to /timeseries carries from + to.
+**Snapshot location:** `/tmp/admin-rebuild/task-25b-csv-drilldown/drilldown-custom-range.png`.
+
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_admin_analytics.py` → 30/30 (4 new on top of 26).
+- **Vitest:** combined `npx vitest run` → **256/256** (no Task 1-35 + 36 + 25b-companion regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-25b-csv-drilldown/verify.py` PASSED — CSV filename embeds window, /timeseries 7-day window, drilldown UI carries `range:` + shows custom-range label + fetches with from/to.
+- **Snapshots:** `/tmp/admin-rebuild/task-25b-csv-drilldown/drilldown-custom-range.png`.
+- **Commit:** `dab0051` (`feat(admin/analytics): CSV + per-post drilldown honor [from, to] (Task 25b-csv-drilldown)`).
+
+Implementation note: the analytics arbitrary-window story is now end-to-end consistent across every endpoint and every UI surface. Drilldown chips remain available — clicking 7 天/30 天/90 天 still works and replaces the active range token; the custom-range label only shows when the active token is non-preset. CSV filename change is technically backwards-compatible because the previous `{N}d` slug is preserved when no from/to is supplied — only the new arbitrary-window form gets the `from_to_to` slug.
