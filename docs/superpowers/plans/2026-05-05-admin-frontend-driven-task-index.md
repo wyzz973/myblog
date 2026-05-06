@@ -990,7 +990,7 @@ Implementation note: `apiIntegrations.listGithubRepos()` consumes the 24a endpoi
 
 ### Task 25 — Analytics: custom date range + CSV export + per-post page
 
-**Status:** in-progress (25a CSV + 25b since-date done; 25c per-post page + 25b-arbitrary-end pending)
+**Status:** in-progress (25a CSV + 25b since-date + 25c per-post page done; 25b-arbitrary-end pending)
 **Priority:** medium
 **Frontend evidence:** `Reader.jsx` hit beacon — every page view feeds analytics.
 **Owner problem:** 7/30/90 chips can't compare May to April; cannot export.
@@ -1034,6 +1034,18 @@ Implementation note: `GET /api/admin/analytics/posts.csv?days=N` returns a UTF-8
 - **Commit:** `a7e7e0a` (`feat(admin/analytics): custom since-date picker (Task 25b)`).
 
 Implementation note: rather than extend the backend service signatures (which would touch `timeseries / per_post / per_tag / top_paths / _merge_jsonb_top` — 5 functions, all currently `days`-parameterized), 25b reuses the existing `days` API by deriving days at the client. `rangeToDays('since:2026-04-21')` computes `(today_utc − start_date) + 1` and clamps to `[1, 365]`. The Analytics page encodes the active range as `since:YYYY-MM-DD` so the same prop drives the bundle/posts/tags fetches AND the CSV download. Picking "today" gives 1 day; clearing the input falls back to the default 30d preset. Arbitrary end-date support (i.e. `[start, end]` where end ≠ today) is left for Task 25c since the existing service is "ending now" by construction; that would require changing service signatures across the board.
+
+#### Task 25c — per-post analytics drilldown page (DONE)
+
+- **Backend:** new `analytics_svc.per_post_timeseries(s, post_id, days)` mirrors the bundle `timeseries` strategy filtered to one `post_id` (HitDaily history + today's HitEvent count). New endpoint `GET /api/admin/analytics/posts/{post_id}/timeseries?days=N` returns `{post_id, title, total, timeseries}`; 404 if post is missing so the UI can show a proper error rather than an all-zero chart.
+- **Frontend:** new route `/admin/analytics/posts/:postId` (`src/admin/analytics/AnalyticsPostDetail.jsx`) — title, total KPI, daily SVG bar chart, range chips 7/30/90 (URL-state via `?range=`), 返回 link back to `/admin/analytics?range=<active>`. Hot-posts table on `/admin/analytics` now renders each title as a `<Link>` with `data-testid=hot-post-<id>`.
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_admin_analytics.py` → 17/17 (3 new: 401 unauth, 404 unknown id, daily breakdown round-trip with two seeded HitDaily rows + today=0).
+- **Vitest:** `npx vitest run src/admin/analytics/AnalyticsPostDetail.test.jsx` → 5/5 (range fetch, bar tooltips, range chip refetch, 404 surfacing, 30d default). Combined `npx vitest run` → **225/225** (no Task 1-24 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-25c/verify.py` → 404 for unknown id → API smoke for `vps` post (7-day timeseries, total=0 here because dev DB has no traffic) → login → navigate `/admin/analytics/posts/vps?range=7d` directly → page mounts → UI total matches API → 7 bars render → click 30d chip → 30 bars → 返回 link → `/admin/analytics?range=30d`.
+- **Snapshots:** `/tmp/admin-rebuild/task-25c/post-detail.png` (full-page).
+- **Commit:** `1dbc82d` (`feat(admin/analytics): per-post drilldown page (Task 25c)`).
+
+Implementation note: kept the SVG bar chart pattern from `Analytics.jsx` rather than introducing a chart lib — this is the third bar chart in the codebase (overall hits, post-detail, eventually pet usage), and they're all <40 LOC. The drilldown supports presets only (no since-date picker) because the click-through always opens the same window the user just looked at; arbitrary end-date / since-date for drilldown is an obvious follow-up if/when an owner wants point-in-time comparisons. The hot-posts row label uses `<Link>` instead of an onClick handler so middle-click opens in a new tab. RankTable gained an optional `r.href` + `r.testId` per row — labels-without-href stay as plain spans (referrers / countries / tags) to avoid surfacing routes that don't exist yet.
 
 ---
 
