@@ -1591,3 +1591,28 @@ Implementation note: the analytics arbitrary-window story is now end-to-end cons
 - **Commit:** see ledger commit below.
 
 Implementation note: kept it pure-XML (no JSON Feed, no RSS 2.0 — Atom 1.0 has cleaner namespace semantics and is what most modern readers expect). Site host config reuses `public_site_base_url` from Task 28c — production deploys override in `.env`. The sitemap site-root entry is unconditional so a brand-new install with zero published posts still has a valid urlset (validated by the no-posts test). Atom self-link points at `/api/feed.xml` directly, so a deploy without proxy alias still works for RSS readers — they just see the API path. A future task can add `<link rel="alternate" type="application/atom+xml">` to the public site's `<head>` so browsers' built-in feed-discovery picks it up.
+
+---
+
+### Task 38 — robots.txt + feed-discovery link
+
+**Status:** completed
+**Priority:** medium (closes the 37-follow-up: make sitemap + feed actually discoverable)
+**Frontend evidence:** Task 37 added `/api/sitemap.xml` + `/api/feed.xml`, but search engines look for `/robots.txt` (not API paths) and browsers won't auto-discover the feed without a `<link rel=alternate>` in `<head>`. The infrastructure existed but was effectively invisible.
+**Owner problem:** "I shipped a sitemap and Atom feed last round but Googlebot has no way to find the sitemap, and Firefox/RSS readers can't subscribe by visiting the homepage."
+**Existing capability:** `/api/sitemap.xml` + `/api/feed.xml` (Task 37).
+**Gap:** no robots.txt, no feed-discovery link tag.
+**Backend touch:**
+  - `GET /api/robots.txt` returning `text/plain` with `User-agent: * / Allow: / / Disallow: /api/admin/ / Sitemap: <site>/api/sitemap.xml`
+  - Sitemap pointer uses absolute URL from `public_site_base_url` so the path is right even when this endpoint is mounted under `/api/`
+**Frontend touch:** `<link rel="alternate" type="application/atom+xml" title="myblog · Atom feed" href="/api/feed.xml" />` injected into `index.html <head>` so Firefox/Safari feed-discovery and RSS-reader bookmarklets find the feed automatically when visiting `/`.
+**Automated tests:** pytest +2 cases (allow + sitemap pointer present, public access).
+**Playwright acceptance path:** API smoke confirms robots.txt content + content-type. Browser smoke loads `/`, asserts `<head>` contains the feed-discovery link, fetches `/api/feed.xml` through the vite proxy and checks the content-type.
+
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_public_sitemap.py` → 7/7 (2 new on top of 5).
+- **Vitest:** combined `npx vitest run` → **256/256** (no regression — index.html is HTML, not in the JS test surface).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-38/verify.py` PASSED — robots.txt 4 lines with Sitemap pointer, `<link rel=alternate>` href=/api/feed.xml + title carries "Atom", feed XML resolves through vite proxy with `application/xml; charset=utf-8`.
+- **Snapshots:** `/tmp/admin-rebuild/task-38/robots.txt`.
+- **Commit:** `235a607` (`feat(public/seo): robots.txt + Atom feed-discovery link (Task 38)`).
+
+Implementation note: the sitemap pointer in robots.txt is absolute (using `public_site_base_url`) on purpose — search-engine crawlers normalize relative paths inconsistently, and a deploy behind a reverse proxy might not have the `/api/` prefix at the canonical site host. Absolute URLs are the safe default. Production deploys typically alias `/robots.txt` → `/api/robots.txt` and `/sitemap.xml` → `/api/sitemap.xml` at the proxy; the absolute pointer keeps the chain intact regardless. The feed-discovery link uses `/api/feed.xml` (relative path) so it works in dev (vite proxies `/api`) and prod (reverse proxy serves it). Title is human-readable so RSS readers display "myblog · Atom feed" rather than the raw URL.
