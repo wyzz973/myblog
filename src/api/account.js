@@ -92,6 +92,36 @@ export const apiAccount = {
       }),
     });
   },
+  // Task 28c step 1: send a magic confirm link to the NEW email.
+  // POST { current_password, new_email } → { sent: true, to }.
+  // Old login keeps working until step 2 confirms.
+  requestEmailChange(currentPassword, newEmail) {
+    return req('/account/email/request', {
+      method: 'POST',
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_email: newEmail,
+      }),
+    });
+  },
+  // Task 28c step 2: consume the one-shot token and rotate.
+  // No bearer required — the token IS the auth.
+  async confirmEmailChange(token) {
+    const r = await fetch(`${BASE}/api/admin/account/email/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    if (!r.ok) {
+      let detail = `${r.status}`;
+      try { const body = await r.json(); detail = body.detail || detail; } catch { /* non-JSON */ }
+      const err = new Error(`${r.status} ${detail}`);
+      err.status = r.status;
+      err.detail = detail;
+      throw err;
+    }
+    return r.json();
+  },
 };
 
 export default apiAccount;

@@ -1,11 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db import get_session
 from app.deps import current_session_admin
 from app.models import Account
 from app.schemas.auth import (
+    EmailChangeConfirmRequest,
+    EmailChangeConfirmResponse,
     EmailChangeRequest,
+    EmailChangeRequestMagic,
     MagicLinkToggleRequest,
     PasswordChangeRequest,
     TfaDisableRequest,
@@ -14,7 +19,13 @@ from app.schemas.auth import (
     TfaRegenerateRequest,
     TfaSetupResponse,
 )
-from app.services import recovery_codes, secret_box, totp
+from app.services import (
+    email as email_svc,
+    pending_email_change as pending_email_svc,
+    recovery_codes,
+    secret_box,
+    totp,
+)
 from app.services.auth import hash_password, verify_password
 from app.services.event_log import write_event
 
@@ -113,6 +124,70 @@ async def change_email(
     )
     await s.commit()
     return {"email": admin.email}
+
+
+# Task 28c: two-step email rotation. Step 1 — request the change. Verifies
+# the password and sends a magic link to the *new* address; the existing
+# email keeps working until step 2 confirms via the token.
+@router.post("/account/email/request")
+async def request_email_change(
+    req: EmailChangeRequestMagic,
+    request: Request,
+    admin: Account = Depends(current_session_admin),
+    s: AsyncSession = Depends(get_session),
+) -> dict:
+    if not verify_password(admin.password_hash, req.current_password):
+        raise HTTPException(400, "current password is incorrect")
+    new_email = req.new_email.strip().lower()
+    if new_email == admin.email.lower():
+        raise HTTPException(400, "new email must differ from current")
+
+    raw = await pending_email_svc.issue(
+        s,
+        account_id=admin.id,
+        new_email=new_email,
+        requested_ip=(request.client.host if request.client else None),
+        user_agent=request.headers.get("user-agent"),
+    )
+    settings = get_settings()
+    url = f"{settings.public_site_base_url}/admin/account/email-confirm?token={raw}"
+    await email_svc.send_email_change_confirm(email=new_email, url=url)
+    await write_event(
+        s, type="account.email.change_requested",
+        actor=admin.email, meta={"new_email": new_email},
+    )
+    await s.commit()
+    return {"sent": True, "to": new_email}
+
+
+# Task 28c: step 2 — confirm. Consumes the one-shot token; rotation
+# happens here. Public (no session) so the link works even if the user is
+# logged out in the new browser/device they're confirming from.
+@router.post("/account/email/confirm", response_model=EmailChangeConfirmResponse)
+async def confirm_email_change(
+    req: EmailChangeConfirmRequest,
+    s: AsyncSession = Depends(get_session),
+) -> EmailChangeConfirmResponse:
+    result = await pending_email_svc.consume(s, raw=req.token)
+    if result is None:
+        raise HTTPException(400, "invalid or expired token")
+    account_id, new_email = result
+    acct = (
+        await s.execute(select(Account).where(Account.id == account_id))
+    ).scalar_one_or_none()
+    if acct is None:
+        raise HTTPException(404, "account not found")
+    if new_email == acct.email.lower():
+        # Race: another request already rotated to this address. Idempotent.
+        return EmailChangeConfirmResponse(email=acct.email)
+    old_email = acct.email
+    acct.email = new_email
+    await write_event(
+        s, type="account.email.changed", actor=old_email,
+        meta={"old": old_email, "new": new_email, "via": "magic_link"},
+    )
+    await s.commit()
+    return EmailChangeConfirmResponse(email=acct.email)
 
 
 @router.patch("/account/magic-link")

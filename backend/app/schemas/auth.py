@@ -78,6 +78,21 @@ class EmailChangeRequest(_Strict):
     new_email: EmailStr
 
 
+class EmailChangeRequestMagic(_Strict):
+    """Task 28c: send a magic link to NEW email (no rotation yet)."""
+    current_password: str = Field(min_length=1, max_length=128)
+    new_email: EmailStr
+
+
+class EmailChangeConfirmRequest(_Strict):
+    """Task 28c: consume one-time token and rotate to the stored new email."""
+    token: str = Field(min_length=8, max_length=128)
+
+
+class EmailChangeConfirmResponse(_Strict):
+    email: EmailStr
+
+
 class ApiTokenCreateRequest(_Strict):
     name: str = Field(min_length=1, max_length=64)
     scope: Literal["read", "write"]

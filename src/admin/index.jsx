@@ -20,6 +20,7 @@ import Settings from './Settings.jsx';
 import ActivityLog from './ActivityLog.jsx';
 import SiteIdentity from './SiteIdentity.jsx';
 import Inbox from './Inbox.jsx';
+import EmailConfirm from './account/EmailConfirm.jsx';
 
 function RequireAuth({ children }) {
   const { isAuthed } = useAuth();
@@ -46,6 +47,8 @@ export default function AdminApp() {
   return (
     <AuthProvider>
       <Routes>
+        {/* Public route: no session required (the token in the URL IS the auth). */}
+        <Route path="account/email-confirm" element={<EmailConfirm />} />
         <Route
           index
           element={

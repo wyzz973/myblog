@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # vars, so the _split_csv validator below sees the raw "a,b,c" string.
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     public_api_base_url: str = "http://localhost:51820"
+    # Frontend URL used in email links that should land on a UI page
+    # (e.g. Task 28c email-change confirm). Override in prod to the SPA host.
+    public_site_base_url: str = "http://localhost:5173"
 
     # IPs we trust to forward original client IP via X-Forwarded-For.
     # In dev: empty list (use request.client.host directly).

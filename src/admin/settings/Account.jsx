@@ -309,18 +309,21 @@ function EmailSection() {
   const [newEmail, setNewEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const [doneEmail, setDoneEmail] = useState(null);
+  const [sentTo, setSentTo] = useState(null);
 
   async function onSubmit(e) {
     e.preventDefault();
     setError(null);
-    setDoneEmail(null);
+    setSentTo(null);
     setBusy(true);
     try {
-      const res = await apiAccount.changeEmail(current, newEmail);
+      // Task 28c: use the magic-link request flow. Backend mails a confirm
+      // link to the new address; rotation only happens after the user
+      // clicks it (validates they own the new mailbox).
+      const res = await apiAccount.requestEmailChange(current, newEmail);
       setCurrent('');
+      setSentTo(res?.to || newEmail);
       setNewEmail('');
-      setDoneEmail(res?.email || newEmail);
     } catch (err) {
       setError(err?.detail || err?.message || '修改失败');
     } finally {
@@ -329,7 +332,7 @@ function EmailSection() {
   }
 
   return (
-    <Card title="登录邮箱" subtitle="修改用于后台登录的邮箱地址">
+    <Card title="登录邮箱" subtitle="修改用于后台登录的邮箱地址（通过新邮箱里的链接确认）">
       <form
         onSubmit={onSubmit}
         style={{ display: 'grid', gap: 10, maxWidth: 380 }}
@@ -366,12 +369,13 @@ function EmailSection() {
             disabled={busy}
             data-testid="email-change-submit"
           >
-            {busy ? '保存中...' : '修改邮箱'}
+            {busy ? '发送中...' : '发送确认邮件'}
           </button>
         </div>
-        {doneEmail && (
-          <div style={styles.success} data-testid="email-change-done">
-            邮箱已改为 {doneEmail} — 下次登录请用新地址。
+        {sentTo && (
+          <div style={styles.success} data-testid="email-change-sent">
+            ✓ 已发送确认链接到 {sentTo}。15 分钟内点开链接才会真正切换邮箱；
+            在那之前现有登录仍然可用。
           </div>
         )}
         {error && (

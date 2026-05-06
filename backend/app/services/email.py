@@ -60,6 +60,22 @@ async def send_magic_link(*, email: str, url: str) -> None:
     await send_email(to=email, subject=subject, body=body)
 
 
+async def send_email_change_confirm(*, email: str, url: str) -> None:
+    """Email the magic confirmation link to the *new* address (Task 28c).
+
+    The current account email never sees this link — clicking it from the
+    new mailbox proves the owner controls that address, which is the whole
+    point of the two-step rotation.
+    """
+    subject = "Confirm your wangyang.dev email change"
+    body = (
+        f"Click to confirm rotating your admin login to this address: {url}\n\n"
+        "Valid for 15 minutes. If you didn't request this, ignore this email — "
+        "your existing login will continue to work."
+    )
+    await send_email(to=email, subject=subject, body=body)
+
+
 async def send_comment_notification(
     *, to: str, comment_id: int, post_id: str, who: str, snippet: str
 ) -> None:
