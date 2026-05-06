@@ -116,19 +116,31 @@ async def get_analytics_tags(
 async def get_analytics_post_timeseries(
     post_id: str,
     days: int = Query(default=30, ge=1),
+    from_: _date | None = Query(default=None, alias="from"),
+    to: _date | None = Query(default=None),
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> PostTimeseriesResponse:
-    """Daily hit timeseries for a single post (Task 25c).
+    """Daily hit timeseries for a single post (Task 25c + 25b-csv-drilldown).
 
-    Returns 404 if the post doesn't exist so the drilldown page can show a
-    proper error rather than a confusing all-zero chart.
+    Accepts either `days=N` or `from`+`to`. 404 when the post doesn't
+    exist so the drilldown page can show a proper error rather than an
+    all-zero chart. 422 when from/to are unpaired or inverted.
     """
-    days = min(days, 365)
+    if (from_ is None) ^ (to is None):
+        raise HTTPException(422, "from and to must be supplied together")
+    if from_ is not None and to is not None:
+        if to < from_:
+            raise HTTPException(422, "to must be on or after from")
+        if (to - from_).days > 365:
+            raise HTTPException(422, "range exceeds 365 days")
     post = (await s.execute(select(Post).where(Post.id == post_id))).scalar_one_or_none()
     if post is None:
         raise HTTPException(status_code=404, detail="post not found")
-    ts = await analytics_svc.per_post_timeseries(s, post_id=post_id, days=days)
+    if from_ is not None and to is not None:
+        ts = await analytics_svc.per_post_timeseries(s, post_id=post_id, from_=from_, to=to)
+    else:
+        ts = await analytics_svc.per_post_timeseries(s, post_id=post_id, days=min(days, 365))
     total = sum(p.hits for p in ts)
     return PostTimeseriesResponse(
         post_id=post_id,
@@ -145,11 +157,29 @@ async def get_analytics_post_timeseries(
 @router.get("/analytics/posts.csv")
 async def get_analytics_posts_csv(
     days: int = Query(default=30, ge=1),
+    from_: _date | None = Query(default=None, alias="from"),
+    to: _date | None = Query(default=None),
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> Response:
-    days = min(days, 365)
-    rows = await analytics_svc.per_post(s, days=days, limit=1000)
+    """CSV export of per-post hits (Task 25a, extended 25b-csv-drilldown).
+
+    Accepts either `days=N` or `from`+`to`. The Content-Disposition
+    filename embeds the active window so multiple exports don't collide.
+    """
+    if (from_ is None) ^ (to is None):
+        raise HTTPException(422, "from and to must be supplied together")
+    if from_ is not None and to is not None:
+        if to < from_:
+            raise HTTPException(422, "to must be on or after from")
+        if (to - from_).days > 365:
+            raise HTTPException(422, "range exceeds 365 days")
+        rows = await analytics_svc.per_post(s, from_=from_, to=to, limit=1000)
+        window_label = f"{from_.isoformat()}_to_{to.isoformat()}"
+    else:
+        d = min(days, 365)
+        rows = await analytics_svc.per_post(s, days=d, limit=1000)
+        window_label = f"{d}d"
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(["post_id", "title", "hits"])
@@ -157,7 +187,7 @@ async def get_analytics_posts_csv(
         writer.writerow([r.post_id, r.title, r.hits])
     body = "﻿" + buf.getvalue()  # UTF-8 BOM for Excel
     stamp = datetime.now(UTC).strftime("%Y%m%d")
-    filename = f"analytics-posts-{stamp}-{days}d.csv"
+    filename = f"analytics-posts-{stamp}-{window_label}.csv"
     return Response(
         content=body.encode("utf-8"),
         media_type="text/csv; charset=utf-8",

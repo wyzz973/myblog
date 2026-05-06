@@ -112,17 +112,24 @@ export const apiAnalytics = {
     return req(`/analytics/tags?days=${rangeToDays(range)}`);
   },
   // Task 25c: per-post drilldown — daily timeseries for one post.
+  // Task 25b-csv-drilldown: arbitrary [from, to] passed through when active.
   postTimeseries(postId, range) {
-    const days = rangeToDays(range);
-    return req(`/analytics/posts/${encodeURIComponent(postId)}/timeseries?days=${days}`);
+    const ft = rangeToFromTo(range);
+    if (ft) {
+      return req(`/analytics/posts/${encodeURIComponent(postId)}/timeseries?from=${encodeURIComponent(ft.from)}&to=${encodeURIComponent(ft.to)}`);
+    }
+    return req(`/analytics/posts/${encodeURIComponent(postId)}/timeseries?days=${rangeToDays(range)}`);
   },
   // Task 25a: download per-post hits as CSV. Fetches with the bearer
   // token, then triggers a browser download via an in-memory blob.
   // Returns the suggested filename so callers can surface a toast.
   async downloadPostsCsv(range) {
-    const days = rangeToDays(range);
+    const ft = rangeToFromTo(range);
+    const qs = ft
+      ? `from=${encodeURIComponent(ft.from)}&to=${encodeURIComponent(ft.to)}`
+      : `days=${rangeToDays(range)}`;
     const token = getToken();
-    const r = await fetch(`${BASE}/api/admin/analytics/posts.csv?days=${days}`, {
+    const r = await fetch(`${BASE}/api/admin/analytics/posts.csv?${qs}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!r.ok) {
@@ -135,7 +142,7 @@ export const apiAnalytics = {
     // Server's Content-Disposition: attachment; filename="..."
     const cd = r.headers.get('content-disposition') || '';
     const m = cd.match(/filename="([^"]+)"/);
-    const filename = m ? m[1] : `analytics-posts-${days}d.csv`;
+    const filename = m ? m[1] : 'analytics-posts.csv';
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

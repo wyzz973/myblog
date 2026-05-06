@@ -88,4 +88,24 @@ describe('AnalyticsPostDetail', () => {
     await waitFor(() => screen.getByTestId('post-detail-total'));
     expect(apiAnalytics.postTimeseries).toHaveBeenCalledWith('p25c-demo', '30d');
   });
+
+  // Task 25b-csv-drilldown
+  it('passes range:from..to through to the API and shows the custom-range label', async () => {
+    renderWithRouter('/admin/analytics/posts/p25c-demo?range=range:2026-04-01..2026-04-10');
+    await waitFor(() => screen.getByTestId('post-detail-total'));
+    expect(apiAnalytics.postTimeseries).toHaveBeenCalledWith(
+      'p25c-demo', 'range:2026-04-01..2026-04-10',
+    );
+    expect(screen.getByTestId('range-custom-label').textContent).toContain('2026-04-01');
+    expect(screen.getByTestId('range-custom-label').textContent).toContain('2026-04-10');
+  });
+
+  it('passes since:YYYY-MM-DD through to the API', async () => {
+    renderWithRouter('/admin/analytics/posts/p25c-demo?range=since:2026-04-21');
+    await waitFor(() => screen.getByTestId('post-detail-total'));
+    expect(apiAnalytics.postTimeseries).toHaveBeenCalledWith(
+      'p25c-demo', 'since:2026-04-21',
+    );
+    expect(screen.getByTestId('range-custom-label').textContent).toContain('自 2026-04-21');
+  });
 });

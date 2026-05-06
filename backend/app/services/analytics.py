@@ -351,36 +351,45 @@ async def per_post(
 
 
 async def per_post_timeseries(
-    s: AsyncSession, *, post_id: str, days: int
+    s: AsyncSession,
+    *,
+    post_id: str,
+    days: int | None = None,
+    from_: date | None = None,
+    to: date | None = None,
 ) -> list[DayPoint]:
-    """Daily hit timeseries for a single post (Task 25c).
+    """Daily hit timeseries for a single post (Task 25c, extended 25b-csv-drilldown).
 
-    Combines pre-rolled hit_daily rows for past days with today's live
-    hit_events count, identical strategy to ``timeseries`` but filtered to
-    one post_id. Returns exactly ``days`` points in ascending date order.
+    Same window resolution as ``timeseries`` — accepts either `days=N`
+    (legacy: last N days ending today) or `from_=D1, to=D2` (arbitrary
+    inclusive window). Today's HitEvent live count is added only when
+    `to == today`; historical-only windows skip the second SELECT.
     """
+    start, end = resolve_window(days=days, from_=from_, to=to)
     today = _today_utc()
-    start = today - timedelta(days=days - 1)
-
+    history_end_exclusive = end + timedelta(days=1) if end < today else today
     history = await s.execute(
         select(HitDaily.date, func.sum(HitDaily.hits))
         .where(HitDaily.date >= start)
-        .where(HitDaily.date < today)
+        .where(HitDaily.date < history_end_exclusive)
         .where(HitDaily.post_id == post_id)
         .group_by(HitDaily.date)
     )
     by_date: dict[date, int] = {row[0]: int(row[1] or 0) for row in history.all()}
 
-    today_n_row = await s.execute(
-        select(func.count(HitEvent.id))
-        .where(HitEvent.created_at >= _today_start_utc())
-        .where(HitEvent.post_id == post_id)
-    )
-    today_n = int(today_n_row.scalar() or 0)
+    today_n = 0
+    if end >= today:
+        today_n_row = await s.execute(
+            select(func.count(HitEvent.id))
+            .where(HitEvent.created_at >= _today_start_utc())
+            .where(HitEvent.post_id == post_id)
+        )
+        today_n = int(today_n_row.scalar() or 0)
 
     points: list[DayPoint] = []
-    for i in range(days):
-        d = today - timedelta(days=days - 1 - i)
+    n_days = (end - start).days + 1
+    for i in range(n_days):
+        d = start + timedelta(days=i)
         n = today_n if d == today else by_date.get(d, 0)
         points.append(DayPoint(date=d, hits=n))
     return points

@@ -1,9 +1,9 @@
-// Per-post analytics drilldown (Task 25c).
+// Per-post analytics drilldown (Task 25c, extended 25b-csv-drilldown).
 // Mounted at /admin/analytics/posts/:postId — shows the post title, total
 // hits in the active window, and a daily timeseries chart. Range chips
-// mirror the parent Analytics page; arbitrary since-date is left out for
-// this MVP because the click-through always opens the same window the
-// user just looked at on the parent page (passed via ?range=...).
+// mirror the parent Analytics page; arbitrary `since:` and `range:`
+// tokens carried over from the parent's URL state are accepted as-is so
+// the drilldown chart matches what the user was just looking at.
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
@@ -15,12 +15,28 @@ const RANGE_PRESETS = [
   { id: '90d', label: '90 天' },
 ];
 
+function isAcceptedRange(token) {
+  if (typeof token !== 'string') return false;
+  if (RANGE_PRESETS.some((p) => p.id === token)) return true;
+  if (token.startsWith('since:') || token.startsWith('range:')) return true;
+  return false;
+}
+
+function formatRangeLabel(token) {
+  if (token.startsWith('since:')) return `自 ${token.slice('since:'.length)}`;
+  if (token.startsWith('range:')) {
+    const [a, b] = token.slice('range:'.length).split('..');
+    return `${a} → ${b}`;
+  }
+  return null;
+}
+
 export default function AnalyticsPostDetail() {
   const { postId } = useParams();
   const [params, setParams] = useSearchParams();
-  const range = RANGE_PRESETS.some((p) => p.id === params.get('range'))
-    ? params.get('range')
-    : '30d';
+  const rawRange = params.get('range');
+  const range = isAcceptedRange(rawRange) ? rawRange : '30d';
+  const customLabel = formatRangeLabel(range);
 
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -53,6 +69,18 @@ export default function AnalyticsPostDetail() {
           </p>
         </div>
         <div style={styles.rangeRow}>
+          {customLabel && (
+            <span
+              data-testid="range-custom-label"
+              style={{
+                fontSize: 11,
+                color: 'var(--accent)',
+                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                marginRight: 6,
+              }}
+              title="窗口由父页 ?range=... 传递"
+            >{customLabel}</span>
+          )}
           {RANGE_PRESETS.map((p) => (
             <button
               type="button"

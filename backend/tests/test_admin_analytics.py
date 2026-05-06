@@ -306,6 +306,85 @@ async def test_analytics_posts_returns_titled_rows(
             await s.commit()
 
 
+async def test_post_timeseries_accepts_from_to(client, admin_token, clean_analytics):
+    """Task 25b-csv-drilldown: per-post timeseries accepts arbitrary [from, to]."""
+    # Seed a post + HitDaily row so the timeseries has something to verify.
+    seed_day = date(2026, 4, 5)
+    slug = "p25b-csv-window"
+    async with AsyncSessionLocal() as s:
+        existing_tag = (await s.execute(
+            Tag.__table__.select().where(Tag.slug == "p25b-csv-tag")
+        )).first()
+        if existing_tag is None:
+            s.add(Tag(slug="p25b-csv-tag", name="csv-tag", color="#888", sort_order=0))
+            await s.flush()
+            existing_tag = (await s.execute(
+                Tag.__table__.select().where(Tag.slug == "p25b-csv-tag")
+            )).first()
+        s.add(Post(
+            id=slug, n="1", title="csv window", subtitle="", date=date(2026, 4, 1),
+            read="1", lang="en", summary="", tldr="", body_md="", body_json=[],
+            word_count=0, status="published", featured=False, private=False,
+            comments_enabled=True, tag_id=existing_tag.id,
+        ))
+        await s.flush()
+        s.add(HitDaily(
+            date=seed_day, path=f"/post/{slug}",
+            hits=11, post_id=slug,
+            referrers_top=[], countries_top=[],
+        ))
+        await s.commit()
+    try:
+        r = await client.get(
+            f"/api/admin/analytics/posts/{slug}/timeseries?from=2026-04-01&to=2026-04-07",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["post_id"] == slug
+        assert len(body["timeseries"]) == 7
+        assert body["timeseries"][0]["date"] == "2026-04-01"
+        assert body["timeseries"][-1]["date"] == "2026-04-07"
+        # Seed-day hits surface in the right slot
+        seed_pt = next(p for p in body["timeseries"] if p["date"] == "2026-04-05")
+        assert seed_pt["hits"] == 11
+    finally:
+        from sqlalchemy import delete as sa_delete
+        async with AsyncSessionLocal() as s:
+            await s.execute(sa_delete(HitDaily).where(HitDaily.post_id == slug))
+            await s.execute(sa_delete(Post).where(Post.id == slug))
+            await s.execute(sa_delete(Tag).where(Tag.slug == "p25b-csv-tag"))
+            await s.commit()
+
+
+async def test_post_timeseries_from_to_partial_422(client, admin_token):
+    r = await client.get(
+        "/api/admin/analytics/posts/anything/timeseries?from=2026-04-01",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 422
+
+
+async def test_posts_csv_accepts_from_to(client, admin_token, clean_analytics):
+    """Task 25b-csv-drilldown: /analytics/posts.csv accepts arbitrary [from, to];
+    Content-Disposition embeds the window in the filename."""
+    r = await client.get(
+        "/api/admin/analytics/posts.csv?from=2026-04-01&to=2026-04-07",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200, r.text
+    cd = r.headers.get("content-disposition", "")
+    assert "2026-04-01_to_2026-04-07" in cd, cd
+
+
+async def test_posts_csv_from_to_partial_422(client, admin_token):
+    r = await client.get(
+        "/api/admin/analytics/posts.csv?from=2026-04-01",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 422
+
+
 async def test_post_timeseries_404_for_unknown_id(client, admin_token):
     r = await client.get(
         "/api/admin/analytics/posts/p25c-missing/timeseries",
