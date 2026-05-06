@@ -271,7 +271,26 @@ export default function Posts() {
                     {p.subtitle && (
                       <div style={styles.subtitle}>{p.subtitle}</div>
                     )}
-                    <div style={styles.idHint}>id: {p.id}</div>
+                    <div style={styles.idHint}>
+                      id: {p.id}
+                      <button
+                        type="button"
+                        style={styles.idCopyBtn}
+                        title="复制 id 到剪贴板"
+                        data-testid={`copy-id-${p.id}`}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await navigator.clipboard.writeText(p.id);
+                            toast.success(`已复制 ${p.id}`);
+                          } catch {
+                            toast.error('复制失败');
+                          }
+                        }}
+                      >
+                        ⧉
+                      </button>
+                    </div>
                   </td>
                   <td style={styles.td}>
                     <span style={styles.tagPill}>{p.tag}</span>
@@ -517,7 +536,12 @@ const styles = {
   },
   title: { color: 'var(--fg)', fontWeight: 500 },
   subtitle: { color: 'var(--fg-3)', fontSize: 11, marginTop: 2 },
-  idHint: { color: 'var(--fg-4)', fontSize: 10, marginTop: 4 },
+  idHint: { color: 'var(--fg-4)', fontSize: 10, marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4 },
+  idCopyBtn: {
+    background: 'transparent', border: 0, color: 'var(--fg-4)',
+    fontSize: 11, padding: '0 4px', cursor: 'pointer', borderRadius: 3,
+    fontFamily: 'inherit',
+  },
   tagPill: {
     display: 'inline-block',
     padding: '2px 8px',
