@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import Comments from './Comments.jsx';
 import UIProvider from './ui/UIProvider.jsx';
 
@@ -35,8 +36,12 @@ const SAMPLE = [
   },
 ];
 
-function renderWithProvider(ui) {
-  return render(<UIProvider>{ui}</UIProvider>);
+function renderWithProvider(ui, { initialEntries = ['/admin/comments'] } = {}) {
+  return render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <UIProvider>{ui}</UIProvider>
+    </MemoryRouter>,
+  );
 }
 
 async function clickConfirmOk() {

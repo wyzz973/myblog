@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { commentsApi } from '../api/comments.js';
 import { useConfirm, useToast } from './ui/UIProvider.jsx';
 import SectionHead from './ui/SectionHead.jsx';
+import useSyncedSearchParams from './useSyncedSearchParams.js';
 
 // Backend status enum is pending|approved|spam; "all" is a frontend-only
 // pseudo-filter that omits the status query param.
@@ -12,10 +13,23 @@ const TABS = [
   { key: 'all', label: 'all' },
 ];
 
+const URL_SCHEMA = [
+  { key: 'status', defaultValue: 'pending' },
+  { key: 'post_id', defaultValue: '' },
+  { key: 'q', defaultValue: '' },
+];
+
 export default function Comments() {
-  const [tab, setTab] = useState('pending');
-  const [postFilter, setPostFilter] = useState('');
-  const [textQuery, setTextQuery] = useState('');
+  // 把 tab / post_id 过滤 / 文本搜索都挂到 URL，于是
+  // /admin/comments?status=all&post_id=vps 这样的深链能直接落到目标视图，
+  // 也方便从 Inbox / Reader admin bar / Dashboard tile 跳过来。
+  const [filters, setFilters] = useSyncedSearchParams(URL_SCHEMA);
+  const tab = filters.status;
+  const postFilter = filters.post_id;
+  const textQuery = filters.q;
+  const setTab = (v) => setFilters({ status: v });
+  const setPostFilter = (v) => setFilters({ post_id: v });
+  const setTextQuery = (v) => setFilters({ q: v });
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -471,7 +485,8 @@ const styles = {
     fontSize: 12,
     borderRadius: 4,
     outline: 'none',
-    minWidth: 220,
+    minWidth: 200,
+    flex: '1 1 240px',
   },
   selectAll: {
     display: 'inline-flex',
