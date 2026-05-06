@@ -321,9 +321,16 @@ export default function Comments() {
                   <StatusPill status={c.status} />
                 </div>
                 <div style={styles.meta}>
-                  <span style={styles.metaLink} title={c.post_id}>
-                    post: {c.post_title || c.post_id}
-                  </span>
+                  <a
+                    href={`/p/${encodeURIComponent(c.post_id)}#comment-${c.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={styles.metaLinkAnchor}
+                    title={`在新标签页打开 ${c.post_id}`}
+                    data-testid={`comment-post-link-${c.id}`}
+                  >
+                    post: {c.post_title || c.post_id} <span style={styles.metaArrow}>↗</span>
+                  </a>
                   <span style={styles.dim}>·</span>
                   <span style={styles.dim}>{fmtDate(c.created_at)}</span>
                   <span style={styles.dim}>· #{c.id}</span>
@@ -563,6 +570,20 @@ const styles = {
     fontSize: 11,
     color: 'var(--fg-3)',
   },
+  metaLinkAnchor: {
+    color: 'var(--fg-3)',
+    background: 'var(--bg)',
+    border: '1px solid var(--line-2)',
+    padding: '1px 6px',
+    borderRadius: 3,
+    textDecoration: 'none',
+    fontSize: 11,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaArrow: { fontSize: 10, opacity: 0.7 },
   metaLink: {
     color: 'var(--fg-3)',
     background: 'var(--bg)',
