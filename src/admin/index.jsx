@@ -71,7 +71,10 @@ export default function AdminApp() {
           <Route path="media" element={<Media />} />
           <Route path="comments" element={<Comments />} />
           <Route path="tags" element={<Tags />} />
-          <Route path="site" element={<Site />} />
+          {/* Theme/colors live at /admin/theme; legacy /admin/site
+              redirects so any bookmarks or analytics URLs still work. */}
+          <Route path="theme" element={<Site />} />
+          <Route path="site" element={<Navigate to="/admin/theme" replace />} />
           <Route path="profile" element={<Profile />} />
           <Route path="contacts" element={<Contacts />} />
           <Route path="projects" element={<Projects />} />

@@ -46,9 +46,9 @@ export const NAV_GROUPS = [
     items: [
       { to: '/admin/site-identity', label: '站点身份' },
       { to: '/admin/contacts', label: '联系方式' },
-      // 主题 keeps the legacy /admin/site URL alive while Task 11 will
-      // formally split theme out of that page.
-      { to: '/admin/site', label: '主题' },
+      // 主题 lives at /admin/theme; legacy /admin/site redirects there
+      // so any external bookmark / analytics URL still works.
+      { to: '/admin/theme', label: '主题' },
     ],
   },
   {
@@ -117,6 +117,11 @@ export default function Layout() {
   const crumb = findCrumb(location.pathname);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  // 移动端 sidebar 抽屉。桌面 ≥768px 时 sidebar 一直展开，state 不影响布局；
+  // <768px 时 sidebar 默认收起，用 hamburger 切换并叠加遮罩。
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // 切路由时自动关抽屉，不留在屏幕中央。
+  useEffect(() => { setMobileNavOpen(false); }, [location.pathname]);
   // Task 47/48: per-route actionable counters from /api/admin/dashboard.
   // Map is keyed by NavLink `to` so each entry is rendered as a badge
   // beside its sidebar item. Polled every 60s and refreshed on route
@@ -194,6 +199,33 @@ export default function Layout() {
 
   return (
     <UIProvider>
+    {/* 移动端响应式：把 sidebar 折成 hamburger 抽屉。
+        桌面 ≥768px：grid 双列保持原状。
+        移动 <768px：单列；sidebar fixed 全屏 80% 抽屉，translateX 切换。 */}
+    <style>{`
+      @media (max-width: 767px) {
+        .admin-shell { grid-template-columns: 1fr !important; }
+        .admin-sidebar {
+          position: fixed !important;
+          inset: 0 auto 0 0 !important;
+          width: 280px !important;
+          max-width: 86vw !important;
+          height: 100vh !important;
+          z-index: 80 !important;
+          transform: translateX(-100%);
+          transition: transform 200ms ease;
+          box-shadow: 0 0 24px rgba(0,0,0,0.45);
+        }
+        .admin-sidebar[data-open="true"] { transform: translateX(0); }
+        .admin-mobile-burger { display: inline-flex !important; }
+        .admin-backdrop { display: block !important; }
+        .admin-topbar { padding-left: 12px !important; padding-right: 12px !important; }
+        .admin-content { padding: 16px 12px !important; }
+      }
+      @media (min-width: 768px) {
+        .admin-mobile-burger, .admin-backdrop { display: none !important; }
+      }
+    `}</style>
     <div className="admin-shell" style={styles.shell}>
       <CommandPalette
         open={paletteOpen}
@@ -204,7 +236,21 @@ export default function Layout() {
         loadPosts={loadPosts}
       />
       <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
-      <aside className="admin-sidebar" style={styles.sidebar}>
+      {mobileNavOpen && (
+        <div
+          className="admin-backdrop"
+          style={styles.backdrop}
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden
+          data-testid="admin-backdrop"
+        />
+      )}
+      <aside
+        className="admin-sidebar"
+        style={styles.sidebar}
+        data-open={mobileNavOpen ? 'true' : 'false'}
+        data-testid="admin-sidebar"
+      >
         <div className="admin-brand" style={styles.brand}>
           <span className="admin-brand-dot" style={styles.brandDot} />
           <div>
@@ -250,6 +296,17 @@ export default function Layout() {
 
       <div className="admin-main" style={styles.main}>
         <header className="admin-topbar" style={styles.topbar}>
+          <button
+            type="button"
+            className="admin-mobile-burger"
+            style={styles.burger}
+            onClick={() => setMobileNavOpen((v) => !v)}
+            aria-label={mobileNavOpen ? '关闭导航' : '打开导航'}
+            aria-expanded={mobileNavOpen}
+            data-testid="admin-burger"
+          >
+            {mobileNavOpen ? '×' : '☰'}
+          </button>
           <div className="admin-crumbs" style={styles.crumbs} data-testid="breadcrumb">
             <span style={styles.dim}>~</span>
             <span style={styles.sep}>/</span>
@@ -421,5 +478,29 @@ const styles = {
     padding: '22px 24px 40px',
     flex: 1,
     minWidth: 0,
+  },
+  // 移动端 hamburger（桌面隐藏）；图标用 ☰/× 字符避免再引入 SVG。
+  burger: {
+    display: 'none', // 默认隐藏，<768px 媒体查询里覆盖成 inline-flex
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 36,
+    height: 36,
+    background: 'transparent',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg)',
+    fontSize: 18,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+    borderRadius: 4,
+    marginRight: 12,
+  },
+  // 抽屉打开时的遮罩 — 桌面始终隐藏。
+  backdrop: {
+    display: 'none', // 默认隐藏；媒体查询里 mobile 显示
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.55)',
+    zIndex: 70,
   },
 };
