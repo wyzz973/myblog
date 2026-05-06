@@ -83,6 +83,30 @@ export default function PetConversations() {
       </div>
       {error && <div className="err">{error}</div>}
       {loading && items.length === 0 && <div className="hint">加载中...</div>}
+      {!loading && !error && items.length === 0 && (
+        <div
+          className="hint"
+          data-testid="conv-empty"
+          style={{
+            padding: '32px 16px',
+            border: '1px dashed var(--line-2)',
+            borderRadius: 6,
+            textAlign: 'center',
+            color: 'var(--fg-3)',
+            lineHeight: 1.6,
+          }}
+        >
+          {(species || hashQuery.trim())
+            ? '当前筛选下没有匹配的对话。换个物种或访客哈希前缀再试。'
+            : (
+              <>
+                尚无访客发起对话。
+                <br />
+                一旦访客在公开页与宠物助手聊天，会话会出现在这里。
+              </>
+            )}
+        </div>
+      )}
       <div>
         {items.map((it) => (
           <Link
