@@ -1977,3 +1977,25 @@ Reuses the ghost-button look via a new `btnGhostLink` style entry that drops the
 **Commit:** `6f654b9` (`feat(admin/posts): "↗ 公开页" link on each row (Task 50)`).
 
 Implementation note: drafts/scheduled posts intentionally still render the link — the resulting public 404 is the cleanest signal that the post isn't yet public, and avoids dragging `status` into PostSummary just for this one UI hint. If we ever want a green/grey badge here it's a one-line addition once `status` is added to PostSummary; today's row stays compact.
+
+---
+
+### Task 51 — 状态 pill column on admin Posts list ✅
+
+**Frontend dependency:** PRD §7's PostSummary schema deliberately omitted `status`, leaving the admin list with no way to flag drafts vs published rows at a glance. The Task 50 follow-up note made this explicit — once status lands the public-link button can be augmented with status-aware colors. This task does the underlying schema work plus the column itself.
+
+**Backend:** `PostSummary.status: str | None = None` (default None so public list responses don't grow noise; only the admin `_summary` populates it from `Post.status`).
+
+**Frontend:** new `状态` column in `Posts.jsx` between 阅读 and 点赞. Pill colors wired through CSS vars (`--ok` green for published, `--danger` red for drafts, `--accent` blue for scheduled, neutral grey fallback).
+
+**Tests:**
+- **Pytest:** new `test_admin_list_summary_carries_status` asserts the field flows through; full file `pytest tests/test_admin_posts.py` → **19/19**.
+- **Vitest:** sweep `npx vitest run` → **265/265**.
+
+**Playwright:** `/Users/sd3/anaconda3/bin/python /tmp/admin-rebuild/task-51/verify.py` PASSED — API smoke checks every row carries a valid status string + public list never leaks anything other than `null`/`published`; UI smoke asserts the 状态 column header and the per-row pill text matches the API row.
+
+**Snapshot:** `/tmp/admin-rebuild/task-51/admin-posts-status-column.png`.
+
+**Commit:** `b020503` (`feat(admin/posts): 状态 pill column on list rows (Task 51)`).
+
+Implementation note: status pills use `color-mix(in oklab, var(--<color>) NN%, transparent)` for borders so the pills inherit the user's theme color shifts (Palette.jsx swaps the accent token at runtime). This is the same pattern the rest of the admin already uses for borderless mid-tones — pills look right under any palette without hardcoding hex values.
