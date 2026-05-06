@@ -17,6 +17,19 @@ export default function Tags() {
   const confirm = useConfirm();
   const toast = useToast();
 
+  // Task 62: 行内 slug 校验。saveEdit 已经做正则与 409 兜底，但用户希望
+  // 在输入时就看到反馈，避免敲完一长串才被弹错。两类错误：格式不合法、
+  // 与现有 slug 冲突。
+  const editSlugError = (() => {
+    if (!editingDraft) return null;
+    const slug = editingDraft.slug || '';
+    if (!slug.trim()) return 'slug 不能为空';
+    if (!SLUG_RE.test(slug)) return 'slug 必须是 a-z 0-9 -，长度 2–32';
+    const dup = items.some((x) => x.id !== editingId && x.slug === slug);
+    if (dup) return `slug 与现有标签 "${slug}" 冲突`;
+    return null;
+  })();
+
   const load = useCallback(() => {
     let mounted = true;
     setLoading(true);
@@ -257,13 +270,27 @@ export default function Tags() {
                   </td>
                   <td style={styles.td}>
                     {isEditing ? (
-                      <input
-                        style={styles.input}
-                        value={editingDraft.slug}
-                        onChange={(e) =>
-                          setEditingDraft({ ...editingDraft, slug: e.target.value })
-                        }
-                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <input
+                          style={{
+                            ...styles.input,
+                            ...(editSlugError ? styles.inputError : null),
+                          }}
+                          value={editingDraft.slug}
+                          onChange={(e) =>
+                            setEditingDraft({ ...editingDraft, slug: e.target.value })
+                          }
+                          data-testid={`tag-slug-input-${t.id}`}
+                        />
+                        {editSlugError && (
+                          <div
+                            style={styles.inlineError}
+                            data-testid={`tag-slug-error-${t.id}`}
+                          >
+                            {editSlugError}
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <code style={styles.slug}>{t.slug}</code>
                     )}
@@ -343,7 +370,8 @@ export default function Tags() {
                           type="button"
                           style={styles.btnPrimaryS}
                           onClick={saveEdit}
-                          disabled={busy}
+                          disabled={busy || !!editSlugError}
+                          data-testid={`tag-save-${t.id}`}
                         >
                           save
                         </button>
@@ -509,6 +537,8 @@ const styles = {
     width: '100%',
     boxSizing: 'border-box',
   },
+  inputError: { borderColor: 'var(--danger)' },
+  inlineError: { fontSize: 10, color: 'var(--danger)' },
   colorInput: {
     background: 'var(--bg)',
     border: '1px solid var(--line-2)',
