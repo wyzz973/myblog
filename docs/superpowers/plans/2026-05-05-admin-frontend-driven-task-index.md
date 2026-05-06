@@ -1051,7 +1051,7 @@ Implementation note: kept the SVG bar chart pattern from `Analytics.jsx` rather 
 
 ### Task 26 — Pet usage charts
 
-**Status:** in-progress (26a daily stacked bar + 26b per-mode pie done; 26c cost line still pending)
+**Status:** completed (26a daily stacked bar + 26b per-mode pie + 26c cost line done)
 **Priority:** low
 **Frontend evidence:** `AsciiPet.jsx` summon stream → token costs accumulate.
 **Owner problem:** flat day×mode×source table tells nothing about trends.
@@ -1088,7 +1088,18 @@ Implementation note: pure helpers in `src/admin/pet/petUsageChart.js` (`groupByD
 - **Snapshots:** `/tmp/admin-rebuild/task-26b/pie.png`.
 - **Commit:** `506c8a0` (`feat(admin/pet): per-mode pie chart on usage page (Task 26b)`).
 
-Implementation note: same pure-helper pattern as 26a. `groupByMode(rows)` aggregates `mode → calls` and sorts descending so the pie reads largest-first. `modeColor(mode)` uses a hash-into-palette so admin-introduced template modes (greet / summary / pet_care / code_assist / etc.) get deterministic colors without an explicit registry. `buildPieSlices(modes, {cx, cy, r, inner})` walks angles starting at 12 o'clock, builds an SVG `<path d>` per slice (handles inner-radius for donut), and computes a label position halfway between r and inner; single-slice case falls back to a full-circle path since SVG arcs collapse when start=end. `<ModePieChart>` in PetUsage.jsx renders the donut with a center total label + a side legend listing every mode's calls. The bar chart and pie sit side-by-side via flexbox (`flex-wrap` so the pie drops below the bar on narrow screens). 26c (estimated cost line — needs configurable provider rates, probably co-located on Integrations page) still pending.
+Implementation note: same pure-helper pattern as 26a. `groupByMode(rows)` aggregates `mode → calls` and sorts descending so the pie reads largest-first. `modeColor(mode)` uses a hash-into-palette so admin-introduced template modes (greet / summary / pet_care / code_assist / etc.) get deterministic colors without an explicit registry. `buildPieSlices(modes, {cx, cy, r, inner})` walks angles starting at 12 o'clock, builds an SVG `<path d>` per slice (handles inner-radius for donut), and computes a label position halfway between r and inner; single-slice case falls back to a full-circle path since SVG arcs collapse when start=end. `<ModePieChart>` in PetUsage.jsx renders the donut with a center total label + a side legend listing every mode's calls. The bar chart and pie sit side-by-side via flexbox (`flex-wrap` so the pie drops below the bar on narrow screens).
+
+#### Task 26c — daily cost line chart (DONE)
+
+- **Backend:** `/api/admin/pet/usage` aggregate now also returns `estimated_input_tokens` + `estimated_output_tokens` per (day, mode, source) so the client-side cost math can apply per-side rates without a new endpoint.
+- **Frontend:** new helpers in `src/admin/pet/petUsageChart.js` — `PROVIDER_RATES` (anthropic / zhipu / qwen / doubao / deepseek + `default` fallback, USD per 1M tokens), `rowCostUSD`, `groupCostByDay`, `buildCostLine`, `formatUSD`. `<CostChart>` in PetUsage.jsx renders an SVG `<polyline>` + `<circle>` per day below the stacked bar. Cache hits / fallbacks / rate-limited calls cost zero; unknown providers use `default` so a typo doesn't silently zero the bill.
+- **Vitest:** `npx vitest run src/admin/pet/petUsageChart.test.js` → 29/29 (16 prior + 13 new: rowCostUSD zero/rate/default/null; groupCostByDay ascending/empty; buildCostLine dot positions/zero-baseline/points format/single-day; formatUSD micro-spend + 2-dp). Combined `npx vitest run` → **238/238** (no Task 1-25 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-26c/verify.py` → /pet/usage payload includes split token fields → /admin/pet?tab=usage → wait for `[data-testid=pet-usage-cost]` OR `[data-testid=pet-usage-cost-empty]` → live DB had 2 day-dots and `$0.09` window total displayed.
+- **Snapshots:** `/tmp/admin-rebuild/task-26c/cost-chart.png`.
+- **Commit:** `77ba787` (`feat(admin/pet): daily cost line chart on usage page (Task 26c)`).
+
+Implementation note: rates are hardcoded in JS for the MVP — owner-configurable rates would belong in the Integrations page (one rate-pair per provider) and feed back to the chart via `apiPet.providerRates()`, but that's a follow-up that doesn't block visibility into spend. Keeping the math in `petUsageChart.js` means the cost number can be inspected/tested without spinning up a backend or react renderer. `formatUSD` uses 4 decimals below `$0.01` so micro-spend (zhipu/doubao runs in mass) still shows non-zero — rounding to `$0.00` was the temptation when most rows are sub-cent. Empty state ("暂无估算成本") fires when total is zero (cache + fallback only) so the chart isn't a misleading flat line at the baseline.
 
 ---
 
