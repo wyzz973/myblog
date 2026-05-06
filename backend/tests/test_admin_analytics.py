@@ -147,6 +147,77 @@ async def test_analytics_from_to_overlong_422(client, admin_token, clean_analyti
     assert r.status_code == 422
 
 
+async def test_analytics_posts_accepts_from_to(
+    client, admin_token, clean_analytics
+):
+    """Companion list /analytics/posts honors arbitrary from/to (Task 25b-companion)."""
+    r = await client.get(
+        "/api/admin/analytics/posts?from=2026-04-01&to=2026-04-07",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200, r.text
+    # Empty result is fine — we just want the endpoint to accept the params.
+    assert isinstance(r.json(), list)
+
+
+async def test_analytics_posts_from_to_partial_422(client, admin_token):
+    r = await client.get(
+        "/api/admin/analytics/posts?from=2026-04-01",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 422
+
+
+async def test_analytics_tags_accepts_from_to(
+    client, admin_token, clean_analytics
+):
+    r = await client.get(
+        "/api/admin/analytics/tags?from=2026-04-01&to=2026-04-07",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert isinstance(r.json(), list)
+
+
+async def test_analytics_bundle_companion_lists_use_window(
+    client, admin_token, clean_analytics
+):
+    """Seed two HitDaily rows on different historical dates; assert top_paths
+    in the requested window includes only the in-range row."""
+    in_date = date(2026, 4, 5)
+    out_date = date(2026, 4, 25)
+    async with AsyncSessionLocal() as s:
+        s.add(HitDaily(
+            date=in_date, path="/p25b-companion-IN",
+            hits=42, post_id=None,
+            referrers_top=[], countries_top=[],
+        ))
+        s.add(HitDaily(
+            date=out_date, path="/p25b-companion-OUT",
+            hits=99, post_id=None,
+            referrers_top=[], countries_top=[],
+        ))
+        await s.commit()
+    try:
+        r = await client.get(
+            "/api/admin/analytics?from=2026-04-01&to=2026-04-10",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert r.status_code == 200, r.text
+        paths = {p["path"]: p["hits"] for p in r.json()["top_paths"]}
+        assert paths.get("/p25b-companion-IN") == 42
+        assert "/p25b-companion-OUT" not in paths
+    finally:
+        from sqlalchemy import delete as sa_delete
+        async with AsyncSessionLocal() as s:
+            await s.execute(
+                sa_delete(HitDaily).where(
+                    HitDaily.path.in_(["/p25b-companion-IN", "/p25b-companion-OUT"])
+                )
+            )
+            await s.commit()
+
+
 async def test_analytics_from_to_seeded_history_visible(
     client, admin_token, clean_analytics
 ):

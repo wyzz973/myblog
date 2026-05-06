@@ -53,37 +53,60 @@ async def get_analytics(
             raise HTTPException(422, "to must be on or after from")
         if (to - from_).days > 365:
             raise HTTPException(422, "range exceeds 365 days")
-        days_for_lists = (to - from_).days + 1
         ts = await analytics_svc.timeseries(s, from_=from_, to=to)
+        top_paths = await analytics_svc.top_paths(s, from_=from_, to=to, limit=10)
+        top_refs = await analytics_svc.top_referrers(s, from_=from_, to=to, limit=10)
+        top_countries = await analytics_svc.top_countries(s, from_=from_, to=to, limit=10)
     else:
-        days_for_lists = min(days, 365)
-        ts = await analytics_svc.timeseries(s, days=days_for_lists)
+        d = min(days, 365)
+        ts = await analytics_svc.timeseries(s, days=d)
+        top_paths = await analytics_svc.top_paths(s, days=d, limit=10)
+        top_refs = await analytics_svc.top_referrers(s, days=d, limit=10)
+        top_countries = await analytics_svc.top_countries(s, days=d, limit=10)
     return AnalyticsBundleResponse(
         timeseries=ts,
-        top_paths=await analytics_svc.top_paths(s, days=days_for_lists, limit=10),
-        top_referrers=await analytics_svc.top_referrers(s, days=days_for_lists, limit=10),
-        top_countries=await analytics_svc.top_countries(s, days=days_for_lists, limit=10),
+        top_paths=top_paths,
+        top_referrers=top_refs,
+        top_countries=top_countries,
     )
 
 
 @router.get("/analytics/posts", response_model=list[PostHitsItem])
 async def get_analytics_posts(
     days: int = Query(default=30, ge=1),
+    from_: _date | None = Query(default=None, alias="from"),
+    to: _date | None = Query(default=None),
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> list[PostHitsItem]:
-    days = min(days, 365)
-    return await analytics_svc.per_post(s, days=days, limit=50)
+    if (from_ is None) ^ (to is None):
+        raise HTTPException(422, "from and to must be supplied together")
+    if from_ is not None and to is not None:
+        if to < from_:
+            raise HTTPException(422, "to must be on or after from")
+        if (to - from_).days > 365:
+            raise HTTPException(422, "range exceeds 365 days")
+        return await analytics_svc.per_post(s, from_=from_, to=to, limit=50)
+    return await analytics_svc.per_post(s, days=min(days, 365), limit=50)
 
 
 @router.get("/analytics/tags", response_model=list[TagHitsItem])
 async def get_analytics_tags(
     days: int = Query(default=30, ge=1),
+    from_: _date | None = Query(default=None, alias="from"),
+    to: _date | None = Query(default=None),
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> list[TagHitsItem]:
-    days = min(days, 365)
-    return await analytics_svc.per_tag(s, days=days)
+    if (from_ is None) ^ (to is None):
+        raise HTTPException(422, "from and to must be supplied together")
+    if from_ is not None and to is not None:
+        if to < from_:
+            raise HTTPException(422, "to must be on or after from")
+        if (to - from_).days > 365:
+            raise HTTPException(422, "range exceeds 365 days")
+        return await analytics_svc.per_tag(s, from_=from_, to=to)
+    return await analytics_svc.per_tag(s, days=min(days, 365))
 
 
 @router.get(

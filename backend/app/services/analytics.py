@@ -92,6 +92,24 @@ async def _hits_history(s: AsyncSession, *, days: int) -> dict[date, int]:
     )
 
 
+def _window_pieces(
+    *,
+    days: int | None = None,
+    from_: date | None = None,
+    to: date | None = None,
+) -> tuple[date, date, datetime | None]:
+    """Decompose an analytics window into (start, history_end_exclusive,
+    today_start_dt_or_None). Today's HitEvent live-add is included only
+    when the window actually covers today (end >= today). Otherwise the
+    aggregate is fully historical and the caller skips the live branch.
+    """
+    today = _today_utc()
+    start, end = resolve_window(days=days, from_=from_, to=to)
+    if end >= today:
+        return start, today, _today_start_utc()
+    return start, end + timedelta(days=1), None
+
+
 async def timeseries(
     s: AsyncSession,
     *,
@@ -184,40 +202,46 @@ async def dashboard_kpis(s: AsyncSession) -> DashboardResponse:
 
 
 async def top_paths(
-    s: AsyncSession, *, days: int, limit: int = 10
+    s: AsyncSession,
+    *,
+    days: int | None = None,
+    from_: date | None = None,
+    to: date | None = None,
+    limit: int = 10,
 ) -> list[PathHits]:
-    today = _today_utc()
-    start = today - timedelta(days=days - 1)
-    today_start_dt = _today_start_utc()
-
-    # Historical days from hit_daily.
+    start, history_end_exclusive, today_start_dt = _window_pieces(
+        days=days, from_=from_, to=to,
+    )
     history = await s.execute(
         select(HitDaily.path, func.sum(HitDaily.hits).label("h"))
-        .where(HitDaily.date >= start).where(HitDaily.date < today)
+        .where(HitDaily.date >= start).where(HitDaily.date < history_end_exclusive)
         .group_by(HitDaily.path)
     )
     counts: dict[str, int] = {p: int(h or 0) for p, h in history.all()}
-
-    # Today's contribution from hit_events.
-    today_rows = await s.execute(
-        select(HitEvent.path, func.count(HitEvent.id))
-        .where(HitEvent.created_at >= today_start_dt)
-        .group_by(HitEvent.path)
-    )
-    for p, n in today_rows.all():
-        counts[p] = counts.get(p, 0) + int(n or 0)
-
+    if today_start_dt is not None:
+        today_rows = await s.execute(
+            select(HitEvent.path, func.count(HitEvent.id))
+            .where(HitEvent.created_at >= today_start_dt)
+            .group_by(HitEvent.path)
+        )
+        for p, n in today_rows.all():
+            counts[p] = counts.get(p, 0) + int(n or 0)
     sorted_pairs = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:limit]
     return [PathHits(path=p, hits=n) for p, n in sorted_pairs]
 
 
 async def _merge_jsonb_top(
-    s: AsyncSession, *, column, key: str, days: int
+    s: AsyncSession,
+    *,
+    column,
+    key: str,
+    start: date,
+    history_end_exclusive: date,
 ) -> dict[str, int]:
-    today = _today_utc()
-    start = today - timedelta(days=days - 1)
     res = await s.execute(
-        select(column).where(HitDaily.date >= start).where(HitDaily.date < today)
+        select(column)
+        .where(HitDaily.date >= start)
+        .where(HitDaily.date < history_end_exclusive)
     )
     counts: dict[str, int] = {}
     for (arr,) in res.all():
@@ -229,75 +253,96 @@ async def _merge_jsonb_top(
 
 
 async def top_referrers(
-    s: AsyncSession, *, days: int, limit: int = 10
+    s: AsyncSession,
+    *,
+    days: int | None = None,
+    from_: date | None = None,
+    to: date | None = None,
+    limit: int = 10,
 ) -> list[ReferrerHits]:
+    start, history_end_exclusive, today_start_dt = _window_pieces(
+        days=days, from_=from_, to=to,
+    )
     counts = await _merge_jsonb_top(
-        s, column=HitDaily.referrers_top, key="r", days=days
+        s, column=HitDaily.referrers_top, key="r",
+        start=start, history_end_exclusive=history_end_exclusive,
     )
-    # Today's contribution from hit_events.
-    today_rows = await s.execute(
-        select(HitEvent.referrer, func.count(HitEvent.id))
-        .where(HitEvent.created_at >= _today_start_utc())
-        .where(HitEvent.referrer.isnot(None))
-        .group_by(HitEvent.referrer)
-    )
-    for r, n in today_rows.all():
-        counts[r] = counts.get(r, 0) + int(n or 0)
+    if today_start_dt is not None:
+        today_rows = await s.execute(
+            select(HitEvent.referrer, func.count(HitEvent.id))
+            .where(HitEvent.created_at >= today_start_dt)
+            .where(HitEvent.referrer.isnot(None))
+            .group_by(HitEvent.referrer)
+        )
+        for r, n in today_rows.all():
+            counts[r] = counts.get(r, 0) + int(n or 0)
     sorted_pairs = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:limit]
     return [ReferrerHits(referrer=r, hits=n) for r, n in sorted_pairs]
 
 
 async def top_countries(
-    s: AsyncSession, *, days: int, limit: int = 10
+    s: AsyncSession,
+    *,
+    days: int | None = None,
+    from_: date | None = None,
+    to: date | None = None,
+    limit: int = 10,
 ) -> list[CountryHits]:
+    start, history_end_exclusive, today_start_dt = _window_pieces(
+        days=days, from_=from_, to=to,
+    )
     counts = await _merge_jsonb_top(
-        s, column=HitDaily.countries_top, key="c", days=days
+        s, column=HitDaily.countries_top, key="c",
+        start=start, history_end_exclusive=history_end_exclusive,
     )
-    today_rows = await s.execute(
-        select(HitEvent.country, func.count(HitEvent.id))
-        .where(HitEvent.created_at >= _today_start_utc())
-        .where(HitEvent.country.isnot(None))
-        .group_by(HitEvent.country)
-    )
-    for c, n in today_rows.all():
-        counts[c] = counts.get(c, 0) + int(n or 0)
+    if today_start_dt is not None:
+        today_rows = await s.execute(
+            select(HitEvent.country, func.count(HitEvent.id))
+            .where(HitEvent.created_at >= today_start_dt)
+            .where(HitEvent.country.isnot(None))
+            .group_by(HitEvent.country)
+        )
+        for c, n in today_rows.all():
+            counts[c] = counts.get(c, 0) + int(n or 0)
     sorted_pairs = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:limit]
     return [CountryHits(country=c, hits=n) for c, n in sorted_pairs]
 
 
 async def per_post(
-    s: AsyncSession, *, days: int, limit: int = 50
+    s: AsyncSession,
+    *,
+    days: int | None = None,
+    from_: date | None = None,
+    to: date | None = None,
+    limit: int = 50,
 ) -> list[PostHitsItem]:
-    today = _today_utc()
-    start = today - timedelta(days=days - 1)
-
-    # Historical sums from hit_daily, JOIN posts for title.
+    start, history_end_exclusive, today_start_dt = _window_pieces(
+        days=days, from_=from_, to=to,
+    )
     history = await s.execute(
         select(
             HitDaily.post_id, Post.title, func.sum(HitDaily.hits).label("h"),
         )
         .join(Post, Post.id == HitDaily.post_id)
         .where(HitDaily.date >= start)
-        .where(HitDaily.date < today)
+        .where(HitDaily.date < history_end_exclusive)
         .where(HitDaily.post_id.isnot(None))
         .group_by(HitDaily.post_id, Post.title)
     )
     counts: dict[str, tuple[str, int]] = {}
     for post_id, title, h in history.all():
         counts[post_id] = (title, int(h or 0))
-
-    # Today's contribution from hit_events with post_id.
-    today_rows = await s.execute(
-        select(HitEvent.post_id, Post.title, func.count(HitEvent.id))
-        .join(Post, Post.id == HitEvent.post_id)
-        .where(HitEvent.created_at >= _today_start_utc())
-        .where(HitEvent.post_id.isnot(None))
-        .group_by(HitEvent.post_id, Post.title)
-    )
-    for post_id, title, n in today_rows.all():
-        prev_title, prev = counts.get(post_id, (title, 0))
-        counts[post_id] = (prev_title, prev + int(n or 0))
-
+    if today_start_dt is not None:
+        today_rows = await s.execute(
+            select(HitEvent.post_id, Post.title, func.count(HitEvent.id))
+            .join(Post, Post.id == HitEvent.post_id)
+            .where(HitEvent.created_at >= today_start_dt)
+            .where(HitEvent.post_id.isnot(None))
+            .group_by(HitEvent.post_id, Post.title)
+        )
+        for post_id, title, n in today_rows.all():
+            prev_title, prev = counts.get(post_id, (title, 0))
+            counts[post_id] = (prev_title, prev + int(n or 0))
     sorted_items = sorted(counts.items(), key=lambda kv: kv[1][1], reverse=True)[:limit]
     return [
         PostHitsItem(post_id=pid, title=title, hits=n)
@@ -341,10 +386,16 @@ async def per_post_timeseries(
     return points
 
 
-async def per_tag(s: AsyncSession, *, days: int) -> list[TagHitsItem]:
-    today = _today_utc()
-    start = today - timedelta(days=days - 1)
-
+async def per_tag(
+    s: AsyncSession,
+    *,
+    days: int | None = None,
+    from_: date | None = None,
+    to: date | None = None,
+) -> list[TagHitsItem]:
+    start, history_end_exclusive, today_start_dt = _window_pieces(
+        days=days, from_=from_, to=to,
+    )
     history = await s.execute(
         select(
             Tag.id, Tag.slug, Tag.name, func.sum(HitDaily.hits).label("h"),
@@ -352,24 +403,23 @@ async def per_tag(s: AsyncSession, *, days: int) -> list[TagHitsItem]:
         .join(Post, Post.id == HitDaily.post_id)
         .join(Tag, Tag.id == Post.tag_id)
         .where(HitDaily.date >= start)
-        .where(HitDaily.date < today)
+        .where(HitDaily.date < history_end_exclusive)
         .group_by(Tag.id, Tag.slug, Tag.name)
     )
     counts: dict[int, tuple[str, str, int]] = {}
     for tid, slug, name, h in history.all():
         counts[tid] = (slug, name, int(h or 0))
-
-    today_rows = await s.execute(
-        select(Tag.id, Tag.slug, Tag.name, func.count(HitEvent.id))
-        .join(Post, Post.id == HitEvent.post_id)
-        .join(Tag, Tag.id == Post.tag_id)
-        .where(HitEvent.created_at >= _today_start_utc())
-        .group_by(Tag.id, Tag.slug, Tag.name)
-    )
-    for tid, slug, name, n in today_rows.all():
-        prev_slug, prev_name, prev = counts.get(tid, (slug, name, 0))
-        counts[tid] = (prev_slug, prev_name, prev + int(n or 0))
-
+    if today_start_dt is not None:
+        today_rows = await s.execute(
+            select(Tag.id, Tag.slug, Tag.name, func.count(HitEvent.id))
+            .join(Post, Post.id == HitEvent.post_id)
+            .join(Tag, Tag.id == Post.tag_id)
+            .where(HitEvent.created_at >= today_start_dt)
+            .group_by(Tag.id, Tag.slug, Tag.name)
+        )
+        for tid, slug, name, n in today_rows.all():
+            prev_slug, prev_name, prev = counts.get(tid, (slug, name, 0))
+            counts[tid] = (prev_slug, prev_name, prev + int(n or 0))
     sorted_items = sorted(counts.items(), key=lambda kv: kv[1][2], reverse=True)
     return [
         TagHitsItem(tag_id=tid, slug=s_, name=n_, hits=h_)

@@ -98,12 +98,18 @@ export const apiAnalytics = {
     return req(`/analytics?days=${days}`);
   },
   posts(range) {
-    const days = rangeToDays(range);
-    return req(`/analytics/posts?days=${days}`);
+    const ft = rangeToFromTo(range);
+    if (ft) {
+      return req(`/analytics/posts?from=${encodeURIComponent(ft.from)}&to=${encodeURIComponent(ft.to)}`);
+    }
+    return req(`/analytics/posts?days=${rangeToDays(range)}`);
   },
   tags(range) {
-    const days = rangeToDays(range);
-    return req(`/analytics/tags?days=${days}`);
+    const ft = rangeToFromTo(range);
+    if (ft) {
+      return req(`/analytics/tags?from=${encodeURIComponent(ft.from)}&to=${encodeURIComponent(ft.to)}`);
+    }
+    return req(`/analytics/tags?days=${rangeToDays(range)}`);
   },
   // Task 25c: per-post drilldown — daily timeseries for one post.
   postTimeseries(postId, range) {
