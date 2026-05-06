@@ -99,6 +99,85 @@ async def test_analytics_days_clamp_upper(client, admin_token, clean_analytics):
     assert len(r.json()["timeseries"]) == 365
 
 
+# Task 25b-arbitrary-end
+
+
+async def test_analytics_from_to_returns_arbitrary_window(
+    client, admin_token, clean_analytics
+):
+    r = await client.get(
+        "/api/admin/analytics?from=2026-04-01&to=2026-04-07",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["timeseries"]) == 7
+    # Window endpoints are inclusive; first/last dates match the params.
+    assert body["timeseries"][0]["date"] == "2026-04-01"
+    assert body["timeseries"][-1]["date"] == "2026-04-07"
+
+
+async def test_analytics_from_to_partial_422(client, admin_token, clean_analytics):
+    """`from` without `to` (or vice versa) should reject — both are required."""
+    r1 = await client.get(
+        "/api/admin/analytics?from=2026-04-01",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r1.status_code == 422, r1.text
+    r2 = await client.get(
+        "/api/admin/analytics?to=2026-04-01",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r2.status_code == 422, r2.text
+
+
+async def test_analytics_from_to_inverted_422(client, admin_token, clean_analytics):
+    r = await client.get(
+        "/api/admin/analytics?from=2026-04-30&to=2026-04-01",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 422
+
+
+async def test_analytics_from_to_overlong_422(client, admin_token, clean_analytics):
+    r = await client.get(
+        "/api/admin/analytics?from=2024-01-01&to=2026-01-01",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 422
+
+
+async def test_analytics_from_to_seeded_history_visible(
+    client, admin_token, clean_analytics
+):
+    """Seed a HitDaily row inside an arbitrary historical window and assert
+    the returned timeseries surfaces it on the right day."""
+    seed_day = date(2026, 4, 15)
+    async with AsyncSessionLocal() as s:
+        s.add(HitDaily(
+            date=seed_day, path="/p25b-window",
+            hits=11, post_id=None,
+            referrers_top=[], countries_top=[],
+        ))
+        await s.commit()
+    try:
+        r = await client.get(
+            "/api/admin/analytics?from=2026-04-10&to=2026-04-20",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert r.status_code == 200
+        ts = r.json()["timeseries"]
+        seed_pt = next(p for p in ts if p["date"] == "2026-04-15")
+        assert seed_pt["hits"] >= 11, seed_pt
+    finally:
+        from sqlalchemy import delete as sa_delete
+        async with AsyncSessionLocal() as s:
+            await s.execute(
+                sa_delete(HitDaily).where(HitDaily.path == "/p25b-window")
+            )
+            await s.commit()
+
+
 async def test_analytics_posts_401(client, clean_analytics):
     r = await client.get("/api/admin/analytics/posts")
     assert r.status_code == 401

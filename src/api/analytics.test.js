@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { rangeToDays } from './analytics.js';
+import { rangeToDays, rangeToFromTo } from './analytics.js';
 
 describe('rangeToDays', () => {
   beforeAll(() => {
@@ -38,5 +38,37 @@ describe('rangeToDays', () => {
   it('falls back to 30 for malformed since: tokens', () => {
     expect(rangeToDays('since:not-a-date')).toBe(30);
     expect(rangeToDays('since:')).toBe(30);
+  });
+
+  // Task 25b-arbitrary-end
+  it('parses range:YYYY-MM-DD..YYYY-MM-DD into inclusive day count', () => {
+    expect(rangeToDays('range:2026-04-01..2026-04-07')).toBe(7);
+    expect(rangeToDays('range:2026-05-06..2026-05-06')).toBe(1);
+  });
+
+  it('range: clamps over-365 windows and falls back on malformed input', () => {
+    expect(rangeToDays('range:2024-01-01..2026-01-01')).toBe(365);
+    expect(rangeToDays('range:2026-04-30..2026-04-01')).toBe(30); // inverted → fallback
+    expect(rangeToDays('range:bogus')).toBe(30);
+    expect(rangeToDays('range:')).toBe(30);
+  });
+});
+
+describe('rangeToFromTo', () => {
+  it('returns null for non-range tokens', () => {
+    expect(rangeToFromTo('30d')).toBeNull();
+    expect(rangeToFromTo('since:2026-04-01')).toBeNull();
+    expect(rangeToFromTo(null)).toBeNull();
+  });
+
+  it('returns {from, to} ISO strings for well-formed range: tokens', () => {
+    expect(rangeToFromTo('range:2026-04-01..2026-04-07')).toEqual({
+      from: '2026-04-01', to: '2026-04-07',
+    });
+  });
+
+  it('returns null for malformed range: tokens', () => {
+    expect(rangeToFromTo('range:bogus')).toBeNull();
+    expect(rangeToFromTo('range:2026-04-01')).toBeNull();
   });
 });

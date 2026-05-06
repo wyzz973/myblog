@@ -376,31 +376,66 @@ const styles = {
 // fetches AND the CSV download. Value clears (=> falls back to a chip
 // preset) when the input is emptied.
 function SinceDatePicker({ range, onChange }) {
-  const value = typeof range === 'string' && range.startsWith('since:')
-    ? range.slice('since:'.length)
-    : '';
-  // Today UTC for the upper bound of the picker — picking "today" still
-  // produces 1 day inclusive.
+  // Decode the active range into (from, to). `since:YYYY-MM-DD` and
+  // `range:YYYY-MM-DD..YYYY-MM-DD` both populate the from box; only
+  // `range:` also populates the to box.
+  let fromVal = '';
+  let toVal = '';
+  if (typeof range === 'string') {
+    if (range.startsWith('since:')) {
+      fromVal = range.slice('since:'.length);
+    } else if (range.startsWith('range:')) {
+      const [a, b] = range.slice('range:'.length).split('..');
+      if (a && b) { fromVal = a; toVal = b; }
+    }
+  }
   const todayUtc = (() => {
     const d = new Date();
     d.setUTCHours(0, 0, 0, 0);
     return d.toISOString().slice(0, 10);
   })();
+
+  function emit(nextFrom, nextTo) {
+    if (!nextFrom && !nextTo) {
+      onChange('30d');
+      return;
+    }
+    if (nextFrom && nextTo) {
+      // Inverted dates: keep the existing token; let the user fix the input.
+      if (nextTo < nextFrom) return;
+      onChange(`range:${nextFrom}..${nextTo}`);
+      return;
+    }
+    if (nextFrom) onChange(`since:${nextFrom}`);
+    else onChange('30d'); // only `to` filled is meaningless on its own
+  }
+
   return (
-    <input
-      type="date"
-      value={value}
-      max={todayUtc}
-      onChange={(e) => {
-        const v = e.target.value;
-        if (!v) onChange('30d'); // clearing falls back to the default preset
-        else onChange(`since:${v}`);
-      }}
-      style={value ? { ...styles.rangeBtn, ...styles.rangeBtnActive } : styles.rangeBtn}
-      data-testid="analytics-since-date"
-      data-active={value ? 'true' : undefined}
-      aria-label="自定义起始日期"
-    />
+    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+      <input
+        type="date"
+        value={fromVal}
+        max={todayUtc}
+        onChange={(e) => emit(e.target.value, toVal)}
+        style={fromVal ? { ...styles.rangeBtn, ...styles.rangeBtnActive } : styles.rangeBtn}
+        data-testid="analytics-since-date"
+        data-active={fromVal ? 'true' : undefined}
+        aria-label="自定义起始日期"
+      />
+      <span style={{ fontSize: 11, color: 'var(--fg-4)' }}>→</span>
+      <input
+        type="date"
+        value={toVal}
+        max={todayUtc}
+        min={fromVal || undefined}
+        onChange={(e) => emit(fromVal, e.target.value)}
+        style={toVal ? { ...styles.rangeBtn, ...styles.rangeBtnActive } : styles.rangeBtn}
+        data-testid="analytics-to-date"
+        data-active={toVal ? 'true' : undefined}
+        aria-label="自定义结束日期 (可选)"
+        placeholder="今天"
+      />
+    </span>
   );
 }
 

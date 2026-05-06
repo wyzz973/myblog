@@ -47,11 +47,34 @@ async def _hits_today(s: AsyncSession) -> int:
     return int(res.scalar() or 0)
 
 
-async def _hits_history(s: AsyncSession, *, days: int) -> dict[date, int]:
-    """Sum hit_daily.hits per date for last `days` excluding today."""
+def resolve_window(
+    *,
+    days: int | None = None,
+    from_: date | None = None,
+    to: date | None = None,
+) -> tuple[date, date]:
+    """Map (days OR [from, to]) → (start_inclusive, end_inclusive).
+
+    Task 25b-arbitrary-end: arbitrary `[from, to]` overrides `days`. When
+    only `days` is given, end defaults to today (existing behavior).
+    Inputs are clamped to [1, 365] days.
+    """
     today = _today_utc()
-    start = today - timedelta(days=days - 1)
-    end_exclusive = today  # everything before today
+    if from_ is not None and to is not None:
+        if to < from_:
+            raise ValueError("`to` must be >= `from`")
+        # Cap window length so a misclick doesn't ask for years of data.
+        if (to - from_).days > 365:
+            raise ValueError("range exceeds 365 days")
+        return (from_, to)
+    n = max(1, min(days or 30, 365))
+    return (today - timedelta(days=n - 1), today)
+
+
+async def _hits_history_window(
+    s: AsyncSession, *, start: date, end_exclusive: date,
+) -> dict[date, int]:
+    """Sum hit_daily.hits per date in [start, end_exclusive)."""
     res = await s.execute(
         select(HitDaily.date, func.sum(HitDaily.hits))
         .where(HitDaily.date >= start)
@@ -61,14 +84,45 @@ async def _hits_history(s: AsyncSession, *, days: int) -> dict[date, int]:
     return {row[0]: int(row[1] or 0) for row in res.all()}
 
 
-async def timeseries(s: AsyncSession, *, days: int) -> list[DayPoint]:
+async def _hits_history(s: AsyncSession, *, days: int) -> dict[date, int]:
+    """Backwards-compat wrapper for callers that still pass `days=N`."""
     today = _today_utc()
-    history = await _hits_history(s, days=days)
-    today_hits = await _hits_today(s)
+    return await _hits_history_window(
+        s, start=today - timedelta(days=days - 1), end_exclusive=today,
+    )
+
+
+async def timeseries(
+    s: AsyncSession,
+    *,
+    days: int | None = None,
+    from_: date | None = None,
+    to: date | None = None,
+) -> list[DayPoint]:
+    """Daily hit timeseries.
+
+    Two calling conventions:
+      - `days=N` (legacy) → window = last N days ending today
+      - `from_=D1, to=D2`  → window = [D1, D2] inclusive (Task 25b-arbitrary-end)
+
+    The right edge of the window contributes today's live hit_events count
+    only when `to == today`; otherwise the window is fully historical.
+    """
+    today = _today_utc()
+    start, end = resolve_window(days=days, from_=from_, to=to)
+
+    # History rows cover [start, end_exclusive_for_history) where
+    # end_exclusive_for_history = end + 1 if end < today else today
+    history_end_exclusive = end + timedelta(days=1) if end < today else today
+    history = await _hits_history_window(
+        s, start=start, end_exclusive=history_end_exclusive,
+    )
+    today_hits = await _hits_today(s) if end >= today else 0
 
     points: list[DayPoint] = []
-    for i in range(days):
-        d = today - timedelta(days=days - 1 - i)
+    n_days = (end - start).days + 1
+    for i in range(n_days):
+        d = start + timedelta(days=i)
         n = today_hits if d == today else history.get(d, 0)
         points.append(DayPoint(date=d, hits=n))
     return points

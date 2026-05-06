@@ -1,6 +1,6 @@
 import csv
 import io
-from datetime import UTC, datetime
+from datetime import UTC, date as _date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
@@ -32,15 +32,37 @@ async def get_dashboard(
 @router.get("/analytics", response_model=AnalyticsBundleResponse)
 async def get_analytics(
     days: int = Query(default=30, ge=1),
+    from_: _date | None = Query(default=None, alias="from"),
+    to: _date | None = Query(default=None),
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> AnalyticsBundleResponse:
-    days = min(days, 365)  # clamp upper bound
+    """Bundle for the analytics page (Task 25b-arbitrary-end).
+
+    `from` + `to` (both required together) → arbitrary-window mode for the
+    timeseries chart. Either both or neither must be present; supplying
+    only one returns 422. Companion lists (top paths/referrers/countries)
+    still use the `days` knob — they read the last-N-days window ending
+    today regardless of `from`/`to`. Surfaces the active window length so
+    the lists stay roughly in sync; the UI surfaces the limitation.
+    """
+    if (from_ is None) ^ (to is None):
+        raise HTTPException(422, "from and to must be supplied together")
+    if from_ is not None and to is not None:
+        if to < from_:
+            raise HTTPException(422, "to must be on or after from")
+        if (to - from_).days > 365:
+            raise HTTPException(422, "range exceeds 365 days")
+        days_for_lists = (to - from_).days + 1
+        ts = await analytics_svc.timeseries(s, from_=from_, to=to)
+    else:
+        days_for_lists = min(days, 365)
+        ts = await analytics_svc.timeseries(s, days=days_for_lists)
     return AnalyticsBundleResponse(
-        timeseries=await analytics_svc.timeseries(s, days=days),
-        top_paths=await analytics_svc.top_paths(s, days=days, limit=10),
-        top_referrers=await analytics_svc.top_referrers(s, days=days, limit=10),
-        top_countries=await analytics_svc.top_countries(s, days=days, limit=10),
+        timeseries=ts,
+        top_paths=await analytics_svc.top_paths(s, days=days_for_lists, limit=10),
+        top_referrers=await analytics_svc.top_referrers(s, days=days_for_lists, limit=10),
+        top_countries=await analytics_svc.top_countries(s, days=days_for_lists, limit=10),
     )
 
 

@@ -38,9 +38,13 @@ async function req(path, opts = {}) {
   return r.json();
 }
 
-// Range tokens accepted by UI -> days for backend.
-//   '7d' / '30d' / '90d' — fixed presets
-//   'since:YYYY-MM-DD'  — custom: derive days = (today_utc - start) + 1
+// Range tokens accepted by UI:
+//   '7d' / '30d' / '90d'        — fixed presets
+//   'since:YYYY-MM-DD'          — custom: derive days = (today_utc - start) + 1
+//   'range:YYYY-MM-DD..YYYY-MM-DD' — Task 25b-arbitrary-end: arbitrary [from, to]
+//
+// `rangeToDays` keeps the legacy "convert to a single days number" semantics
+// for endpoints that haven't been extended yet (per_post / per_tag / posts.csv).
 function rangeToDays(range) {
   if (typeof range === 'string' && range.startsWith('since:')) {
     const iso = range.slice('since:'.length);
@@ -54,15 +58,42 @@ function rangeToDays(range) {
     if (days > 365) return 365;
     return days;
   }
+  if (typeof range === 'string' && range.startsWith('range:')) {
+    const [from, to] = range.slice('range:'.length).split('..');
+    if (from && to) {
+      const start = new Date(`${from}T00:00:00Z`);
+      const end = new Date(`${to}T00:00:00Z`);
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end >= start) {
+        const ms = end.getTime() - start.getTime();
+        const d = Math.floor(ms / 86400000) + 1;
+        return Math.max(1, Math.min(365, d));
+      }
+    }
+    return 30;
+  }
   if (range === '7d') return 7;
   if (range === '90d') return 90;
   return 30;
 }
 
-export { rangeToDays };
+// For endpoints that accept arbitrary windows: convert range token →
+// {from, to} ISO date strings, or null when the token is days-based.
+function rangeToFromTo(range) {
+  if (typeof range === 'string' && range.startsWith('range:')) {
+    const [from, to] = range.slice('range:'.length).split('..');
+    if (from && to) return { from, to };
+  }
+  return null;
+}
+
+export { rangeToDays, rangeToFromTo };
 
 export const apiAnalytics = {
   bundle(range) {
+    const ft = rangeToFromTo(range);
+    if (ft) {
+      return req(`/analytics?from=${encodeURIComponent(ft.from)}&to=${encodeURIComponent(ft.to)}`);
+    }
     const days = rangeToDays(range);
     return req(`/analytics?days=${days}`);
   },
