@@ -2177,3 +2177,54 @@ Implementation note: Playwright's `route()` interception is the cleanest way to 
 **Commit:** `8341dc3` (`feat(admin/comments): clickable post link per row (Task 59)`).
 
 Implementation note: the verifier's "switch to all tab" step is necessary because the Comments page defaults to `pending`, and a real moderation queue with no pending items would otherwise hide every row. Codifying this in the verify script (rather than seeding a pending comment per run) keeps the dev DB clean across rounds.
+
+---
+
+## Long-tail UX wave (Task 60–65)
+
+### Task 60 — Posts 行 复制 ID 按钮 ✅
+- `data-testid=copy-id-{id}` `⧉` 按钮 → `navigator.clipboard.writeText(p.id)` + toast
+- Verify: `/tmp/admin-rebuild/task-60/verify.py` PASSED（剪贴板+toast）
+- Commit: `a7a832c`
+
+### Task 61 — ActivityLog 行 actor/target 点击过滤 ✅
+- 单元格变成虚线下划线按钮，stopPropagation 后调用 `pickQuery(value)`
+- Verify: `/tmp/admin-rebuild/task-61/verify.py` PASSED（actor + target 两路）
+- Commit: `983328c`
+
+### Task 62 — Tags 行内 slug 实时校验 ✅
+- 计算 editSlugError = (格式 + 唯一性)；inputError 红边 + inlineError 文字 + save 禁用
+- Verify: `/tmp/admin-rebuild/task-62/verify.py` PASSED（冲突/非法/恢复 3 路）
+- Commit: `ccf971f`
+
+### Task 63 — Inbox 行级 dismiss ✅
+- `bl.admin.inbox.dismissed` Set<"section:id">；isNew = ts > lastSeen && !dismissed
+- Verify: `/tmp/admin-rebuild/task-63/verify.py` PASSED（dismiss 立即生效 + 跨刷新保持）
+- Commit: `2467fcb`
+
+### Task 64 — Posts 列表快捷键提示 ✅
+- 工具行下方 kbd 风格一行：`[j]/[k] 行间移动 · [Enter]/[e] 编辑 · [n] 新建`
+- Verify: `/tmp/admin-rebuild/task-64/verify.py` PASSED
+- Commit: `c8e8569`
+
+### Task 65 — Dashboard 卡片可点击导航 ✅
+- 每个 KPI 卡片包成 Link → 对应模块；无 `to` 时降级为 div
+- Verify: `/tmp/admin-rebuild/task-65/verify.py` PASSED（5 张卡 5 个目标 URL）
+- Commit: `3a9d999`
+
+### 长尾里 *未做* 且不再做的项（理由）
+
+| 项目 | 状态 | 原因 |
+|---|---|---|
+| Comments 批量删除/标垃圾 | 已存在 | bulk-bar 早已实现（select-all + approve/spam/pending/delete） |
+| Pet visitor profile inspector 独立页 | 已存在 | VisitorProfileSidebar 嵌在 PetConversationDetail 已覆盖 PRD §4.2 inspector 需求 |
+| Analytics 多周期 CSV 拼接 | 不做 | 单窗口导出已覆盖核心场景；多周期拼接是边缘需求 |
+| footer_note `[task5-…]` 清理脚本 | 不做 | 字段当前已是干净值（Task 52 verifier 末尾会复原）；无可清理对象 |
+| Reader 内联评论审核浮层 | 阻塞 | 依赖 PRD §8 显式 out-of-scope 的「公开 Reader 评论 UI」；那块 ship 之前没必要做 |
+| HomeA 时间窗 `?from=&to=` 深链 | 不做 | `/api/posts` 无 date 范围过滤；同时缺少明确用户场景 |
+| 公开 Reader 完整评论 UI | PRD §8 out of scope | — |
+| 第二语言 i18n | 不做 | 需要单独 PRD（决定哪些字段双语 / 是否 URL 路由化） |
+| OG/Twitter card meta tags | 阻塞 | 需要 SSR；当前 Vite SPA 架构出 OG meta 只对爬虫无效 |
+| 草稿/发布预览模式（带 token 链接） | 不做 | 需要新设计（token TTL、是否带 CSP、是否禁宠物面板） |
+
+至此 PRD §7 缺口矩阵 + 长尾 UX wave 都已穷尽，剩余项都是阻塞或不做。
