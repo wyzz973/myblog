@@ -5,6 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>myblog</title>
   <meta name="description" content="A self-hosted personal blog." />
+  <!-- Task 69: 基础 Open Graph / Twitter card. 这些是「无 JS 爬虫」看到
+       的回退值；登录后或 SPA hydrated 后，DocumentMeta 会按当前页面
+       覆盖 og:title / og:description 等 — 但 Slack/Twitter/Facebook
+       的预览爬虫不执行 JS，所以这一层默认值才是它们看到的。 -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="myblog" />
+  <meta property="og:title" content="myblog" />
+  <meta property="og:description" content="A self-hosted personal blog." />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="myblog" />
+  <meta name="twitter:description" content="A self-hosted personal blog." />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' shape-rendering='crispEdges'><rect width='12' height='12' rx='2' fill='%237dd3a4'/><g fill='%230a0b0d'><rect x='4' y='0' width='4' height='1'/><rect x='2' y='1' width='8' height='1'/><rect x='1' y='2' width='10' height='1'/><rect x='0' y='3' width='12' height='1'/><rect x='0' y='4' width='2' height='2'/><rect x='4' y='4' width='4' height='2'/><rect x='10' y='4' width='2' height='2'/><rect x='0' y='6' width='12' height='1'/><rect x='0' y='7' width='3' height='1'/><rect x='4' y='7' width='4' height='1'/><rect x='9' y='7' width='3' height='1'/><rect x='0' y='8' width='4' height='1'/><rect x='8' y='8' width='4' height='1'/><rect x='1' y='9' width='10' height='1'/><rect x='2' y='10' width='8' height='1'/><rect x='4' y='11' width='4' height='1'/></g></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSite, usePosts, useTags } from './api/hooks.js';
+import { setDocumentMeta } from './utils/documentMeta.js';
 import { applyAccent } from './utils/accent.js';
 import TopBar from './components/TopBar.jsx';
 import HomeA from './components/HomeA.jsx';
@@ -77,8 +78,21 @@ export default function App() {
     : null;
 
   useEffect(() => {
-    document.title = reading?.title ? `${reading.title} — myblog` : 'myblog';
-  }, [reading?.title]);
+    // Task 69: 同时更新 OG/Twitter meta，让 SPA 内部跳转后 head 跟得上。
+    if (reading?.title) {
+      setDocumentMeta({
+        title: `${reading.title} — ${siteData?.name_en || 'myblog'}`,
+        description: reading.summary || siteData?.tagline || 'A self-hosted personal blog.',
+        type: 'article',
+      });
+    } else {
+      setDocumentMeta({
+        title: siteData?.name_en || 'myblog',
+        description: siteData?.tagline || 'A self-hosted personal blog.',
+        type: 'website',
+      });
+    }
+  }, [reading?.title, reading?.summary, siteData?.name_en, siteData?.tagline]);
 
   useEffect(() => {
     if (reading) return;
