@@ -29,7 +29,15 @@ loadSpecies().catch(() => { /* offline / blocked — pet falls back to "loading"
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        // Opt into v7 behaviors so v6 stops emitting the two warnings:
+        // - state updates wrapped in React.startTransition
+        // - splat-route relative paths use v7 semantics
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Routes>
         {/* Admin SPA (auth + dashboard + placeholders) */}
         <Route path="/admin/*" element={<AdminApp />} />
