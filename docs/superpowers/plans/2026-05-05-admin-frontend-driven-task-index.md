@@ -1466,3 +1466,37 @@ Implementation note: import sits inside the `if not _TASK_REGISTRY:` so repeated
 **Completed:** `017e930`.
 
 Implementation note: the i18n changes had been carried in the unstaged stash for many rounds — every loop they got re-stashed and popped, occasionally generating conflicts. Bundling them into a single explicit commit closes that overhead and serves the loop's "保持页面美观、一致、可长期使用" principle. The responsive tweaks are tiny and travel with the same UI surfaces, so they share the commit. Working tree is now empty for the first time since round 1.
+
+---
+
+### Task 36 — Owner-configurable LLM cost rates
+
+**Status:** completed
+**Priority:** medium (closes Task 26c follow-up)
+**Frontend evidence:** PetUsage cost line (Task 26c) — owner couldn't tune the per-provider USD rates; values were hardcoded approximations.
+**Owner problem:** real billing differs from my hardcoded rates (zhipu/deepseek/qwen/doubao/anthropic shift over time), so the cost line was a rough estimate at best.
+**Existing capability:** PROVIDER_RATES table in `petUsageChart.js` (5 hardcoded providers + default fallback).
+**Gap:** no API to override; no admin UI to set rates.
+**Admin module:** 03 观察 / 宠物用量 (inline editor on the same page as the cost chart).
+**Backend touch:**
+  - new `app/services/pet_cost_rates.py` — `get_all(s)` aggregates from `Integration.extra_json.cost_in_per_m` / `cost_out_per_m` with default fallback; `set_rate(s, provider, in_per_m, out_per_m)` writes back into the existing Integration row's extra_json
+  - new endpoints `GET /api/admin/pet/cost-rates` (read; auth-only) and `PUT /api/admin/pet/cost-rates` (write-scope; 404 when provider has no Integration row, 422 negative/unknown)
+  - new schemas `CostRatesResponse` / `CostRateItem` / `CostRateUpdateRequest` in `app/schemas/pet.py`
+**Frontend API client:** `apiPet.getCostRates` + `apiPet.setCostRate` in `src/api/pet.js`.
+**UI / interaction:** `<CostRatesEditor>` on Pet → 用量 tab below the cost chart, collapsed behind `⚙ 设置成本费率`. Per-provider row with `输入 $/M` / `输出 $/M` inputs + per-row save. Save triggers a parent reload so the cost chart redraws against the new rate immediately.
+**Automated tests:** pytest `tests/test_pet_cost_rates.py` (6 cases) + vitest extends `petUsageChart.test.js` (rowCostUSD honors custom rates, groupCostByDay accepts the rates map).
+**Playwright acceptance path:**
+  1. /admin/pet?tab=usage → expand `⚙ 设置成本费率`
+  2. Set new rates for a configured provider
+  3. Save → re-fetch /pet/cost-rates confirms persistence
+  4. Cost chart re-renders against the new rate
+  5. Restore original at teardown
+**Snapshot location:** `/tmp/admin-rebuild/task-36/rates-panel.png`
+**Commit:** `d57354a` (`feat(admin/pet): owner-configurable LLM cost rates (Task 36)`).
+
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_pet_cost_rates.py` → 6/6 (defaults when no overrides, 404 for unconfigured provider, 422 negative/unknown, 401 unauth, end-to-end persistence with seeded anthropic Integration).
+- **Vitest:** combined `npx vitest run` → **254/254** (no Task 1-35 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-36/verify.py` → API smoke (6 entries returned, 422 negative + unknown) → live `deepseek` integration in dev → expand panel → set rate → save → /cost-rates persisted within 1e-6 tolerance → restore.
+- **Snapshots:** `/tmp/admin-rebuild/task-36/rates-panel.png`.
+
+Implementation note: storing rates inside each provider's existing `Integration.extra_json` keeps the surface tiny — no migration, no separate model, and the API key + price travel together. When the owner hasn't configured a provider yet, PUT returns 404 with a clear hint ("integration X not configured") rather than silently creating an orphan rate row. The bundled `DEFAULT_RATES` in `pet_cost_rates.py` mirrors `PROVIDER_RATES` in `petUsageChart.js` exactly so the chart's pre-fetch first-paint matches the post-fetch render. The editor is collapsed by default behind `⚙` so it doesn't compete with the charts for attention; per-row save lets the owner update zhipu without touching anthropic. write_event log row records every rate change for audit.
