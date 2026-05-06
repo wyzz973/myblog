@@ -4,6 +4,7 @@ import Login from './Login.jsx';
 import Layout from './Layout.jsx';
 import Dashboard from './Dashboard.jsx';
 import Analytics from './Analytics.jsx';
+import AnalyticsPostDetail from './analytics/AnalyticsPostDetail.jsx';
 import Posts from './Posts.jsx';
 import Media from './Media.jsx';
 import Comments from './Comments.jsx';
@@ -62,6 +63,7 @@ export default function AdminApp() {
         >
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="analytics/posts/:postId" element={<AnalyticsPostDetail />} />
           <Route path="posts" element={<Posts />} />
           <Route path="media" element={<Media />} />
           <Route path="comments" element={<Comments />} />

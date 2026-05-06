@@ -74,6 +74,11 @@ export const apiAnalytics = {
     const days = rangeToDays(range);
     return req(`/analytics/tags?days=${days}`);
   },
+  // Task 25c: per-post drilldown — daily timeseries for one post.
+  postTimeseries(postId, range) {
+    const days = rangeToDays(range);
+    return req(`/analytics/posts/${encodeURIComponent(postId)}/timeseries?days=${days}`);
+  },
   // Task 25a: download per-post hits as CSV. Fetches with the bearer
   // token, then triggers a browser download via an in-memory blob.
   // Returns the suggested filename so callers can surface a toast.

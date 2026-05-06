@@ -251,6 +251,42 @@ async def per_post(
     ]
 
 
+async def per_post_timeseries(
+    s: AsyncSession, *, post_id: str, days: int
+) -> list[DayPoint]:
+    """Daily hit timeseries for a single post (Task 25c).
+
+    Combines pre-rolled hit_daily rows for past days with today's live
+    hit_events count, identical strategy to ``timeseries`` but filtered to
+    one post_id. Returns exactly ``days`` points in ascending date order.
+    """
+    today = _today_utc()
+    start = today - timedelta(days=days - 1)
+
+    history = await s.execute(
+        select(HitDaily.date, func.sum(HitDaily.hits))
+        .where(HitDaily.date >= start)
+        .where(HitDaily.date < today)
+        .where(HitDaily.post_id == post_id)
+        .group_by(HitDaily.date)
+    )
+    by_date: dict[date, int] = {row[0]: int(row[1] or 0) for row in history.all()}
+
+    today_n_row = await s.execute(
+        select(func.count(HitEvent.id))
+        .where(HitEvent.created_at >= _today_start_utc())
+        .where(HitEvent.post_id == post_id)
+    )
+    today_n = int(today_n_row.scalar() or 0)
+
+    points: list[DayPoint] = []
+    for i in range(days):
+        d = today - timedelta(days=days - 1 - i)
+        n = today_n if d == today else by_date.get(d, 0)
+        points.append(DayPoint(date=d, hits=n))
+    return points
+
+
 async def per_tag(s: AsyncSession, *, days: int) -> list[TagHitsItem]:
     today = _today_utc()
     start = today - timedelta(days=days - 1)

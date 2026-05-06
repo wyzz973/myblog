@@ -156,6 +156,84 @@ async def test_analytics_posts_returns_titled_rows(
             await s.commit()
 
 
+async def test_post_timeseries_404_for_unknown_id(client, admin_token):
+    r = await client.get(
+        "/api/admin/analytics/posts/p25c-missing/timeseries",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 404
+
+
+async def test_post_timeseries_unauthenticated_401(client):
+    r = await client.get("/api/admin/analytics/posts/anything/timeseries")
+    assert r.status_code == 401
+
+
+async def test_post_timeseries_returns_daily_breakdown(
+    client, admin_token, clean_analytics
+):
+    """Two seeded daily rows for one post → endpoint returns those days as
+    non-zero entries inside the requested window, all other days as 0,
+    and total = sum."""
+    from datetime import datetime as _dt, timezone as _tz
+    today = _dt.now(_tz.utc).date()
+    d1 = today - timedelta(days=1)
+    d3 = today - timedelta(days=3)
+    slug = "p25c-timeseries"
+    async with AsyncSessionLocal() as s:
+        existing_tag = (await s.execute(
+            Tag.__table__.select().where(Tag.slug == "p25c-tag")
+        )).first()
+        if existing_tag is None:
+            s.add(Tag(slug="p25c-tag", name="25c Tag", color="#888", sort_order=0))
+            await s.flush()
+            existing_tag = (await s.execute(
+                Tag.__table__.select().where(Tag.slug == "p25c-tag")
+            )).first()
+        s.add(Post(
+            id=slug, n="1", title="25c Post", subtitle="", date=date(2026, 5, 1),
+            read="1", lang="en", summary="", tldr="", body_md="", body_json=[],
+            word_count=0, status="published", featured=False, private=False,
+            comments_enabled=True, tag_id=existing_tag.id,
+        ))
+        await s.flush()
+        s.add(HitDaily(date=d1, path=f"/post/{slug}",
+                       hits=7, post_id=slug,
+                       referrers_top=[], countries_top=[]))
+        s.add(HitDaily(date=d3, path=f"/post/{slug}",
+                       hits=3, post_id=slug,
+                       referrers_top=[], countries_top=[]))
+        await s.commit()
+    try:
+        r = await client.get(
+            f"/api/admin/analytics/posts/{slug}/timeseries?days=7",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["post_id"] == slug
+        assert body["title"] == "25c Post"
+        assert body["total"] == 10  # 7 + 3
+        assert len(body["timeseries"]) == 7
+        # Map date → hits and assert d1=7, d3=3, rest=0 (today depends on
+        # whether any HitEvent fired for this post during the test, which
+        # we don't generate, so today should be 0).
+        by_date = {pt["date"]: pt["hits"] for pt in body["timeseries"]}
+        assert by_date[d1.isoformat()] == 7
+        assert by_date[d3.isoformat()] == 3
+        # Everything else (excluding the seeded dates) is 0.
+        for iso, hits in by_date.items():
+            if iso not in (d1.isoformat(), d3.isoformat()):
+                assert hits == 0, f"unexpected hits on {iso}: {hits}"
+    finally:
+        from sqlalchemy import delete as sa_delete
+        async with AsyncSessionLocal() as s:
+            await s.execute(sa_delete(HitDaily).where(HitDaily.post_id == slug))
+            await s.execute(sa_delete(Post).where(Post.id == slug))
+            await s.execute(sa_delete(Tag).where(Tag.slug == "p25c-tag"))
+            await s.commit()
+
+
 async def test_analytics_posts_excludes_deleted(
     client, admin_token, clean_analytics
 ):

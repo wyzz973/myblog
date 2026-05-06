@@ -95,3 +95,11 @@ class TagHitsItem(BaseModel):
     slug: str
     name: str
     hits: int
+
+
+# Task 25c: per-post drilldown.
+class PostTimeseriesResponse(BaseModel):
+    post_id: str
+    title: str
+    total: int
+    timeseries: list[DayPoint]

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiAnalytics } from '../api/analytics.js';
 
 const RANGES = [
@@ -110,6 +111,8 @@ export default function Analytics() {
                 rows={(posts || []).map((r) => ({
                   label: r.title || r.post_id,
                   count: r.hits,
+                  href: `/admin/analytics/posts/${encodeURIComponent(r.post_id)}?range=${range}`,
+                  testId: `hot-post-${r.post_id}`,
                 }))}
               />
             </Section>
@@ -221,10 +224,20 @@ function RankTable({ rows }) {
       <tbody>
         {rows.map((r, i) => {
           const pct = (r.count / max) * 100;
+          const labelCell = r.href ? (
+            <Link
+              to={r.href}
+              data-testid={r.testId}
+              style={styles.tdLabelLink}
+              title={r.label}
+            >{r.label}</Link>
+          ) : (
+            <span title={r.label}>{r.label}</span>
+          );
           return (
             <tr key={`${r.label}-${i}`}>
               <td style={styles.tdRank}>{i + 1}</td>
-              <td style={styles.tdLabel} title={r.label}>{r.label}</td>
+              <td style={styles.tdLabel}>{labelCell}</td>
               <td style={styles.tdCount}>{r.count.toLocaleString()}</td>
               <td style={styles.tdBar}>
                 <div style={styles.barShell}>
@@ -315,6 +328,15 @@ const styles = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     maxWidth: 140,
+  },
+  tdLabelLink: {
+    color: 'var(--accent)',
+    textDecoration: 'none',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    display: 'inline-block',
+    maxWidth: '100%',
   },
   tdCount: {
     padding: '4px 8px 4px 0',
