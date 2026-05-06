@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiContacts } from '../api/contacts.js';
 import { useConfirm, useToast } from './ui/UIProvider.jsx';
+import SectionHead from './ui/SectionHead.jsx';
 
 // Admin screen for the social-link contacts strip.
 // - Lists rows in sort_order
@@ -154,32 +155,34 @@ export default function Contacts() {
   return (
     <div>
       <header style={styles.header}>
-        <h1 style={styles.h1}>Contacts</h1>
-        <p style={styles.lead}>
-          Social-link strip. Drag-or-arrow to reorder.
-        </p>
+        <SectionHead
+          n="04"
+          title="./contacts"
+          count={rows ? `${rows.length} 项` : ''}
+          lead="联系方式条 — 公开站点 hero / footer 用同一份数据；拖拽或方向键调整顺序。"
+        />
       </header>
 
       <form style={styles.newRow} onSubmit={submitDraft}>
-        <div style={styles.newRowTitle}>+ new contact</div>
+        <div style={styles.newRowTitle}>+ 新建联系方式</div>
         <div style={styles.formGrid}>
           <input
             style={styles.input}
-            placeholder="label (e.g. github)"
+            placeholder="标签（例：github）"
             value={draft.label}
             onChange={(e) => setDraft({ ...draft, label: e.target.value })}
             required
           />
           <input
             style={styles.input}
-            placeholder="value (display text)"
+            placeholder="展示文本"
             value={draft.value}
             onChange={(e) => setDraft({ ...draft, value: e.target.value })}
             required
           />
           <input
             style={styles.input}
-            placeholder="href (https://…)"
+            placeholder="链接（https://…）"
             value={draft.href}
             onChange={(e) => setDraft({ ...draft, href: e.target.value })}
           />
@@ -188,30 +191,32 @@ export default function Contacts() {
               on={draft.visible}
               onChange={(v) => setDraft({ ...draft, visible: v })}
             />
-            <span style={styles.toggleLabel}>visible</span>
+            <span style={styles.toggleLabel}>对公开站点可见</span>
           </label>
           <button type="submit" style={styles.primaryBtn} disabled={creating}>
-            {creating ? 'adding…' : 'add'}
+            {creating ? '添加中…' : '添加'}
           </button>
         </div>
       </form>
 
-      {loading && <div style={styles.muted}>loading contacts…</div>}
-      {error && <div style={styles.error}>error: {error}</div>}
+      {loading && <div style={styles.muted}>加载中…</div>}
+      {error && <div style={styles.error}>! {error}</div>}
 
       {!loading && !error && rows && rows.length === 0 && (
-        <div style={styles.empty}>no contacts yet — add one above</div>
+        <div style={styles.empty} data-testid="contacts-empty">
+          暂无联系方式 — 在上方表单添加一条。
+        </div>
       )}
 
       {!loading && !error && rows && rows.length > 0 && (
         <div style={styles.tableWrap}>
           <div style={{ ...styles.row, ...styles.headRow }}>
             <div style={styles.cellOrder}>#</div>
-            <div style={styles.cellLabel}>label</div>
-            <div style={styles.cellValue}>value</div>
-            <div style={styles.cellHref}>href</div>
-            <div style={styles.cellVisible}>visible</div>
-            <div style={styles.cellActions}>actions</div>
+            <div style={styles.cellLabel}>标签</div>
+            <div style={styles.cellValue}>展示文本</div>
+            <div style={styles.cellHref}>链接</div>
+            <div style={styles.cellVisible}>可见</div>
+            <div style={styles.cellActions}>操作</div>
           </div>
           {rows.map((row, idx) => {
             const merged = { ...row, ...(edits[row.id] || {}) };
