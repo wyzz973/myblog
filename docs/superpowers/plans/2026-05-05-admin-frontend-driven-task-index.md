@@ -2132,3 +2132,28 @@ Implementation note: the dim/foreground color split on the count cell mirrors th
 **Commit:** `767e07c` (`feat(admin/dashboard): pet KPI tile (Task 57)`).
 
 Implementation note: making `DashboardResponse.pet` optional (`PetKPI | None = None`) is what kept the tile change non-breaking — pre-existing client code that defaults `d.pet?.conversations ?? '—'` works regardless of whether the backend was redeployed first. Same pattern as the half-built rollout in PRD §6.2 ("backend-and-UI features ship in two halves; the second half is a no-op upgrade").
+
+---
+
+### Task 58 — Admin Media empty-state onboarding ✅
+
+**Frontend dependency:** PRD §7's cross-cut "empty-state onboarding" gap. PetConversations got the treatment in Task 55; Media was the next one carrying the bare `no media yet — upload your first image.` placeholder. The line answered "is anything broken?" but not "what do I do next?" — fresh installs hitting the page didn't see the upload affordances enumerated in one place.
+
+**Backend:** none.
+
+**Frontend:** `Media.jsx` swaps the muted line for a dashed-border block (`data-testid="media-empty"`) with three layers:
+- Heading: 媒体库还是空的
+- Action hint pointing at `+ upload` + the drag-and-drop strip + the `::image{id="…"}::` directive that ties media to the post editor
+- Sub-line listing allowed types (png / jpg / webp / svg)
+
+Style parity with Task 55 — same dashed `var(--line-2)` border, same `var(--fg-3)` body color so both empty states visually rhyme.
+
+**Tests:** vitest sweep `npx vitest run` → **267/267** unchanged. Media.jsx has no unit-test suite (uses native file input + drag handlers; covered via Playwright).
+
+**Playwright:** `/Users/sd3/anaconda3/bin/python /tmp/admin-rebuild/task-58/verify.py` PASSED — uses `page.route` to fulfill `/api/admin/media` with `[]` so the empty branch runs even though the dev DB has 2 rows; asserts all three onboarding hints; then `page.unroute` + reload confirms the block disappears against real data.
+
+**Snapshot:** `/tmp/admin-rebuild/task-58/media-empty-onboarding.png`.
+
+**Commit:** `18e0734` (`feat(admin/media): empty-state onboarding block (Task 58)`).
+
+Implementation note: Playwright's `route()` interception is the cleanest way to test fresh-install UX without polluting the dev DB or tearing real data down between runs. That same pattern unlocks future empty-state verifies for any admin page where the dev DB is too rich to easily reach an empty state.
