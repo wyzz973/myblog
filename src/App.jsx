@@ -224,9 +224,16 @@ export default function App() {
       />
       <div className="wrap">
         <footer className="footer">
-          <div>
-            © 2026 {siteData?.name_en || siteData?.handle || 'myblog'} · hand-coded · no trackers ·{' '}
-            <span className="accent">powered by coffee</span>
+          <div data-testid="footer-note">
+            © {new Date().getFullYear()} {siteData?.name_en || siteData?.handle || 'myblog'} ·{' '}
+            {siteData?.footer_note?.trim()
+              ? siteData.footer_note
+              : (
+                <>
+                  hand-coded · no trackers ·{' '}
+                  <span className="accent">powered by coffee</span>
+                </>
+              )}
           </div>
           <div className="footer-links">
             {siteData?.github && (
