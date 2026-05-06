@@ -1562,3 +1562,32 @@ Implementation note: `_window_pieces` decouples "which HitDaily dates to read" f
 - **Commit:** `dab0051` (`feat(admin/analytics): CSV + per-post drilldown honor [from, to] (Task 25b-csv-drilldown)`).
 
 Implementation note: the analytics arbitrary-window story is now end-to-end consistent across every endpoint and every UI surface. Drilldown chips remain available — clicking 7 天/30 天/90 天 still works and replaces the active range token; the custom-range label only shows when the active token is non-preset. CSV filename change is technically backwards-compatible because the previous `{N}d` slug is preserved when no from/to is supplied — only the new arbitrary-window form gets the `from_to_to` slug.
+
+---
+
+### Task 37 — public sitemap.xml + Atom feed
+
+**Status:** completed
+**Priority:** medium (SEO and RSS reader support)
+**Frontend evidence:** No public surface for search engines or RSS readers — every post URL `/p/<id>` was un-discoverable from outside the SPA.
+**Owner problem:** crawlers had no way to enumerate the post catalogue; readers couldn't subscribe via RSS/Atom.
+**Existing capability:** none — the API exposed `/api/posts` with filtering + pagination but search engines don't follow API endpoints.
+**Gap:** classic SEO infrastructure (sitemap protocol 0.9 + Atom 1.0 feed) was missing.
+**Backend touch:**
+  - new `backend/app/routers/public/sitemap.py` with two endpoints
+  - `GET /api/sitemap.xml` — every published, non-private post + the site root, with `<lastmod>` from `updated_at` (or `date` when null)
+  - `GET /api/feed.xml` — Atom 1.0 feed of last 50 published posts (id, title, link, updated, summary). Title and summary XML-escaped via `xml.sax.saxutils.escape` so `<Test>` and `&` don't break parsers
+  - Site host comes from `settings.public_site_base_url` (already added in Task 28c)
+  - Filters: `Post.status='published' AND Post.private IS FALSE`
+**Frontend API client:** none — XML endpoints are consumed by external crawlers / readers, not by the SPA
+**UI / interaction:** none for v1. Production reverse proxy can alias `/sitemap.xml` → `/api/sitemap.xml` so search engines find it at the canonical root path.
+**Automated tests:** pytest 5 cases (sitemap surfaces published only, draft + private excluded, well-formed XML, atom escapes special chars, no-published edge case).
+**Playwright acceptance path:** none browser-side — XML is consumed programmatically. API smoke validates parseable XML + content.
+
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_public_sitemap.py` → 5/5.
+- **Vitest:** no frontend impact, regression sweep stays at **256/256**.
+- **API smoke:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-37/verify.py` PASSED — sitemap returns 6 urls (5 published posts + root), feed returns 5 entries with id/title/link triples, both parse as valid XML.
+- **Snapshots:** `/tmp/admin-rebuild/task-37/{sitemap.xml,feed.xml}` captured for inspection.
+- **Commit:** see ledger commit below.
+
+Implementation note: kept it pure-XML (no JSON Feed, no RSS 2.0 — Atom 1.0 has cleaner namespace semantics and is what most modern readers expect). Site host config reuses `public_site_base_url` from Task 28c — production deploys override in `.env`. The sitemap site-root entry is unconditional so a brand-new install with zero published posts still has a valid urlset (validated by the no-posts test). Atom self-link points at `/api/feed.xml` directly, so a deploy without proxy alias still works for RSS readers — they just see the API path. A future task can add `<link rel="alternate" type="application/atom+xml">` to the public site's `<head>` so browsers' built-in feed-discovery picks it up.
