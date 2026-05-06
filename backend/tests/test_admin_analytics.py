@@ -49,6 +49,8 @@ async def test_dashboard_empty_returns_zeros(client, admin_token, clean_analytic
     assert body["hits"]["last_7d"] == 0
     assert body["hits"]["last_30d"] == 0
     assert "likes" in body and "comments" in body and "posts" in body and "media" in body
+    # Task 57: pet KPI present and zero-by-default
+    assert body.get("pet") == {"conversations": 0, "messages_last_7d": 0}
 
 
 async def test_dashboard_today_hits_visible(client, admin_token, clean_analytics):

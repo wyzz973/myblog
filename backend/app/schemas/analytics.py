@@ -43,12 +43,28 @@ class MediaKPI(BaseModel):
     count: int
 
 
+class PetKPI(BaseModel):
+    """Pet helper traffic for the dashboard tile.
+
+    `conversations` is the number of distinct visitor_hash values that
+    have ever spoken to the pet (= rows in the conversations summary
+    list). `messages_last_7d` is the count of pet_message rows whose
+    `created_at` falls in the last 7 days.
+    """
+    conversations: int
+    messages_last_7d: int
+
+
 class DashboardResponse(BaseModel):
     hits: HitsKPI
     likes: LikesKPI
     comments: CommentsKPI
     posts: PostsKPI
     media: MediaKPI
+    # Optional so older API consumers / tests don't break; the admin UI
+    # falls back gracefully when missing. Always populated by the
+    # dashboard_kpis service in this build.
+    pet: PetKPI | None = None
 
 
 # --- analytics bundle ---

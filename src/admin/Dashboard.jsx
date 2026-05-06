@@ -178,6 +178,14 @@ function buildTiles(d) {
       headline: fmt(d.media?.count),
       subs: [],
     },
+    // Task 57: pet helper traffic. Hidden when the field is missing
+    // (older deploys / tests) — keeps existing snapshots stable.
+    ...(d.pet ? [{
+      key: 'pet',
+      title: 'Pet conversations',
+      headline: fmt(d.pet.conversations),
+      subs: [['msgs / 7d', fmt(d.pet.messages_last_7d)]],
+    }] : []),
   ];
 }
 

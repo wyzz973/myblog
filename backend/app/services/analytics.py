@@ -13,6 +13,7 @@ from app.models import (
     HitEvent,
     LikeEvent,
     Media,
+    PetMessage,
     Post,
     Tag,
 )
@@ -25,6 +26,7 @@ from app.schemas.analytics import (
     LikesKPI,
     MediaKPI,
     PathHits,
+    PetKPI,
     PostHitsItem,
     PostsKPI,
     ReferrerHits,
@@ -190,6 +192,17 @@ async def dashboard_kpis(s: AsyncSession) -> DashboardResponse:
     # media
     media_count = int((await s.execute(select(func.count(Media.id)))).scalar() or 0)
 
+    # pet — Task 57: distinct visitor count + messages in last 7d so the
+    # dashboard surfaces pet-helper traffic without a drilldown.
+    pet_convs = int((await s.execute(
+        select(func.count(func.distinct(PetMessage.visitor_hash)))
+    )).scalar() or 0)
+    pet_msgs_7d_cutoff = datetime.now(UTC) - timedelta(days=7)
+    pet_msgs_7d = int((await s.execute(
+        select(func.count(PetMessage.id))
+        .where(PetMessage.created_at >= pet_msgs_7d_cutoff)
+    )).scalar() or 0)
+
     return DashboardResponse(
         hits=HitsKPI(today=today_hits, last_7d=last_7d, last_30d=last_30d),
         likes=LikesKPI(total=likes_total, last_7d=likes_7),
@@ -198,6 +211,7 @@ async def dashboard_kpis(s: AsyncSession) -> DashboardResponse:
             published=posts_published, draft=posts_draft, scheduled=posts_scheduled
         ),
         media=MediaKPI(count=media_count),
+        pet=PetKPI(conversations=pet_convs, messages_last_7d=pet_msgs_7d),
     )
 
 
