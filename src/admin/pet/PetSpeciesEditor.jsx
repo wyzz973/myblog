@@ -58,6 +58,7 @@ export default function PetSpeciesEditor() {
   const [deletingId, setDeletingId] = useState(null);
   const [drafts, setDrafts] = useState({});       // id -> partial overrides
   const [newDraft, setNewDraft] = useState(null); // null when add-form closed
+  const [framesOpenId, setFramesOpenId] = useState(null); // id of expanded frames panel
 
   useEffect(() => {
     let mounted = true;
@@ -74,6 +75,18 @@ export default function PetSpeciesEditor() {
 
   function setDraftField(id, key, value) {
     setDrafts((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), [key]: value } }));
+  }
+
+  // Task 21f: replace one frame's lines (a list of strings) inside the
+  // draft. Frames is the only field where users edit a nested array, so
+  // it gets a dedicated helper instead of going through setDraftField.
+  function setDraftFrame(id, frameIndex, frameLines) {
+    setDrafts((prev) => {
+      const base = (prev[id] && prev[id].frames) ?? rows.find((r) => r.id === id)?.frames ?? [];
+      const next = [...base];
+      next[frameIndex] = frameLines;
+      return { ...prev, [id]: { ...(prev[id] || {}), frames: next } };
+    });
   }
 
   const dirty = (id) => Boolean(drafts[id] && Object.keys(drafts[id]).length);
@@ -315,7 +328,14 @@ export default function PetSpeciesEditor() {
                       />
                       可见
                     </label>
-                    <span className="hint">{(r.frames || []).length} frames</span>
+                    <button
+                      type="button"
+                      data-testid={`species-frames-toggle-${r.id}`}
+                      onClick={() => setFramesOpenId(framesOpenId === r.id ? null : r.id)}
+                      aria-expanded={framesOpenId === r.id}
+                    >
+                      {framesOpenId === r.id ? '收起帧' : `编辑帧 (${(d.frames || []).length})`}
+                    </button>
                     <span className="grow" />
                     <button
                       type="button"
@@ -332,12 +352,117 @@ export default function PetSpeciesEditor() {
                       onClick={() => removeRow(r.id)}
                     >{deletingId === r.id ? 'deleting…' : '删除'}</button>
                   </div>
+                  {framesOpenId === r.id && (
+                    <FramesPanel
+                      speciesId={r.id}
+                      frames={d.frames || []}
+                      onChange={(frameIdx, lines) => setDraftFrame(r.id, frameIdx, lines)}
+                    />
+                  )}
                 </fieldset>
               );
             })}
           </details>
         );
       })}
+    </div>
+  );
+}
+
+// Task 21f: ASCII frame editor.
+//
+// AsciiPet's renderer expects each frame to be a list of 5 lines, each 12
+// chars wide after `{E}` is substituted with a one-char eye marker. We
+// don't BLOCK saves on layout drift — sometimes a wider sprite is
+// intentional — but we surface a hint per row that's off-spec so the
+// owner sees what the public renderer will think is "wrong".
+const SPEC_LINES = 5;
+const SPEC_WIDTH = 12;
+
+export function frameLayoutHint(lines) {
+  if (!Array.isArray(lines)) return null;
+  const issues = [];
+  if (lines.length !== SPEC_LINES) {
+    issues.push(`${lines.length} 行（应 ${SPEC_LINES}）`);
+  }
+  for (let i = 0; i < lines.length; i++) {
+    // Be defensive: stale draft state or a malformed API response could
+    // hand us a non-string line. Treating it as empty just suppresses the
+    // hint for that row rather than crashing the panel.
+    const raw = typeof lines[i] === 'string' ? lines[i] : '';
+    const w = raw.replace(/\{E\}/g, 'X').length;
+    if (w !== SPEC_WIDTH) {
+      issues.push(`第 ${i + 1} 行 ${w} 字符（应 ${SPEC_WIDTH}）`);
+    }
+  }
+  return issues.length ? issues.join('；') : null;
+}
+
+function FramesPanel({ speciesId, frames, onChange }) {
+  // Pad to 3 frames so the editor always has 3 columns even for new
+  // species; user can leave extras empty (saving will keep them as empty
+  // arrays which AsciiPet handles by skipping that frame index).
+  const slots = frames.length < 3
+    ? [...frames, ...Array(3 - frames.length).fill([])]
+    : frames;
+
+  return (
+    <div
+      data-testid={`species-frames-panel-${speciesId}`}
+      style={{
+        marginTop: 12, padding: '10px 12px',
+        border: '1px dashed var(--line)', borderRadius: 4,
+        background: 'var(--bg)',
+      }}
+    >
+      <div style={{ fontSize: 11, color: 'var(--fg-3)', marginBottom: 8 }}>
+        每只精灵 3 帧 ASCII，每帧 5 行 × 12 字符（替换 <code>{'{E}'}</code> 后计算宽度）。
+      </div>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: 12,
+      }}>
+        {slots.slice(0, 3).map((frame, idx) => {
+          const text = (frame || []).join('\n');
+          const hint = frameLayoutHint(frame);
+          return (
+            <div key={idx}>
+              <label style={{ fontSize: 11, color: 'var(--fg-3)' }}>
+                帧 {idx + 1}
+              </label>
+              <textarea
+                data-testid={`species-frame-${speciesId}-${idx}`}
+                value={text}
+                rows={SPEC_LINES}
+                onChange={(e) => onChange(idx, e.target.value.split('\n'))}
+                style={{
+                  width: '100%',
+                  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                  fontSize: 12,
+                  background: 'var(--bg-2)',
+                  color: 'var(--fg)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 3,
+                  padding: '4px 6px',
+                  whiteSpace: 'pre',
+                  overflowX: 'auto',
+                }}
+                spellCheck={false}
+                wrap="off"
+              />
+              {hint && (
+                <div
+                  data-testid={`species-frame-hint-${speciesId}-${idx}`}
+                  style={{ fontSize: 10, color: 'var(--accent)', marginTop: 2 }}
+                >
+                  {hint}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
