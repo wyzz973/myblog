@@ -2061,3 +2061,26 @@ Implementation note: the link points at `originalId`, not the current frontmatte
 **Commit:** `2c848ad` (`feat(public/home): URL-driven tag filter + admin link (Task 54)`).
 
 Implementation note: `setSearchParams` accepts a `(prev) => next` updater, which we use here so the rest of the query string (e.g., a future `?from=…` analytics window or `?theme=…` debug flag) survives tag changes. Also: `setActiveTag('all')` deletes the param rather than writing `?tag=all`, keeping the canonical home URL clean. The previous `setActiveTag(undefined)` call site in HomeA still works because the updater coalesces null/undefined/'all' uniformly.
+
+---
+
+### Task 55 — empty-state on Pet Conversations admin list ✅
+
+**Frontend dependency:** PRD §7 cross-cut "empty-state onboarding" gap was still open. `PetConversations.jsx` silently rendered nothing when `items` was empty — fresh installs and no-match filter results both produced an unexplained blank panel between the toolbar and the "加载更多" button (which itself only renders when `hasMore`).
+
+**Backend:** none.
+
+**Frontend:** dashed-border block with `data-testid="conv-empty"` rendered when `!loading && !error && items.length === 0`. Two flavors keyed off `species || hashQuery.trim()`:
+- bare: 尚无访客发起对话。一旦访客在公开页与宠物助手聊天，会话会出现在这里。
+- filter active: 当前筛选下没有匹配的对话。换个物种或访客哈希前缀再试。
+
+**Tests:** `PetConversations.test.jsx` extended from 1 → 3 cases. The mock factory was refactored to use a shared `listMock = vi.fn()` so each `it` can swap the response shape (rows, no rows, no rows + filter).
+- **Vitest:** `npx vitest run` → **267/267** (3 in this file).
+
+**Playwright:** `/Users/sd3/anaconda3/bin/python /tmp/admin-rebuild/task-55/verify.py` PASSED — drives the no-match flow because the dev DB has rows. Filter to `zzz-no-match-…` → `[data-testid=conv-empty]` shows the no-match copy; clear-filter button dismisses the empty state.
+
+**Snapshot:** `/tmp/admin-rebuild/task-55/conv-empty-filtered.png`.
+
+**Commit:** `09b2a1f` (`feat(admin/pet): empty-state on conversations list (Task 55)`).
+
+Implementation note: the empty-state element uses `border: 1px dashed` rather than the solid borders elsewhere in the admin. The dashed treatment is the standard "this slot exists but is intentionally empty" pattern from the public site's draft-mode tag chips, keeping the visual language consistent.
