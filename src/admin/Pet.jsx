@@ -19,6 +19,11 @@ const TABS = [
   { id: 'usage', label: 'Usage' },
 ];
 
+// Conversations / Usage 是只读视图（数据从 endpoint 拉，不存在 PUT
+// /api/admin/pet 全量保存的概念）；那两 tab 下面把 Save 按钮藏起来，
+// 避免给用户一个永远 disabled 的按钮制造困惑。
+const TABS_WITHOUT_SAVE = new Set(['conversations', 'usage']);
+
 export default function Pet() {
   const [params, setParams] = useSearchParams();
   const tab = TABS.some((t) => t.id === params.get('tab')) ? params.get('tab') : 'behavior';
@@ -97,10 +102,14 @@ export default function Pet() {
           >{t.label}</button>
         ))}
         <span className="grow" />
-        <button type="button" className="primary" onClick={save} disabled={saving}>
-          {saving ? 'saving…' : 'Save'}
-        </button>
-        {savedTick > 0 && <span className="saved-hint">✓ saved</span>}
+        {!TABS_WITHOUT_SAVE.has(tab) && (
+          <>
+            <button type="button" className="primary" onClick={save} disabled={saving}>
+              {saving ? 'saving…' : 'Save'}
+            </button>
+            {savedTick > 0 && <span className="saved-hint">✓ saved</span>}
+          </>
+        )}
       </nav>
 
       {/* Inline error banner (save / reset failure) — keeps the form usable. */}
