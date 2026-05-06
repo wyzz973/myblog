@@ -1902,3 +1902,33 @@ Implementation note: prefix (`'q%'`) rather than substring (`'%q%'`) on visitor_
 - **Commit:** `e2a51e1` (`feat(admin/layout): pending-comments badge on sidebar (Task 47)`).
 
 Implementation note: 60-second poll cadence matches the dashboard's freshness expectation and stays well below Redis rate-limits. Re-fetch on `location.pathname` change ensures that approving a comment immediately updates the badge (the next route change triggers a refresh; faster than waiting for the 60s tick). Badge is a single-purpose UI add — pattern can extend to media uploads pending review, scheduled-post countdown, etc., by mapping `item.to` → counter from the same dashboard payload (which already has draft/scheduled post counts and media count). Counts are silent when zero so the sidebar stays calm during normal periods.
+
+---
+
+### Task 48 — generalize sidebar badges; add Posts drafts counter
+
+**Status:** completed
+**Priority:** low (extension of Task 47 + actionable visibility)
+**Frontend evidence:** Task 47 added a hardcoded pending-comments badge. Sidebar items beyond Comments could carry similar actionable counters (drafts in flight, etc.) but the Layout was wired to one specific item only.
+**Owner problem:** "I have drafts I started yesterday — am I forgetting any?" — required clicking into Posts to count.
+**Existing capability:** `/api/admin/dashboard` already returns `posts.draft` (Task 5 KPIs).
+**Gap:** badge logic was item-specific; second counter required hardcoded duplication.
+**Frontend touch:**
+  - extract a pure `pickNavCounters(dashboard)` (now exported from `Layout.jsx`) returning `{itemTo: count}` for badge-able routes
+  - replace `pendingComments` state with `navCounters` map; NavLink renders badge from `navCounters[item.to]`
+  - add `/admin/posts` → `dashboard.posts.draft` mapping. Inventory-only fields (published, scheduled, media count) deliberately omitted to avoid sidebar noise.
+**Automated tests:** vitest +4 cases on `pickNavCounters` (real payload, missing fields → zeros, null/undefined → {}, no inventory keys leak).
+**Playwright acceptance path:**
+  1. snapshot pre-test pending + draft counts
+  2. seed 1 pending comment + 2 draft posts (1 existing post + 2 new draft Post rows)
+  3. /dashboard reports the new totals
+  4. Login → assert both `nav-badge--admin-comments` and `nav-badge--admin-posts` show correct numbers
+  5. Cleanup: delete seeded comment + posts
+**Snapshot location:** `/tmp/admin-rebuild/task-48/sidebar-two-badges.png`
+
+- **Vitest:** `npx vitest run src/admin/Layout.test.jsx` → 9/9 (5 prior + 4 new). Combined `npx vitest run` → **265/265** (no Task 1-47 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-48/verify.py` PASSED — badges show 1 / 2 against the seeded counts; cleanup restores DB.
+- **Snapshots:** `/tmp/admin-rebuild/task-48/sidebar-two-badges.png`.
+- **Commit:** `97a6672` (`feat(admin/layout): generalize sidebar badges; add posts drafts (Task 48)`).
+
+Implementation note: `pickNavCounters` is a pure function so the unit test can pin behavior without rendering Layout. This makes adding a third counter (e.g., flagged comments, lockout-active sessions) a one-line change + a new test case. Inventory fields (published-post count, media count) intentionally omit from the map — sidebar badges should signal "this needs attention" not "you have 47 things". Renders zero counts as silent — same convention as Task 47 — so the sidebar stays calm during normal periods.
