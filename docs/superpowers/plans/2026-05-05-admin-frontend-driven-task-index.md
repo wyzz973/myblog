@@ -1870,3 +1870,35 @@ Implementation note: same ILIKE pattern as Task 44 — zero migration footprint,
 - **Commit:** `7361d3f` (`feat(admin/pet): visitor-hash prefix search on conversations list (Task 46)`).
 
 Implementation note: prefix (`'q%'`) rather than substring (`'%q%'`) on visitor_hash — visitor hashes are opaque hex strings, owners always have the start of the hash (from logs, export filenames, etc.), and prefix matching can use the implicit btree index. Substring would force a seq scan with no operational benefit. Same `q=blank → ignore` convention as Tasks 44/45 keeps the URL-state encoding consistent across all admin search inputs. Search composes with the existing `species`/`since` filters via AND so an owner can narrow the species first then prefix-match by hash.
+
+---
+
+### Task 47 — pending-comments badge on sidebar
+
+**Status:** completed
+**Priority:** medium (operational visibility)
+**Frontend evidence:** Sidebar showed every navigation entry uniformly. Owner had to click into Comments to learn whether anything was pending. With moderation gated on humans, missing a single pending comment for hours was easy.
+**Owner problem:** "Did anything come in since I last looked?" — required a clicked-through visit.
+**Existing capability:** dashboard endpoint `/api/admin/dashboard` already returns `comments.pending` (Task 5 KPIs).
+**Gap:** no surfaced counter on the sidebar — value was reachable only by visiting the dashboard page.
+**Frontend touch:**
+  - Layout.jsx imports `apiAdmin` and adds `pendingComments` state populated from `apiAdmin.dashboard()` on mount + every 60s (and on `location.pathname` change so a moderation action immediately refreshes the badge after navigation back to the sidebar)
+  - Inline `<span data-testid=nav-badge--admin-comments>` next to the Comments NavLink shows the count when > 0
+  - New `styles.navBadge` — accent-color chip, tabular-nums, 18×18 minimum so single digits don't visually drift
+  - Badge is silent when count is 0 — no "(0)" noise
+**Automated tests:** Vitest 261/261 still passing — no regression because Layout's NavLink rendering branch only adds an extra child when count > 0; existing snapshot/dom assertions are unaffected.
+**Playwright acceptance path:**
+  1. Snapshot pre-test pending count
+  2. Seed 3 pending comments via direct DB
+  3. /dashboard reports pending = pre + 3
+  4. Login → assert `[data-testid=nav-badge--admin-comments]` text equals expected
+  5. Approve all seeded comments via API → pending returns to pre
+  6. Cleanup
+**Snapshot location:** `/tmp/admin-rebuild/task-47/sidebar-badge.png`
+
+- **Vitest:** combined `npx vitest run` → **261/261** (no regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-47/verify.py` PASSED — every step green; live DB rolled from 0 → 3 pending → 0 with the badge faithfully tracking.
+- **Snapshots:** `/tmp/admin-rebuild/task-47/sidebar-badge.png`.
+- **Commit:** `e2a51e1` (`feat(admin/layout): pending-comments badge on sidebar (Task 47)`).
+
+Implementation note: 60-second poll cadence matches the dashboard's freshness expectation and stays well below Redis rate-limits. Re-fetch on `location.pathname` change ensures that approving a comment immediately updates the badge (the next route change triggers a refresh; faster than waiting for the 60s tick). Badge is a single-purpose UI add — pattern can extend to media uploads pending review, scheduled-post countdown, etc., by mapping `item.to` → counter from the same dashboard payload (which already has draft/scheduled post counts and media count). Counts are silent when zero so the sidebar stays calm during normal periods.
