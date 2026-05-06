@@ -1952,3 +1952,28 @@ Implementation note: `pickNavCounters` is a pure function so the unit test can p
 - **Commit:** `757eaf1` (`feat(admin/posts): auto-suggest next post number on new (Task 49)`).
 
 Implementation note: the substitute-only-if-pristine guard matters because the next-n network round-trip can race against the user starting to type or recovering a stale draft. Comparing to the literal `NEW_POST_TEMPLATE` constant is a cheap and exact way to detect "still untouched" without a separate dirty flag — once the user types any character the markdown won't equal the constant any more.
+
+---
+
+### Task 50 — "↗ 公开页" link on admin Posts rows ✅
+
+**Frontend dependency:** PRD §7 listed cross-cut "view on public site" links as an open gap — owners had to manually paste `/p/<id>` in a new tab to spot-check the public render of any row. The admin list had two row-level actions (`编辑` / `删除`) and no shortcut to the public surface.
+
+**Backend:** none — the public route already exists at `/p/:id`.
+
+**Frontend:** add an anchor before the 编辑 button:
+```
+<a href="/p/{id}" target="_blank" rel="noopener noreferrer"
+   data-testid="public-link-{id}">↗ 公开页</a>
+```
+Reuses the ghost-button look via a new `btnGhostLink` style entry that drops the button-only `cursor` semantics (anchors carry their own `pointer`) and adds `text-decoration: none` so it visually matches the surrounding buttons.
+
+**Tests:** no new vitest case — Posts.jsx has no unit-test suite (rendered via Playwright E2E only). Full sweep `npx vitest run` → **265/265** unchanged.
+
+**Playwright:** `/Users/sd3/anaconda3/bin/python /tmp/admin-rebuild/task-50/verify.py` PASSED — login → /admin/posts → assert `[data-testid=public-link-{id}]` exists with href=`/p/<id>`, target=`_blank`, rel includes `noopener` → click → new tab opens at `http://localhost:5173/p/<id>`.
+
+**Snapshots:** `/tmp/admin-rebuild/task-50/admin-posts-public-link.png` (admin row), `/tmp/admin-rebuild/task-50/public-page-from-admin.png` (resulting public page).
+
+**Commit:** `6f654b9` (`feat(admin/posts): "↗ 公开页" link on each row (Task 50)`).
+
+Implementation note: drafts/scheduled posts intentionally still render the link — the resulting public 404 is the cleanest signal that the post isn't yet public, and avoids dragging `status` into PostSummary just for this one UI hint. If we ever want a green/grey badge here it's a one-line addition once `status` is added to PostSummary; today's row stays compact.
