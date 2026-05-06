@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import Layout from './Layout.jsx';
+import Layout, { pickNavCounters } from './Layout.jsx';
 
 vi.mock('./AuthContext.jsx', () => ({
   useAuth: () => ({
@@ -74,5 +74,42 @@ describe('Layout sidebar IA', () => {
     const crumb = screen.getByTestId('breadcrumb');
     // No leaf appended for unmatched pages.
     expect(crumb.textContent).not.toContain('文章');
+  });
+});
+
+// Task 48: per-route badge counters derived from /api/admin/dashboard.
+describe('pickNavCounters', () => {
+  it('maps comments.pending and posts.draft from a real dashboard payload', () => {
+    const payload = {
+      hits: {}, likes: {},
+      comments: { total: 100, pending: 7 },
+      posts: { published: 12, draft: 3, scheduled: 1 },
+      media: { count: 4 },
+    };
+    const counters = pickNavCounters(payload);
+    expect(counters['/admin/comments']).toBe(7);
+    expect(counters['/admin/posts']).toBe(3);
+  });
+
+  it('returns zeros (not undefined) when the payload is missing fields', () => {
+    const counters = pickNavCounters({});
+    expect(counters['/admin/comments']).toBe(0);
+    expect(counters['/admin/posts']).toBe(0);
+  });
+
+  it('returns an empty object for null/undefined input', () => {
+    expect(pickNavCounters(null)).toEqual({});
+    expect(pickNavCounters(undefined)).toEqual({});
+  });
+
+  it('does not surface inventory-only fields as counters', () => {
+    const payload = {
+      comments: { total: 100, pending: 0 },
+      posts: { published: 12, draft: 0 },
+      media: { count: 99 },
+    };
+    const counters = pickNavCounters(payload);
+    // No keys for media / published — only the actionable ones (zero is fine).
+    expect(Object.keys(counters).sort()).toEqual(['/admin/comments', '/admin/posts']);
   });
 });

@@ -78,6 +78,24 @@ const ROUTE_INDEX = (() => {
   return idx;
 })();
 
+// Task 48: derive per-route counters from a /api/admin/dashboard payload.
+// Each entry maps a NavLink `to` to the actionable count rendered as a
+// sidebar badge. Add an entry here to surface a new counter — anything
+// already in the dashboard payload is one line away.
+//
+// Counters intentionally favor "needs-attention" over "inventory":
+//   - comments.pending — moderation queue (blocked on owner)
+//   - posts.draft      — work in progress; reminder to finish
+// Inventory-only fields (posts.published, media.count, etc.) are
+// omitted so the sidebar doesn't broadcast non-actionable noise.
+export function pickNavCounters(dashboard) {
+  if (!dashboard) return {};
+  return {
+    '/admin/comments': dashboard?.comments?.pending ?? 0,
+    '/admin/posts': dashboard?.posts?.draft ?? 0,
+  };
+}
+
 function findCrumb(pathname) {
   if (!pathname) return null;
   // Exact match first; fall back to the longest registered prefix so
@@ -99,14 +117,20 @@ export default function Layout() {
   const crumb = findCrumb(location.pathname);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  // Task 47: pending-comments badge. Polls /api/admin/dashboard every 60s
-  // so the sidebar counter stays roughly fresh without becoming chatty.
-  const [pendingComments, setPendingComments] = useState(0);
+  // Task 47/48: per-route actionable counters from /api/admin/dashboard.
+  // Map is keyed by NavLink `to` so each entry is rendered as a badge
+  // beside its sidebar item. Polled every 60s and refreshed on route
+  // change so an action that updates the underlying number reflects
+  // immediately on the next page transition.
+  const [navCounters, setNavCounters] = useState({});
   useEffect(() => {
     let alive = true;
     function refresh() {
       apiAdmin.dashboard()
-        .then((res) => alive && setPendingComments(res?.comments?.pending ?? 0))
+        .then((res) => {
+          if (!alive) return;
+          setNavCounters(pickNavCounters(res));
+        })
         .catch(() => { /* silent — sidebar still works */ });
     }
     refresh();
@@ -196,9 +220,8 @@ export default function Layout() {
                 <span style={styles.navGroupLabel}>{group.label}</span>
               </div>
               {group.items.map((item) => {
-                const badge = item.to === '/admin/comments' && pendingComments > 0
-                  ? pendingComments
-                  : null;
+                const count = navCounters[item.to] ?? 0;
+                const badge = count > 0 ? count : null;
                 return (
                   <NavLink
                     key={item.to}
