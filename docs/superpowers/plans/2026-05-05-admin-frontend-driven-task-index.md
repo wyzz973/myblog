@@ -1616,3 +1616,30 @@ Implementation note: kept it pure-XML (no JSON Feed, no RSS 2.0 — Atom 1.0 has
 - **Commit:** `235a607` (`feat(public/seo): robots.txt + Atom feed-discovery link (Task 38)`).
 
 Implementation note: the sitemap pointer in robots.txt is absolute (using `public_site_base_url`) on purpose — search-engine crawlers normalize relative paths inconsistently, and a deploy behind a reverse proxy might not have the `/api/` prefix at the canonical site host. Absolute URLs are the safe default. Production deploys typically alias `/robots.txt` → `/api/robots.txt` and `/sitemap.xml` → `/api/sitemap.xml` at the proxy; the absolute pointer keeps the chain intact regardless. The feed-discovery link uses `/api/feed.xml` (relative path) so it works in dev (vite proxies `/api`) and prod (reverse proxy serves it). Title is human-readable so RSS readers display "myblog · Atom feed" rather than the raw URL.
+
+---
+
+### Task 39 — PetSpeciesEditor uses ConfirmModal not window.confirm
+
+**Status:** completed
+**Priority:** low (visual consistency polish — closes Task 21d follow-up)
+**Frontend evidence:** every other admin destructive action used the shared `<ConfirmModal>` (via `useConfirm` hook) for visual consistency; only the species delete dropped to the native `window.confirm()` browser dialog. This was flagged in 21d's implementation note as a deferred polish.
+**Owner problem:** the system browser dialog was visually inconsistent with the rest of the admin (different font, spacing, and missing the destructive-button styling).
+**Existing capability:** `useConfirm` hook + `<ConfirmModal>` mounted via `<UIProvider>` at the admin shell root.
+**Gap:** PetSpeciesEditor's `removeRow` still called `window.confirm()` (added in 21d).
+**Frontend touch:** import `useConfirm` from `../ui/UIProvider.jsx`; replace `if (!window.confirm(...)) return` with `const ok = await confirm({ title, message, confirmLabel, destructive: true }); if (!ok) return`.
+**Automated tests:** vitest mocks `useConfirm` at module scope to always-confirm so existing behavioral tests stay green; the cancel path is exercised by Playwright instead.
+**Playwright acceptance path:**
+  1. /admin/pet?tab=species → create temp species via UI
+  2. Click delete → assert `[data-testid=confirm-modal]` mounts (NOT a native dialog)
+  3. Confirm via `[data-testid=confirm-ok]` → row detaches
+  4. Repeat with cancel via `[data-testid=confirm-cancel]` → row preserved
+  5. `page.on("dialog", ...)` collector confirms zero native dialogs fired throughout
+**Snapshot location:** `/tmp/admin-rebuild/task-39/confirm-modal.png`
+
+- **Vitest:** `npx vitest run` → **256/256** (no regression — `useConfirm` mocked to async-true preserves existing happy-path assertions).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-39/verify.py` PASSED — modal mounts with species id + warning copy, confirm removes the row, cancel preserves it, zero native dialogs throughout the run.
+- **Snapshots:** `/tmp/admin-rebuild/task-39/confirm-modal.png`.
+- **Commit:** `ff4d104` (`feat(admin/pet): replace window.confirm with admin ConfirmModal in species editor (Task 39)`).
+
+Implementation note: zero-content change to the editor's behavior — same gate, same blast radius, same destructive-action affordance. The win is purely visual consistency: the species delete now uses the same modal styling and keyboard handling (Esc to cancel, Enter to confirm) as the password-change confirm, the integration revoke confirm, the comment-bulk-reject confirm, etc. `grep -rn 'window.confirm' src` is now empty across the admin surface — every destructive action is unified behind `useConfirm`.
