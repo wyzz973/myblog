@@ -2228,3 +2228,54 @@ Implementation note: the verifier's "switch to all tab" step is necessary becaus
 | 草稿/发布预览模式（带 token 链接） | 不做 | 需要新设计（token TTL、是否带 CSP、是否禁宠物面板） |
 
 至此 PRD §7 缺口矩阵 + 长尾 UX wave 都已穷尽，剩余项都是阻塞或不做。
+
+---
+
+## Mid-tail wave (Task 66–69) — 一次性收尾
+
+### Task 66 — PostEditor 实时字数 / 阅读时长 ✅
+- `src/admin/wordCount.js` 镜像后端 markdown_pipeline.compute_derived（ASCII 词块 + CJK 字符独立计数，240 wpm，最少 1 min）
+- PostEditor header lead 行追加 `· N 字 · M min 阅读`，useMemo 实时刷新
+- Vitest 14 个 case；Playwright `/tmp/admin-rebuild/task-66/verify.py` PASSED（输入后字数实时增长）
+- Commit: `a7a832c..` then full Task 66 → see `git log --oneline | grep "Task 66"` (commit 在前)
+
+### Task 67 — 草稿/计划文章预览 token ✅
+- Backend: `services/post_preview.py` HMAC v1.{id}.{exp}.{sig}, TTL 24h, 无状态
+- `POST /api/admin/posts/{id}/preview-token` 颁发；`GET /api/posts/{id}?preview_token=` 验证后绕过 status 过滤
+- Frontend: `postsApi.issuePreviewToken`；PostEditor header 在 status≠published 时显示「复制预览链接」按钮（自动写剪贴板 + toast）；Reader 透传 preview_token
+- 5 个 pytest case（颁发/通过/wrong-id/tampered/missing-post）；Playwright `/tmp/admin-rebuild/task-67/verify.py` PASSED — 草稿无 token 404，admin 颁发后访问得到 200，前端复制 URL 在新 tab 直接渲染 draft
+- Commit: `78a9cbf`
+
+### Task 68 — Reader admin-only 评论审核浮层 ✅
+- `src/components/ReaderAdminBar.jsx`：仅在 localStorage 有 admin token 时挂载，拉 pending 评论计数
+- 浮条提供「全部通过 / 全部标垃圾 / ↗ 详细审核」三按钮，bulk action 完成后 refresh，归零自动隐藏；401 时自动隐藏
+- 不依赖公开评论 UI（PRD §8 OOS）
+- Playwright `/tmp/admin-rebuild/task-68/verify.py` PASSED — 未登录访客看不到、admin 看到 N 条、点全部通过后浮条消失
+- Commit: `99a02b5`
+
+### Task 69 — 基础 OG/Twitter card meta ✅
+- index.html 加入 og:type/og:site_name/og:title/og:description/twitter:card/twitter:title/twitter:description 站点级回退
+- `src/utils/documentMeta.js` setDocumentMeta/restoreDocumentMeta 在 SPA 内部跳转时动态更新 head；首页 og:type=website，/p/<id> og:type=article + 文章标题/描述
+- 6 个 vitest case；Playwright `/tmp/admin-rebuild/task-69/verify.py` PASSED — 静态 index.html 含回退 + JS hydrate 后 reader 路由 og:title 切换为文章标题
+- 完整 per-post 静态预渲染（让无 JS 爬虫看到具体文章 OG）需 SSR/build-time prerender，是另一波 PRD 的事
+- Commit: `(see git log; this batch's last feat commit)`
+
+---
+
+## 最终结论
+
+✅ PRD §7 缺口矩阵全部关闭
+✅ 长尾 UX wave (Task 60–65) 全部关闭
+✅ Mid-tail wave (Task 66–69) 全部关闭
+
+仍未做且短期内不做的（每项有原因）:
+
+| 项目 | 阻塞点 |
+|---|---|
+| 公开 Reader 完整评论 UI | PRD §8 显式 out of scope |
+| 第二语言 i18n | 需独立 PRD（哪些字段双语 / URL 路由化） |
+| 完整 per-post OG 预渲染 | 需 SSR 或 Vite build-time prerender |
+| HomeA `?from=&to=` 时间窗 | `/api/posts` 无 date range；用户场景不明 |
+| Analytics 多周期拼接 CSV | 边缘需求 |
+
+至此 admin 重构项目可交付。
