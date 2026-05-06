@@ -2107,3 +2107,28 @@ Implementation note: the empty-state element uses `border: 1px dashed` rather th
 **Commit:** `9acdf65` (`feat(admin/tags): 文章数 column + protected delete (Task 56)`).
 
 Implementation note: the dim/foreground color split on the count cell mirrors the same convention used in the Posts list (status pill: zero/empty values fade, populated values have full chroma). Helps the owner scan a long tag list and spot the protected rows without reading numbers — heavily-used tags stand out, dead tags fade.
+
+---
+
+### Task 57 — Pet KPI tile on /admin/dashboard ✅
+
+**Frontend dependency:** the dashboard already surfaced hits / likes / comments / posts / media tiles per PRD §5.2 but pet helper traffic was missing entirely. Owners had to drill into Pet › Conversations to see whether the helper saw any activity at all.
+
+**Backend:**
+- `PetKPI(conversations: int, messages_last_7d: int)` schema added.
+- `DashboardResponse.pet: PetKPI | None = None` (optional so older API consumers and snapshot tests don't break).
+- `dashboard_kpis()` service computes both via `COUNT(DISTINCT visitor_hash)` and a 7-day cutoff `created_at >= now - 7d` against `pet_message`.
+
+**Frontend:** `buildTiles` in `Dashboard.jsx` appends a "Pet conversations" tile with `headline = conversations`, `subs = [['msgs / 7d', messages_last_7d]]`. Tile is gated on `d.pet` truthiness — when the field is absent the tile silently disappears.
+
+**Tests:**
+- **Pytest:** `test_dashboard_empty_returns_zeros` extended to assert `body['pet'] == {'conversations': 0, 'messages_last_7d': 0}`. Full sweep `pytest tests/test_admin_analytics.py tests/test_analytics_service.py` → **41/41**.
+- **Vitest:** sweep `npx vitest run` → **267/267** unchanged.
+
+**Playwright:** `/Users/sd3/anaconda3/bin/python /tmp/admin-rebuild/task-57/verify.py` PASSED — API smoke checks the field shape; UI smoke logs in, navigates to `/admin/dashboard`, and asserts the "Pet conversations" tile is rendered with the API's `conversations` count visible.
+
+**Snapshot:** `/tmp/admin-rebuild/task-57/dashboard-pet-tile.png`.
+
+**Commit:** `767e07c` (`feat(admin/dashboard): pet KPI tile (Task 57)`).
+
+Implementation note: making `DashboardResponse.pet` optional (`PetKPI | None = None`) is what kept the tile change non-breaking — pre-existing client code that defaults `d.pet?.conversations ?? '—'` works regardless of whether the backend was redeployed first. Same pattern as the half-built rollout in PRD §6.2 ("backend-and-UI features ship in two halves; the second half is a no-op upgrade").
