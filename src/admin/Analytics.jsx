@@ -156,10 +156,25 @@ function HitsChart({ series }) {
     return <div style={styles.muted}>这个时间范围内暂无访问。</div>;
   }
   const max = Math.max(1, ...data.map((d) => d.hits));
+  const nonZero = data.reduce((n, d) => n + (d.hits > 0 ? 1 : 0), 0);
   const innerW = width - padX * 2;
   const innerH = height - padY * 2;
   const barGap = 2;
-  const barW = Math.max(1, innerW / data.length - barGap);
+  // 单点的特殊情况：把柱宽限到合理上限并居中渲染，否则 1 根柱占满整个轴
+  // 视觉空旷。多点时按等分计算。
+  let barW;
+  let barX0;
+  if (data.length === 1) {
+    barW = Math.min(64, innerW / 2);
+    barX0 = padX + (innerW - barW) / 2;
+  } else {
+    barW = Math.max(1, innerW / data.length - barGap);
+    barX0 = padX;
+  }
+  // 「零访问日」用 1px baseline tick（var(--line-2)）来让轴上每一天都有
+  // 可见标记，避免 30 天里只有一根柱时主视图看起来像是断的。
+  const baselineY = height - padY;
+  const tickH = 2;
 
   return (
     <div style={styles.chartShell}>
@@ -172,28 +187,41 @@ function HitsChart({ series }) {
         <line
           x1={padX}
           x2={width - padX}
-          y1={height - padY}
-          y2={height - padY}
+          y1={baselineY}
+          y2={baselineY}
           stroke="var(--line)"
           strokeWidth="1"
         />
         {data.map((d, i) => {
           const h = (d.hits / max) * innerH;
-          const x = padX + i * (barW + barGap);
-          const y = height - padY - h;
-          return (
-            <g key={`${d.date}-${i}`}>
+          const x = barX0 + i * (data.length === 1 ? 0 : (barW + barGap));
+          const y = baselineY - h;
+          if (d.hits === 0) {
+            return (
               <rect
+                key={`${d.date}-${i}`}
                 x={x}
-                y={y}
-                width={barW}
-                height={h}
-                fill="var(--accent)"
-                opacity={d.hits === 0 ? 0.18 : 0.85}
+                y={baselineY - tickH}
+                width={Math.max(1, barW)}
+                height={tickH}
+                fill="var(--line-2)"
               >
-                <title>{`${d.date}: ${d.hits}`}</title>
+                <title>{`${d.date}: 0`}</title>
               </rect>
-            </g>
+            );
+          }
+          return (
+            <rect
+              key={`${d.date}-${i}`}
+              x={x}
+              y={y}
+              width={barW}
+              height={h}
+              fill="var(--accent)"
+              opacity={0.85}
+            >
+              <title>{`${d.date}: ${d.hits}`}</title>
+            </rect>
           );
         })}
         <text
@@ -204,6 +232,7 @@ function HitsChart({ series }) {
           fontFamily="'JetBrains Mono', ui-monospace, monospace"
         >
           最高 {max.toLocaleString()}
+          {nonZero < data.length && ` · 仅 ${nonZero} / ${data.length} 天有访问`}
         </text>
       </svg>
       <div style={styles.chartAxis}>
