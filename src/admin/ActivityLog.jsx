@@ -41,6 +41,7 @@ export default function ActivityLog() {
   const [offset, setOffset] = useState(0);
   const [reachedEnd, setReachedEnd] = useState(false);
   const [filterType, setFilterType] = useState(null);
+  const [textQuery, setTextQuery] = useState('');
   const [expanded, setExpanded] = useState(() => new Set());
 
   useEffect(() => {
@@ -48,7 +49,12 @@ export default function ActivityLog() {
     setLoading(true);
     setError(null);
     activityApi
-      .list({ types: filterType ? [filterType] : undefined, limit: PAGE_SIZE, offset })
+      .list({
+        types: filterType ? [filterType] : undefined,
+        q: textQuery.trim() || undefined,
+        limit: PAGE_SIZE,
+        offset,
+      })
       .then((rows) => {
         if (!mounted) return;
         setItems((prev) => (offset === 0 ? rows : [...prev, ...rows]));
@@ -64,11 +70,18 @@ export default function ActivityLog() {
     return () => {
       mounted = false;
     };
-  }, [offset, filterType]);
+  }, [offset, filterType, textQuery]);
 
   // Reset pagination when the filter changes.
   function pickFilter(t) {
     setFilterType(t);
+    setOffset(0);
+    setItems([]);
+    setReachedEnd(false);
+  }
+
+  function pickQuery(q) {
+    setTextQuery(q);
     setOffset(0);
     setItems([]);
     setReachedEnd(false);
@@ -104,6 +117,26 @@ export default function ActivityLog() {
           </p>
         </div>
       </header>
+
+      <div style={{ marginBottom: 8 }}>
+        <input
+          type="search"
+          value={textQuery}
+          onChange={(e) => pickQuery(e.target.value)}
+          placeholder="搜 actor / target（如邮箱、文章 id、token 名）"
+          style={styles.searchInput}
+          data-testid="activity-search"
+          aria-label="搜索 actor 或 target"
+        />
+        {textQuery && (
+          <button
+            type="button"
+            onClick={() => pickQuery('')}
+            style={styles.searchClear}
+            data-testid="activity-search-clear"
+          >清除</button>
+        )}
+      </div>
 
       <div style={styles.chipRow} data-testid="activity-chips">
         <FilterChip
@@ -247,6 +280,29 @@ const styles = {
   headN: { color: 'var(--accent)', fontSize: 14, letterSpacing: '0.06em' },
   headSlash: { color: 'var(--fg-4)' },
   lead: { fontSize: 12, color: 'var(--fg-3)', margin: '4px 0 0' },
+  searchInput: {
+    background: 'var(--bg-2)',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg)',
+    padding: '6px 10px',
+    fontFamily: 'inherit',
+    fontSize: 12,
+    borderRadius: 4,
+    outline: 'none',
+    width: '320px',
+    maxWidth: '100%',
+  },
+  searchClear: {
+    marginLeft: 6,
+    background: 'transparent',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-3)',
+    padding: '5px 10px',
+    fontFamily: 'inherit',
+    fontSize: 11,
+    borderRadius: 4,
+    cursor: 'pointer',
+  },
   chipRow: {
     display: 'flex',
     flexWrap: 'wrap',

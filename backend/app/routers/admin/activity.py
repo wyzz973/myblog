@@ -13,12 +13,13 @@ router = APIRouter()
 @router.get("/activity", response_model=list[ActivityItem])
 async def list_activity(
     type: list[str] | None = Query(default=None),
+    q: str | None = Query(default=None),  # Task 45: substring search on actor/target
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> list[ActivityItem]:
-    rows = await activity.list_events(s, types=type, limit=limit, offset=offset)
+    rows = await activity.list_events(s, types=type, q=q, limit=limit, offset=offset)
     return [
         ActivityItem(
             id=r.id, type=r.type, actor=r.actor, target=r.target,

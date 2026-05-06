@@ -21,8 +21,9 @@ function qs(params) {
 export const activityApi = {
   // Full timeline for /admin/activity-log. `types` is an optional list of
   // event-type strings; leave undefined for "all".
-  list({ types, limit = 50, offset = 0 } = {}) {
-    return adminRequest(`/activity${qs({ type: types, limit, offset })}`);
+  // Task 45: `q` is a substring filter (server-side ILIKE on actor/target).
+  list({ types, q, limit = 50, offset = 0 } = {}) {
+    return adminRequest(`/activity${qs({ type: types, q, limit, offset })}`);
   },
   // Dashboard widget — last N events, no filter.
   recent({ limit = 20 } = {}) {

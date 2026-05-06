@@ -53,6 +53,93 @@ async def test_activity_filter_by_type(client, admin_token, seed_events):
     assert types == {"phase4.test.a"}
 
 
+# Task 45: text search across actor / target
+
+
+async def test_activity_q_filter_matches_target(client, admin_token):
+    """Seed an event with a unique target; assert q matches just that row."""
+    async with AsyncSessionLocal() as s:
+        s.add_all([
+            EventLog(type="t45.search", actor="alice@example.com",
+                     target="t45-needle-unique", meta={}, created_at=datetime.now(UTC)),
+            EventLog(type="t45.search", actor="alice@example.com",
+                     target="t45-decoy", meta={}, created_at=datetime.now(UTC)),
+        ])
+        await s.commit()
+    try:
+        r = await client.get(
+            "/api/admin/activity?q=t45-needle-unique&limit=20",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert r.status_code == 200
+        items = r.json()
+        targets = [i["target"] for i in items]
+        assert "t45-needle-unique" in targets
+        assert "t45-decoy" not in targets
+    finally:
+        async with AsyncSessionLocal() as s:
+            await s.execute(delete(EventLog).where(EventLog.type == "t45.search"))
+            await s.commit()
+
+
+async def test_activity_q_filter_matches_actor(client, admin_token):
+    """ILIKE matches actor column too."""
+    async with AsyncSessionLocal() as s:
+        s.add_all([
+            EventLog(type="t45.actor", actor="t45-actor-rare@example.com",
+                     target="anything", meta={}, created_at=datetime.now(UTC)),
+            EventLog(type="t45.actor", actor="someone-else@example.com",
+                     target="anything", meta={}, created_at=datetime.now(UTC)),
+        ])
+        await s.commit()
+    try:
+        r = await client.get(
+            "/api/admin/activity?q=t45-actor-rare",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        actors = [i["actor"] for i in r.json()]
+        assert any("t45-actor-rare" in a for a in actors)
+        assert not any("someone-else" in a for a in actors)
+    finally:
+        async with AsyncSessionLocal() as s:
+            await s.execute(delete(EventLog).where(EventLog.type == "t45.actor"))
+            await s.commit()
+
+
+async def test_activity_q_blank_ignored(client, admin_token, seed_events):
+    """Whitespace-only q is treated as no filter."""
+    r = await client.get(
+        "/api/admin/activity?q=%20%20&limit=50",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    items = r.json()
+    types = {i["type"] for i in items}
+    # Both seeded types should appear when q is effectively empty.
+    assert "phase4.test.a" in types or "phase4.test.b" in types
+
+
+async def test_activity_q_combines_with_type_filter(client, admin_token):
+    async with AsyncSessionLocal() as s:
+        s.add_all([
+            EventLog(type="t45.combo.x", actor="a", target="needle-X", meta={}, created_at=datetime.now(UTC)),
+            EventLog(type="t45.combo.y", actor="a", target="needle-X", meta={}, created_at=datetime.now(UTC)),
+        ])
+        await s.commit()
+    try:
+        r = await client.get(
+            "/api/admin/activity?type=t45.combo.x&q=needle-X",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        items = r.json()
+        # Both filters AND together: only t45.combo.x rows appear.
+        assert len(items) == 1
+        assert items[0]["type"] == "t45.combo.x"
+    finally:
+        async with AsyncSessionLocal() as s:
+            await s.execute(delete(EventLog).where(EventLog.type.in_(["t45.combo.x", "t45.combo.y"])))
+            await s.commit()
+
+
 async def test_activity_descending_order(client, admin_token, seed_events):
     r = await client.get(
         "/api/admin/activity?limit=50",
