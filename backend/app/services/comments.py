@@ -81,16 +81,27 @@ async def list_admin(
     *,
     status: Literal["pending", "approved", "spam"] | None = None,
     post_id: str | None = None,
+    q: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[Comment]:
-    q = select(Comment)
+    """Admin list with optional filters.
+
+    Task 44: ``q`` does case-insensitive substring matching on ``who`` OR
+    ``body`` so owners can moderate by author handle / body text without
+    knowing the post id. Falsy / whitespace-only ``q`` is ignored.
+    """
+    from sqlalchemy import or_
+    stmt = select(Comment)
     if status is not None:
-        q = q.where(Comment.status == status)
+        stmt = stmt.where(Comment.status == status)
     if post_id is not None:
-        q = q.where(Comment.post_id == post_id)
-    q = q.order_by(Comment.created_at.desc()).limit(limit).offset(offset)
-    return list((await s.execute(q)).scalars().all())
+        stmt = stmt.where(Comment.post_id == post_id)
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(Comment.who.ilike(like), Comment.body.ilike(like)))
+    stmt = stmt.order_by(Comment.created_at.desc()).limit(limit).offset(offset)
+    return list((await s.execute(stmt)).scalars().all())
 
 
 async def patch(

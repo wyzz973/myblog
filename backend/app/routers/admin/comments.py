@@ -24,13 +24,14 @@ router = APIRouter()
 async def list_comments(
     status: Literal["pending", "approved", "spam"] | None = None,
     post_id: str | None = None,
+    q: str | None = None,  # Task 44: substring search on who/body
     limit: int = 50,
     offset: int = 0,
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> list[AdminCommentItem]:
     rows = await comments.list_admin(
-        s, status=status, post_id=post_id, limit=limit, offset=offset
+        s, status=status, post_id=post_id, q=q, limit=limit, offset=offset
     )
     post_ids = {r.post_id for r in rows}
     titles: dict[str, str] = {}

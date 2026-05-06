@@ -246,3 +246,56 @@ async def test_admin_patch_read_token_denied_403(client, admin_token, seed_post)
         headers={"Authorization": f"Bearer {raw}"},
     )
     assert r.status_code == 403
+
+
+# Task 44: text search across who / body
+
+
+async def test_admin_list_q_filter_matches_body(client, admin_token, seed_post):
+    await _seed_comments(seed_post)
+    r = await client.get(
+        f"/api/admin/comments?post_id={seed_post}&q=approved",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200, r.text
+    items = r.json()
+    # Only the row whose body is "approved one" should match
+    assert len(items) == 1, items
+    assert items[0]["body"] == "approved one"
+
+
+async def test_admin_list_q_filter_matches_who(client, admin_token, seed_post):
+    await _seed_comments(seed_post)
+    # Author "a" only — substring match against `who` column.
+    r = await client.get(
+        f"/api/admin/comments?post_id={seed_post}&q=a",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    items = r.json()
+    # who="a" matches 1; body "approved" + "spam" + "pending" all contain
+    # 'a' too — assert at least one matched and all matches are valid.
+    assert len(items) >= 1, items
+    bodies_or_authors = [(it["who"], it["body"]) for it in items]
+    for who, body in bodies_or_authors:
+        assert "a" in (who.lower() + body.lower())
+
+
+async def test_admin_list_q_blank_is_ignored(client, admin_token, seed_post):
+    """Whitespace-only q must NOT filter — same shape as no q."""
+    await _seed_comments(seed_post)
+    r = await client.get(
+        f"/api/admin/comments?post_id={seed_post}&q=%20%20%20",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    assert len(r.json()) == 3
+
+
+async def test_admin_list_q_no_match_returns_empty(client, admin_token, seed_post):
+    await _seed_comments(seed_post)
+    r = await client.get(
+        f"/api/admin/comments?post_id={seed_post}&q=zzzzzzz-no-match",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert r.status_code == 200
+    assert r.json() == []

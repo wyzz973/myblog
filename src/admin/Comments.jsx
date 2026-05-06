@@ -15,6 +15,7 @@ const TABS = [
 export default function Comments() {
   const [tab, setTab] = useState('pending');
   const [postFilter, setPostFilter] = useState('');
+  const [textQuery, setTextQuery] = useState('');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -37,6 +38,7 @@ export default function Comments() {
       .list({
         status: tab === 'all' ? undefined : tab,
         post_id: postFilter.trim() || undefined,
+        q: textQuery.trim() || undefined,
       })
       .then((rows) => {
         if (!mounted) return;
@@ -53,7 +55,7 @@ export default function Comments() {
     return () => {
       mounted = false;
     };
-  }, [tab, postFilter, reloadTick]);
+  }, [tab, postFilter, textQuery, reloadTick]);
 
   function toggleSelected(id) {
     setSelected((prev) => {
@@ -207,6 +209,25 @@ export default function Comments() {
             type="button"
             onClick={() => setPostFilter('')}
             style={styles.btnGhost}
+          >
+            清除
+          </button>
+        )}
+        <input
+          type="search"
+          value={textQuery}
+          onChange={(e) => setTextQuery(e.target.value)}
+          placeholder="搜作者 / 正文…"
+          style={styles.postFilter}
+          data-testid="text-search"
+          aria-label="搜索作者或评论正文"
+        />
+        {textQuery && (
+          <button
+            type="button"
+            onClick={() => setTextQuery('')}
+            style={styles.btnGhost}
+            data-testid="text-search-clear"
           >
             清除
           </button>

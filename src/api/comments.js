@@ -49,8 +49,9 @@ function qs(params) {
 
 export const commentsApi = {
   // status: "pending" | "approved" | "spam" | undefined (=all)
-  list({ status, post_id, limit = 100, offset = 0 } = {}) {
-    return adminRequest(`/comments${qs({ status, post_id, limit, offset })}`);
+  // Task 44: q is a substring filter against who/body (server-side ILIKE).
+  list({ status, post_id, q, limit = 100, offset = 0 } = {}) {
+    return adminRequest(`/comments${qs({ status, post_id, q, limit, offset })}`);
   },
   patch(id, payload) {
     return adminRequest(`/comments/${id}`, {
