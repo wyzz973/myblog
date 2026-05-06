@@ -1775,3 +1775,35 @@ Implementation note: tar (not zip) for unix-friendliness; tar headers preserve `
 - **Commit:** `b14abbf` (`feat(admin/account): owner-configurable comment notify email (Task 43)`).
 
 Implementation note: account-row override + service env baseline gives owners both per-deploy defaults and runtime control. The override is `null`-able rather than empty-string-able at the schema level so a clear-back path exists; UI maps empty input to null in the request body. Master toggle dominates priority — `notify_comments=False` short-circuits even when an override is set, matching how email-marketing tools handle global opt-outs. Endpoint is session-only (api-tokens rejected) because this is personal owner config, not a CI/CLI lever; the existing `account.email` rotation requires the same. Public comments path keeps the same one-shot email dispatch — no batching / rate-limiting added (single-author site doesn't warrant it).
+
+---
+
+### Task 44 — text search across comments admin list
+
+**Status:** completed
+**Priority:** medium (operational gap — moderation by author/body was unsupported)
+**Frontend evidence:** Comments admin page had a post-id filter but no way to find a specific comment by author handle or body text. Owner moderating a flood would have to scroll the paginated list manually.
+**Owner problem:** "Find every comment by visitor 'alice'" / "Find that one rude reply that mentioned 'crypto'" — both required eyeballing the list.
+**Existing capability:** `/api/admin/comments?status&post_id&limit&offset`.
+**Gap:** no substring search.
+**Backend touch:**
+  - extend `comments.list_admin` to accept `q: str | None` and apply ILIKE on `Comment.who OR Comment.body` when present
+  - whitespace-only `q` short-circuits to "no filter" so a stray space in the URL doesn't blank the page
+  - extend `/api/admin/comments` router to forward `q`
+**Frontend API client:** `commentsApi.list({...q})` propagates the new param.
+**UI / interaction:** new search input (`<input type=search>`) next to the post-id filter on `/admin/comments`. Cleared via the existing 清除 pattern.
+**Automated tests:** pytest +4 (q matches body / matches who / blank q ignored / no-match → empty).
+**Playwright acceptance path:**
+  1. seed 2 distinctive comments with `T44-needle-foo` and `T44-needle-bar` bodies + alice44/bob44 authors
+  2. API: `q=T44-needle-foo` returns only that row; `q=alice44` returns the alice row; `q=zzz-not-here-44` returns `[]`
+  3. UI: text-search input renders, filling shows matching row, clear button empties input
+  4. Cleanup: remove seeded rows
+**Snapshot location:** `/tmp/admin-rebuild/task-44/comments-search.png`
+
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_admin_comments.py -k "_q_"` → 4/4.
+- **Vitest:** combined `npx vitest run` → **261/261** (no regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-44/verify.py` PASSED — every step green.
+- **Snapshots:** `/tmp/admin-rebuild/task-44/comments-search.png`.
+- **Commit:** `a84c61b` (`feat(admin/comments): substring search across who+body (Task 44)`).
+
+Implementation note: ILIKE rather than full-text-search keeps the migration footprint zero — pg_trgm indexes are overkill for single-author comment volume, and ILIKE on a 4-digit comment table is a sub-millisecond seq scan. The same pattern can extend to posts/now/contacts admin pages later without churn. Whitespace-only `q` is treated as absent (rather than literal-space match) so URL-state encoders that pad with `%20` don't fall into a "matches every comment containing a space" trap. Server-side filter (not client-side) so pagination stays correct for large windows.
