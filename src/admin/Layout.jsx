@@ -6,7 +6,7 @@ import ShortcutsHelp from './ShortcutsHelp.jsx';
 import useGlobalShortcuts from './useGlobalShortcuts.js';
 import UIProvider from './ui/UIProvider.jsx';
 import { postsApi } from '../api/posts.js';
-import { getToken } from '../api/admin.js';
+import { apiAdmin, getToken } from '../api/admin.js';
 
 // Six workflow groups, mirroring the public site's `01 / 02 / 03` numbered
 // section motif (HomeA.jsx). Routes are unchanged in this rebuild step;
@@ -99,6 +99,20 @@ export default function Layout() {
   const crumb = findCrumb(location.pathname);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  // Task 47: pending-comments badge. Polls /api/admin/dashboard every 60s
+  // so the sidebar counter stays roughly fresh without becoming chatty.
+  const [pendingComments, setPendingComments] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    function refresh() {
+      apiAdmin.dashboard()
+        .then((res) => alive && setPendingComments(res?.comments?.pending ?? 0))
+        .catch(() => { /* silent — sidebar still works */ });
+    }
+    refresh();
+    const id = setInterval(refresh, 60_000);
+    return () => { alive = false; clearInterval(id); };
+  }, [location.pathname]); // refresh on route change too
   const showHelp = useCallback(() => setHelpOpen(true), []);
   useGlobalShortcuts({ navigate, onShowHelp: showHelp });
 
@@ -181,19 +195,31 @@ export default function Layout() {
                 <span style={styles.navGroupNum}>{group.n}</span>
                 <span style={styles.navGroupLabel}>{group.label}</span>
               </div>
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className="admin-nav-item"
-                  style={({ isActive }) => ({
-                    ...styles.navItem,
-                    ...(isActive ? styles.navItemActive : null),
-                  })}
-                >
-                  <span>{item.label}</span>
-                </NavLink>
-              ))}
+              {group.items.map((item) => {
+                const badge = item.to === '/admin/comments' && pendingComments > 0
+                  ? pendingComments
+                  : null;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className="admin-nav-item"
+                    style={({ isActive }) => ({
+                      ...styles.navItem,
+                      ...(isActive ? styles.navItemActive : null),
+                    })}
+                  >
+                    <span>{item.label}</span>
+                    {badge !== null && (
+                      <span
+                        style={styles.navBadge}
+                        data-testid={`nav-badge-${item.to.replace(/\//g, '-')}`}
+                        aria-label={`${badge} 待审核`}
+                      >{badge}</span>
+                    )}
+                  </NavLink>
+                );
+              })}
             </div>
           ))}
         </nav>
@@ -304,6 +330,23 @@ const styles = {
     color: 'var(--fg)',
     fontWeight: 600,
     borderLeft: '2px solid var(--accent)',
+  },
+  navBadge: {
+    // Task 47: actionable counter chip — accent background so it draws
+    // attention only when it actually has a number. Subtle padding so
+    // single-digit counts don't visually float.
+    minWidth: 18,
+    height: 18,
+    padding: '0 6px',
+    borderRadius: 9,
+    background: 'var(--accent)',
+    color: '#0a0b0d',
+    fontSize: 10,
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   main: {
     display: 'flex',
