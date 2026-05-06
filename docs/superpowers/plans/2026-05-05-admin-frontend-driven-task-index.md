@@ -1673,3 +1673,36 @@ Implementation note: zero-content change to the editor's behavior — same gate,
 - **Commit:** `aadf74d` (`feat(admin/pet): live preview alongside ASCII frame textarea (Task 40)`).
 
 Implementation note: chose to inline the `·` constant rather than `import { STATE_EYE } from '...'`. The species module hydrates async; the editor mounts before that's done. Hardcoding mirrors `STATE_EYE.idle` and avoids coupling the admin's preview to the pet renderer's load cycle. If the idle eye changes globally, both places need to be updated — the comment makes that explicit. Preview deliberately does NOT colorize per-species (the production renderer applies tint as CSS `color`); skipping that here keeps the admin preview neutral so layout drift is the focal point, not aesthetic match.
+
+---
+
+### Task 41 — pet conversation export (JSON + Markdown)
+
+**Status:** completed
+**Priority:** medium (owner backup gap)
+**Frontend evidence:** `/admin/pet/conversations/{hash}` shows the full transcript paginated, but there was no way to download an entire visitor's chat history for archival. Owner could screenshot or scroll, but couldn't generate a portable archive.
+**Owner problem:** "I want a backup of every conversation with this visitor before I purge them" / "I want to share a JSON dump of one conversation with the LLM provider for debugging".
+**Existing capability:** paginated `/api/admin/pet/conversations/{hash}` with limit + cursor; full DELETE endpoint.
+**Gap:** no export.
+**Backend touch:**
+  - new `GET /api/admin/pet/conversations/{visitor_hash}/export.json` — full PetMessage rows, oldest first, no pagination
+  - new `GET /api/admin/pet/conversations/{visitor_hash}/export.md` — human-readable transcript with `### mode · timestamp` headings, post links, selection/summary blockquotes, visitor + pet turns
+  - `Content-Disposition` filename `pet-conversation-{shortHash}-{YYYYMMDD}.{ext}` so multiple exports don't collide
+  - Unknown visitor hashes return 200 with empty `items` (not 404) so the UI can show "no messages yet" without an error path
+**Frontend API client:** `apiPet.downloadConversation(visitorHash, format)` — bearer-aware fetch + Blob URL + synthetic `<a download>` (admin tokens live in localStorage, so a plain `<a>` link won't work).
+**UI / interaction:** two new buttons "导出 JSON" / "导出 Markdown" in the PetConversationDetail header next to "Delete all"; toast confirmation with the saved filename.
+**Automated tests:** pytest +4 (JSON shape + filename, Markdown human-readable, empty-archive 200, 401 unauth).
+**Playwright acceptance path:**
+  1. API smoke: both endpoints return 200 with correct content-type + filename
+  2. /admin/pet/conversations/{hash} → both export buttons render
+  3. `page.expect_download()` captures the JSON download (filename ends `.json`)
+  4. Same for the Markdown download
+**Snapshot location:** `/tmp/admin-rebuild/task-41/{detail-with-exports.png, export-{shortHash}.json, export-{shortHash}.md}`
+
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_admin_pet_conversations.py -k export` → 4/4. Combined `pytest tests/test_admin_pet_conversations.py` regression stays green.
+- **Vitest:** combined `npx vitest run` → **261/261** (no regression — JSX wiring uses existing useToast/useConfirm patterns).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-41/verify.py` PASSED — live conversation export captured: 372 items in JSON / 2235 lines in Markdown / both downloads round-tripped through the browser.
+- **Snapshots:** `/tmp/admin-rebuild/task-41/detail-with-exports.png` + the two captured archives.
+- **Commit:** `8b1a0f8` (`feat(admin/pet): per-conversation export to JSON + Markdown (Task 41)`).
+
+Implementation note: Markdown format favors human skim — `### mode` headings make it easy to scroll for a specific turn type; selection/summary as blockquotes preserve the "what context did the pet have" trace. JSON keeps every column except internal-only fields (`prior_turns` is omitted because the running transcript already carries that context as ordered rows). Empty-archive returning 200 (not 404) matches the existing "delete unknown hash" behavior — both are idempotent. Visitor-hash never appears in plaintext beyond the `[:12]` short prefix so a screenshot of the export wouldn't leak the full identifier; the full hash IS in the JSON body for completeness, but file-system-wise the filename uses the short form.
