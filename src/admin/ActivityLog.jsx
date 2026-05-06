@@ -191,6 +191,7 @@ export default function ActivityLog() {
                   item={it}
                   expanded={expanded.has(it.id)}
                   onToggle={() => toggle(it.id)}
+                  onPickQuery={pickQuery}
                 />
               ))
             )}
@@ -233,14 +234,42 @@ function FilterChip({ label, active, onClick }) {
   );
 }
 
-function Row({ item, expanded, onToggle }) {
+function Row({ item, expanded, onToggle, onPickQuery }) {
   const hasMeta = item.meta && Object.keys(item.meta).length > 0;
+  function pick(e, value) {
+    e.stopPropagation();
+    if (value) onPickQuery?.(value);
+  }
   return (
     <>
       <tr style={styles.tr} onClick={onToggle} data-testid={`row-${item.id}`}>
         <td style={styles.tdType}>{item.type}</td>
-        <td style={styles.td}>{item.actor || '—'}</td>
-        <td style={styles.tdTarget}>{item.target || '—'}</td>
+        <td style={styles.td}>
+          {item.actor ? (
+            <button
+              type="button"
+              style={styles.cellLink}
+              onClick={(e) => pick(e, item.actor)}
+              title="按此 actor 过滤"
+              data-testid={`pick-actor-${item.id}`}
+            >
+              {item.actor}
+            </button>
+          ) : '—'}
+        </td>
+        <td style={styles.tdTarget}>
+          {item.target ? (
+            <button
+              type="button"
+              style={styles.cellLink}
+              onClick={(e) => pick(e, item.target)}
+              title="按此 target 过滤"
+              data-testid={`pick-target-${item.id}`}
+            >
+              {item.target}
+            </button>
+          ) : '—'}
+        </td>
         <td style={styles.td}>{ago(item.created_at)}</td>
       </tr>
       {expanded && (
@@ -360,6 +389,12 @@ const styles = {
     padding: '8px 12px',
     color: 'var(--fg)',
     fontVariantNumeric: 'tabular-nums',
+  },
+  cellLink: {
+    background: 'transparent', border: 0, padding: 0, margin: 0,
+    color: 'inherit', font: 'inherit', cursor: 'pointer',
+    textDecoration: 'underline dotted var(--fg-4)',
+    textUnderlineOffset: 3,
   },
   tdTarget: {
     padding: '8px 12px',
