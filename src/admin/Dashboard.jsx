@@ -48,7 +48,14 @@ export default function Dashboard() {
       </header>
       <div style={styles.grid}>
         {tiles.map((t) => (
-          <Card key={t.key} title={t.title} headline={t.headline} subs={t.subs} />
+          <Card
+            key={t.key}
+            title={t.title}
+            headline={t.headline}
+            subs={t.subs}
+            to={t.to}
+            testid={`dashboard-tile-${t.key}`}
+          />
         ))}
       </div>
       <RecentActivity />
@@ -150,18 +157,21 @@ function buildTiles(d) {
         ['last 7d', fmt(d.hits?.last_7d)],
         ['last 30d', fmt(d.hits?.last_30d)],
       ],
+      to: '/admin/analytics',
     },
     {
       key: 'likes',
       title: 'Likes total',
       headline: fmt(d.likes?.total),
       subs: [['last 7d', fmt(d.likes?.last_7d)]],
+      to: '/admin/analytics',
     },
     {
       key: 'comments',
       title: 'Comments',
       headline: fmt(d.comments?.total),
       subs: [['pending', fmt(d.comments?.pending)]],
+      to: '/admin/comments',
     },
     {
       key: 'posts',
@@ -171,12 +181,14 @@ function buildTiles(d) {
         ['draft', fmt(d.posts?.draft)],
         ['scheduled', fmt(d.posts?.scheduled)],
       ],
+      to: '/admin/posts',
     },
     {
       key: 'media',
       title: 'Media items',
       headline: fmt(d.media?.count),
       subs: [],
+      to: '/admin/media',
     },
     // Task 57: pet helper traffic. Hidden when the field is missing
     // (older deploys / tests) — keeps existing snapshots stable.
@@ -185,6 +197,7 @@ function buildTiles(d) {
       title: 'Pet conversations',
       headline: fmt(d.pet.conversations),
       subs: [['msgs / 7d', fmt(d.pet.messages_last_7d)]],
+      to: '/admin/pet?tab=conversations',
     }] : []),
   ];
 }
@@ -195,9 +208,10 @@ function fmt(v) {
   return String(v);
 }
 
-function Card({ title, headline, subs }) {
-  return (
-    <div style={styles.card}>
+function Card({ title, headline, subs, to, testid }) {
+  // Task 65: 卡片可点击 → 跳到对应模块。无 `to` 时降级为 div。
+  const inner = (
+    <>
       <div style={styles.cardTitle}>{title}</div>
       <div style={styles.headline}>{headline}</div>
       {subs && subs.length > 0 && (
@@ -210,8 +224,16 @@ function Card({ title, headline, subs }) {
           ))}
         </div>
       )}
-    </div>
+    </>
   );
+  if (to) {
+    return (
+      <Link to={to} style={{ ...styles.card, ...styles.cardLink }} data-testid={testid}>
+        {inner}
+      </Link>
+    );
+  }
+  return <div style={styles.card} data-testid={testid}>{inner}</div>;
 }
 
 const styles = {
@@ -232,6 +254,10 @@ const styles = {
     flexDirection: 'column',
     gap: 8,
     minHeight: 120,
+  },
+  cardLink: {
+    textDecoration: 'none', color: 'inherit', cursor: 'pointer',
+    transition: 'border-color 120ms',
   },
   cardTitle: {
     fontSize: 11,
