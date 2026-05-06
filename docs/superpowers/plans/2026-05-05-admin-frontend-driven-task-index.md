@@ -1643,3 +1643,33 @@ Implementation note: the sitemap pointer in robots.txt is absolute (using `publi
 - **Commit:** `ff4d104` (`feat(admin/pet): replace window.confirm with admin ConfirmModal in species editor (Task 39)`).
 
 Implementation note: zero-content change to the editor's behavior — same gate, same blast radius, same destructive-action affordance. The win is purely visual consistency: the species delete now uses the same modal styling and keyboard handling (Esc to cancel, Enter to confirm) as the password-change confirm, the integration revoke confirm, the comment-bulk-reject confirm, etc. `grep -rn 'window.confirm' src` is now empty across the admin surface — every destructive action is unified behind `useConfirm`.
+
+---
+
+### Task 40 — frame composer live preview
+
+**Status:** completed
+**Priority:** low (closes Task 21f follow-up)
+**Frontend evidence:** Task 21f added 3 ASCII frame textareas per species. Owners couldn't see what the renderer would do with `{E}` markers without saving and visiting the public page.
+**Owner problem:** "I'm editing duck's frame 2, but is the eye in the right place? Where's the ω going to land?" — the textarea showed raw template, not the rendered sprite.
+**Existing capability:** layout hint + frame-count badge (Task 21f), `STATE_EYE` mapping in `src/components/pet/species.js`.
+**Gap:** no live preview alongside the textarea.
+**Frontend touch:**
+  - new `renderFrameForPreview(lines)` exported helper — substitutes `{E}` with the idle eye marker `·` (mirrors `STATE_EYE.idle` to match what visitors see when no interaction is in flight)
+  - `<FramesPanel>` now renders a `<pre data-testid=species-frame-preview-{id}-{idx}>` block immediately below each textarea; same monospace, dashed border, accent color, `min-height: 5em` so empty frames keep visual rhythm
+  - Defensive: non-array / non-string entries coerce to empty so a stale draft mid-edit doesn't crash the preview
+**Automated tests:** vitest +5 cases (substitution, multi-line join, defensive empty/null/undefined, non-string entries, plus a UI test that types into the textarea and watches the preview track).
+**Playwright acceptance path:**
+  1. /admin/pet?tab=species → expand duck frames panel
+  2. Assert all 3 preview blocks mount alongside textareas
+  3. Verify existing duck frame 0 preview has no leaked `{E}` and contains `·`
+  4. Type a sentinel `( {E} ω {E} )\nLINE-2-MARKER` → preview shows `( · ω · )\nLINE-2-MARKER`
+  5. Cleanup: restore duck.frames to pre-test state
+**Snapshot location:** `/tmp/admin-rebuild/task-40/frame-preview.png`
+
+- **Vitest:** combined `npx vitest run` → **261/261** (no Task 1-39 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-40/verify.py` PASSED — 3 preview blocks mount, existing frame substitutes correctly, sentinel input round-trips through the preview live.
+- **Snapshots:** `/tmp/admin-rebuild/task-40/frame-preview.png`.
+- **Commit:** `aadf74d` (`feat(admin/pet): live preview alongside ASCII frame textarea (Task 40)`).
+
+Implementation note: chose to inline the `·` constant rather than `import { STATE_EYE } from '...'`. The species module hydrates async; the editor mounts before that's done. Hardcoding mirrors `STATE_EYE.idle` and avoids coupling the admin's preview to the pet renderer's load cycle. If the idle eye changes globally, both places need to be updated — the comment makes that explicit. Preview deliberately does NOT colorize per-species (the production renderer applies tint as CSS `color`); skipping that here keeps the admin preview neutral so layout drift is the focal point, not aesthetic match.
