@@ -12,6 +12,7 @@ import { activityApi } from '../api/activity.js';
 import SectionHead from './ui/SectionHead.jsx';
 
 const LAST_SEEN_KEY = 'bl.admin.inbox.last_seen';
+const DISMISSED_KEY = 'bl.admin.inbox.dismissed';
 const SECTION_LIMIT = 10;
 const AUTH_TYPES = ['auth.login.fail', 'auth.login.success', 'auth.2fa.fail'];
 
@@ -32,6 +33,27 @@ function writeLastSeen(ts) {
   }
 }
 
+// Task 63: per-row dismiss state. Stored as a Set of "section:id" strings
+// in localStorage so individual cards can be marked read without nuking
+// every "new" badge via the global markAllRead.
+function readDismissed() {
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    if (!raw) return new Set();
+    return new Set(JSON.parse(raw));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeDismissed(set) {
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(Array.from(set)));
+  } catch {
+    /* ignore */
+  }
+}
+
 export default function Inbox() {
   const [comments, setComments] = useState([]);
   const [conversations, setConversations] = useState([]);
@@ -39,7 +61,20 @@ export default function Inbox() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastSeen, setLastSeen] = useState(readLastSeen);
+  const [dismissed, setDismissed] = useState(readDismissed);
   const [tick, setTick] = useState(0);
+
+  function dismissOne(section, rowId) {
+    if (!rowId) return;
+    const key = `${section}:${rowId}`;
+    const next = new Set(dismissed);
+    next.add(key);
+    writeDismissed(next);
+    setDismissed(next);
+  }
+  function isDismissed(section, rowId) {
+    return rowId != null && dismissed.has(`${section}:${rowId}`);
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -127,19 +162,20 @@ export default function Inbox() {
           rows={comments}
           empty="[ 暂无 pending 评论 ]"
           renderRow={(c) => (
-            <Link to={`/admin/comments`} style={styles.rowLink}>
-              <RowGrid
-                isNew={msTs(c.created_at) > lastSeen}
-                cells={[
-                  <span key="who" style={styles.rowAccent}>{c.who}</span>,
-                  <span key="post" style={styles.rowMuted}>
-                    on {c.post_title || c.post_id}
-                  </span>,
-                  <span key="body" style={styles.rowBody}>{c.body}</span>,
-                  <span key="ago" style={styles.rowAgo}>{ago(c.created_at)}</span>,
-                ]}
-              />
-            </Link>
+            <RowWrap
+              isNew={msTs(c.created_at) > lastSeen && !isDismissed('comments', c.id)}
+              testid={`inbox-row-comments-${c.id}`}
+              onDismiss={() => dismissOne('comments', c.id)}
+              to="/admin/comments"
+              cells={[
+                <span key="who" style={styles.rowAccent}>{c.who}</span>,
+                <span key="post" style={styles.rowMuted}>
+                  on {c.post_title || c.post_id}
+                </span>,
+                <span key="body" style={styles.rowBody}>{c.body}</span>,
+                <span key="ago" style={styles.rowAgo}>{ago(c.created_at)}</span>,
+              ]}
+            />
           )}
         />
 
@@ -150,24 +186,22 @@ export default function Inbox() {
           rows={conversations}
           empty="[ 暂无对话 ]"
           renderRow={(c) => (
-            <Link
+            <RowWrap
+              isNew={msTs(c.last_msg_at) > lastSeen && !isDismissed('conversations', c.visitor_hash)}
+              testid={`inbox-row-conversations-${c.visitor_hash}`}
+              onDismiss={() => dismissOne('conversations', c.visitor_hash)}
               to={`/admin/pet/conversations/${c.visitor_hash}`}
-              style={styles.rowLink}
-            >
-              <RowGrid
-                isNew={msTs(c.last_msg_at) > lastSeen}
-                cells={[
-                  <span key="vh" style={styles.rowAccent}>
-                    {String(c.visitor_hash || '').slice(0, 12)}
-                  </span>,
-                  <span key="sp" style={styles.rowMuted}>{c.species}</span>,
-                  <span key="msg" style={styles.rowBody}>
-                    {c.message_count} 条 · {c.last_reply_preview || '—'}
-                  </span>,
-                  <span key="ago" style={styles.rowAgo}>{ago(c.last_msg_at)}</span>,
-                ]}
-              />
-            </Link>
+              cells={[
+                <span key="vh" style={styles.rowAccent}>
+                  {String(c.visitor_hash || '').slice(0, 12)}
+                </span>,
+                <span key="sp" style={styles.rowMuted}>{c.species}</span>,
+                <span key="msg" style={styles.rowBody}>
+                  {c.message_count} 条 · {c.last_reply_preview || '—'}
+                </span>,
+                <span key="ago" style={styles.rowAgo}>{ago(c.last_msg_at)}</span>,
+              ]}
+            />
           )}
         />
 
@@ -178,20 +212,21 @@ export default function Inbox() {
           rows={authEvents}
           empty="[ 暂无登录事件 ]"
           renderRow={(e) => (
-            <Link to="/admin/activity-log" style={styles.rowLink}>
-              <RowGrid
-                isNew={msTs(e.created_at) > lastSeen}
-                cells={[
-                  <span key="t" style={styles.rowAccent}>{e.type}</span>,
-                  <span key="a" style={styles.rowMuted}>{e.actor || '—'}</span>,
-                  <span key="m" style={styles.rowBody}>
-                    {e.meta?.ip ? `ip: ${e.meta.ip}` : ''}
-                    {e.meta?.reason ? ` · ${e.meta.reason}` : ''}
-                  </span>,
-                  <span key="ago" style={styles.rowAgo}>{ago(e.created_at)}</span>,
-                ]}
-              />
-            </Link>
+            <RowWrap
+              isNew={msTs(e.created_at) > lastSeen && !isDismissed('auth', e.id)}
+              testid={`inbox-row-auth-${e.id}`}
+              onDismiss={() => dismissOne('auth', e.id)}
+              to="/admin/activity-log"
+              cells={[
+                <span key="t" style={styles.rowAccent}>{e.type}</span>,
+                <span key="a" style={styles.rowMuted}>{e.actor || '—'}</span>,
+                <span key="m" style={styles.rowBody}>
+                  {e.meta?.ip ? `ip: ${e.meta.ip}` : ''}
+                  {e.meta?.reason ? ` · ${e.meta.reason}` : ''}
+                </span>,
+                <span key="ago" style={styles.rowAgo}>{ago(e.created_at)}</span>,
+              ]}
+            />
           )}
         />
       </div>
@@ -231,6 +266,31 @@ function RowGrid({ isNew, cells }) {
       data-isnew={isNew ? 'true' : 'false'}
     >
       {cells}
+    </div>
+  );
+}
+
+// Task 63: 行容器 — Link 包裹的 RowGrid + 右侧 ✓ dismiss 按钮。
+// 按钮的 onClick 必须 stopPropagation/preventDefault，否则会被 Link 吞掉。
+function RowWrap({ isNew, cells, to, onDismiss, testid }) {
+  return (
+    <div style={styles.rowWrap} data-testid={testid}>
+      <Link to={to} style={styles.rowLink}>
+        <RowGrid isNew={isNew} cells={cells} />
+      </Link>
+      <button
+        type="button"
+        title="标为已读"
+        style={styles.dismissBtn}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onDismiss?.();
+        }}
+        data-testid={`${testid}-dismiss`}
+      >
+        ✓
+      </button>
     </div>
   );
 }
@@ -332,7 +392,14 @@ const styles = {
     fontStyle: 'italic',
     textAlign: 'center',
   },
-  rowLink: { textDecoration: 'none', color: 'inherit', display: 'block' },
+  rowLink: { textDecoration: 'none', color: 'inherit', display: 'block', flex: 1, minWidth: 0 },
+  rowWrap: { display: 'flex', alignItems: 'stretch' },
+  dismissBtn: {
+    background: 'transparent', border: '1px solid var(--line-2)',
+    color: 'var(--fg-3)', fontFamily: 'inherit', fontSize: 11,
+    padding: '0 10px', cursor: 'pointer',
+    borderRadius: 3, marginLeft: 6, alignSelf: 'center',
+  },
   row: {
     display: 'grid',
     gridTemplateColumns: 'minmax(80px, max-content) minmax(80px, max-content) minmax(0, 1fr) max-content',
