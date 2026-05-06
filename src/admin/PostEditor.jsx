@@ -10,6 +10,7 @@ import MediaPicker from './MediaPicker.jsx';
 import { buildImageMarkdown, insertAt } from './markdownInsert.js';
 import { clearDraft, draftIsNewerThan, loadDraft, saveDraft } from './draftStore.js';
 import { countWords, readingMinutes } from './wordCount.js';
+import { useToast } from './ui/UIProvider.jsx';
 
 const NEW_POST_TEMPLATE = `---
 id: my-new-post
@@ -30,6 +31,7 @@ Write your post body here in **markdown**.
 
 export default function PostEditor({ id, onClose, onSaved }) {
   const isNew = id == null;
+  const toast = useToast();
   const [markdown, setMarkdown] = useState(isNew ? NEW_POST_TEMPLATE : '');
   const [originalId] = useState(id);
   const [loading, setLoading] = useState(!isNew);
@@ -331,6 +333,26 @@ export default function PostEditor({ id, onClose, onSaved }) {
             >
               ↗ 公开页
             </a>
+          )}
+          {!isNew && originalId && fm.status && fm.status !== 'published' && (
+            <button
+              type="button"
+              style={styles.btnGhost}
+              data-testid="editor-preview-token-btn"
+              onClick={async () => {
+                try {
+                  const resp = await postsApi.issuePreviewToken(originalId);
+                  const url = `${window.location.origin}/p/${encodeURIComponent(originalId)}?preview_token=${encodeURIComponent(resp.token)}`;
+                  await navigator.clipboard.writeText(url);
+                  toast.success('预览链接已复制（24h 内有效）');
+                } catch (e) {
+                  toast.error(`无法生成预览链接：${e?.detail || e?.message || '未知错误'}`);
+                }
+              }}
+              title="生成 24h 预览链接（复制到剪贴板，可分享给任何人）"
+            >
+              复制预览链接
+            </button>
           )}
           <button type="button" style={styles.btnGhost} onClick={onClose}>
             取消

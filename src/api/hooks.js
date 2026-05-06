@@ -37,6 +37,10 @@ export const useProjects = () => useResource(() => api.projects());
 export const useContrib = (w = 52) => useResource(() => api.contrib(w), [w]);
 export const usePosts = (params) =>
   useResource(() => api.posts.list(params), [JSON.stringify(params)]);
-export const usePost = (id) =>
-  useResource(() => (id ? api.posts.detail(id) : Promise.resolve(null)), [id]);
+export const usePost = (id, opts = {}) =>
+  useResource(
+    () => (id ? api.posts.detail(id, opts) : Promise.resolve(null)),
+    // Task 67: previewToken 进 dep 数组，URL 拷贝过来时立刻 refetch。
+    [id, opts.previewToken],
+  );
 export const useNow = () => useResource(() => api.now());

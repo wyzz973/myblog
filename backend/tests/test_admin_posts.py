@@ -335,3 +335,61 @@ async def test_next_n_skips_non_numeric_rows(client, auth):
         async with AsyncSessionLocal() as s:
             await s.execute(delete(Post).where(Post.id == "t49-next-bogus"))
             await s.commit()
+
+
+# --- Task 67: preview token ---
+
+
+async def test_preview_token_lets_draft_through_public_detail(client, auth):
+    """admin issues preview-token → public GET /api/posts/{id}?preview_token=
+    returns a draft (which is normally 404)."""
+    await client.delete("/api/admin/posts/t67-preview-draft", headers=auth)
+    draft = (
+        GOOD_MD.replace("status: published", "status: draft")
+        .replace("test-post-1", "t67-preview-draft")
+    )
+    create = await client.post(
+        "/api/admin/posts", json={"markdown": draft}, headers=auth,
+    )
+    assert create.status_code == 201, create.text
+    try:
+        # 1) public detail without token → 404 (status filter)
+        r0 = await client.get("/api/posts/t67-preview-draft")
+        assert r0.status_code == 404, r0.text
+
+        # 2) admin issues a preview token
+        tok_resp = await client.post(
+            "/api/admin/posts/t67-preview-draft/preview-token", headers=auth,
+        )
+        assert tok_resp.status_code == 200, tok_resp.text
+        token = tok_resp.json()["token"]
+        assert token.startswith("v1.t67-preview-draft.")
+
+        # 3) public detail with token → 200, body comes back
+        r1 = await client.get(
+            "/api/posts/t67-preview-draft", params={"preview_token": token},
+        )
+        assert r1.status_code == 200, r1.text
+        assert r1.json()["id"] == "t67-preview-draft"
+
+        # 4) wrong post id in token → 404
+        r2 = await client.get(
+            "/api/posts/t67-preview-draft", params={"preview_token": "v1.other.9999.bad"},
+        )
+        assert r2.status_code == 404, r2.text
+
+        # 5) tampered signature → 404
+        tampered = token[:-2] + "??"
+        r3 = await client.get(
+            "/api/posts/t67-preview-draft", params={"preview_token": tampered},
+        )
+        assert r3.status_code == 404, r3.text
+    finally:
+        await client.delete("/api/admin/posts/t67-preview-draft", headers=auth)
+
+
+async def test_preview_token_404_when_post_missing(client, auth):
+    r = await client.post(
+        "/api/admin/posts/does-not-exist/preview-token", headers=auth,
+    )
+    assert r.status_code == 404

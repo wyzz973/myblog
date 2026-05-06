@@ -56,12 +56,29 @@ async def list_posts(
 
 
 @router.get("/posts/{post_id}", response_model=PostDetail)
-async def get_post(post_id: str, s: AsyncSession = Depends(get_session)) -> PostDetail:
-    post = (await s.execute(
-        select(Post).join(Tag).where(
-            Post.id == post_id, Post.status == "published", Post.private.is_(False)
+async def get_post(
+    post_id: str,
+    preview_token: str | None = Query(default=None),
+    s: AsyncSession = Depends(get_session),
+) -> PostDetail:
+    # Task 67: signed preview token bypasses the status filter for a
+    # specific post id. We still 404 if the post itself doesn't exist
+    # so an enumeration attack can't tell drafts apart from absent ids.
+    from app.config import get_settings
+    from app.services.post_preview import verify_preview_token
+
+    base = select(Post).join(Tag).where(Post.id == post_id)
+    bypass = bool(
+        preview_token
+        and verify_preview_token(
+            secret=get_settings().jwt_secret,
+            token=preview_token,
+            post_id=post_id,
         )
-    )).scalar_one_or_none()
+    )
+    if not bypass:
+        base = base.where(Post.status == "published", Post.private.is_(False))
+    post = (await s.execute(base)).scalar_one_or_none()
     if post is None:
         raise HTTPException(status_code=404, detail="post not found")
     return PostDetail(

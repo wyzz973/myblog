@@ -114,6 +114,13 @@ export const postsApi = {
   nextN() {
     return adminRequest('/posts/next-n');
   },
+  // Task 67: 颁发 24h 预览 token，用来分享 draft/scheduled 的公开 URL。
+  issuePreviewToken(id) {
+    return adminRequest(`/posts/${encodeURIComponent(id)}/preview-token`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
   // Task 42: download every post as a single tar archive — round-trips
   // through bulkUpload for full backup/restore.
   async downloadTar() {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSite, usePosts, usePost } from '../api/hooks.js';
 import { api } from '../api/client.js';
 import { sendHit } from '../utils/beacon.js';
@@ -83,7 +83,17 @@ export default function Reader({ post: postSummary, onBack, onOpenPost, onSelect
 
   const { data: site } = useSite();
   const { data: postsResp } = usePosts({ limit: 100 });
-  const { data: detail } = usePost(postSummary?.id);
+  // Task 67: 把 URL 上的 ?preview_token= 透传给 detail 调用，让 admin
+  // 分享出来的预览链接能命中草稿。useMemo 防止每次 render 创建新对象
+  // 触发 useResource 的 refetch。
+  const previewToken = useMemo(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('preview_token') || undefined;
+    } catch {
+      return undefined;
+    }
+  }, []);
+  const { data: detail } = usePost(postSummary?.id, { previewToken });
   const post = detail || postSummary;
   const SITE = site || { name: '', tagline: '', github: '', email: '' };
   const POSTS = postsResp?.items || [];

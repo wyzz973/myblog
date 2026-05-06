@@ -127,6 +127,27 @@ async def next_post_number(
     return {"n": f"{next_n:03d}"}
 
 
+# Task 67: 草稿/计划文章预览 token. Admin-only issue endpoint; public
+# /api/posts/{id} verifies the token and bypasses the status filter so
+# the owner / a collaborator can preview unpublished work via a single
+# signed URL. 24h TTL, stateless HMAC.
+@router.post("/posts/{post_id}/preview-token")
+async def issue_preview_token_route(
+    post_id: str,
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> dict[str, str | int]:
+    from app.config import get_settings
+    from app.services.post_preview import issue_preview_token
+
+    post = (await s.execute(select(Post).where(Post.id == post_id))).scalar_one_or_none()
+    if post is None:
+        raise HTTPException(status_code=404, detail="post not found")
+    settings = get_settings()
+    token, exp = issue_preview_token(secret=settings.jwt_secret, post_id=post_id)
+    return {"token": token, "expires_at": exp}
+
+
 @router.get("/posts/{post_id}", response_model=PostDetail)
 async def get_post(
     post_id: str,

@@ -34,7 +34,11 @@ export const api = {
       ).toString();
       return request(`/posts${q ? '?' + q : ''}`);
     },
-    detail: (id) => request(`/posts/${id}`),
+    detail: (id, { previewToken } = {}) => {
+      // Task 67: 当 URL 带 ?preview_token= 时把它转发给后端，让 draft 也能渲染。
+      const q = previewToken ? `?preview_token=${encodeURIComponent(previewToken)}` : '';
+      return request(`/posts/${id}${q}`);
+    },
     like: (id) => request(`/posts/${id}/like`, { method: 'POST' }),
   },
   now: () => request('/now'),
