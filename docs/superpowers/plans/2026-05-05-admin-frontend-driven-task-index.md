@@ -1706,3 +1706,36 @@ Implementation note: chose to inline the `·` constant rather than `import { STA
 - **Commit:** `8b1a0f8` (`feat(admin/pet): per-conversation export to JSON + Markdown (Task 41)`).
 
 Implementation note: Markdown format favors human skim — `### mode` headings make it easy to scroll for a specific turn type; selection/summary as blockquotes preserve the "what context did the pet have" trace. JSON keeps every column except internal-only fields (`prior_turns` is omitted because the running transcript already carries that context as ordered rows). Empty-archive returning 200 (not 404) matches the existing "delete unknown hash" behavior — both are idempotent. Visitor-hash never appears in plaintext beyond the `[:12]` short prefix so a screenshot of the export wouldn't leak the full identifier; the full hash IS in the JSON body for completeness, but file-system-wise the filename uses the short form.
+
+---
+
+### Task 42 — bulk post export to tar archive
+
+**Status:** completed
+**Priority:** medium (closes ingest/egress symmetry with Task 30)
+**Frontend evidence:** `/admin/posts` already had bulk import (Task 30: drop a folder of `.md` files, get them upserted). The reverse — export every post for backup, migration, or external publishing — was missing.
+**Owner problem:** "I want a single-file backup of every post (drafts + private + published) before I run a risky migration" / "I want to publish my catalogue elsewhere as plain markdown."
+**Existing capability:** `/posts/upload` accepts a multipart batch of frontmatter+body markdown files and routes them through `parse_or_infer_frontmatter` + `upsert_post` (Task 30).
+**Gap:** no export — owner had to scrape post-by-post via the API.
+**Backend touch:**
+  - new `_serialize_post_to_md(p)` helper renders a Post as frontmatter+body matching `PostFrontmatter` exactly (so the output round-trips through `/posts/upload`)
+  - block-scalar `key: |` fallback for strings containing colons / quotes / newlines so YAML parsing stays unambiguous
+  - new `GET /api/admin/posts.tar` streams an in-memory tar archive (every post, regardless of status / private flag, ordered by date desc + id)
+  - filename `posts-{YYYYMMDD}-{N}items.tar` so the owner can keep multiple snapshots side-by-side
+  - **Routing decision:** `/posts.tar` (sibling), not `/posts/export.tar` (child). The latter collides with `/posts/{post_id}` (FastAPI matches `{post_id}` as a string, so `export.tar` is treated as a slug → 404). Sibling path mirrors `/analytics/posts.csv` precedent.
+**Frontend API client:** `postsApi.downloadTar()` — bearer-aware fetch + Blob URL + synthetic `<a download>` (admin tokens live in localStorage, plain anchor wouldn't carry them).
+**UI / interaction:** new `<ExportTarButton>` in the Posts page header next to "批量导入"; toast on success/failure with the saved filename.
+**Automated tests:** pytest +3 (tar archive contains seeded post + frontmatter; export → delete → re-upload from the captured tar member round-trips correctly; 401 unauth).
+**Playwright acceptance path:**
+  1. API smoke: tar archive parseable, all entries `.md`, first entry has valid frontmatter, 401 unauth
+  2. /admin/posts → button rendered next to 批量导入
+  3. `page.expect_download()` captures the actual tar download (filename `posts-{YYYYMMDD}-Nitems.tar`)
+**Snapshot location:** `/tmp/admin-rebuild/task-42/posts-with-export-button.png` + `/tmp/admin-rebuild/task-42/posts.tar`
+
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_admin_posts.py -k export` → 3/3.
+- **Vitest:** combined `npx vitest run` → **261/261** (no regression — Posts.jsx adds one new component, doesn't change existing markup).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-42/verify.py` PASSED — live dev DB has 5 posts, downloaded archive is `posts-20260506-5items.tar`, first entry parses as valid frontmatter (18,255 bytes including the seeded test post's body).
+- **Snapshots:** `/tmp/admin-rebuild/task-42/posts-with-export-button.png` + the captured `posts.tar` archive.
+- **Commit:** `ac78ab9` (`feat(admin/posts): bulk export to tar archive (Task 42)`).
+
+Implementation note: tar (not zip) for unix-friendliness; tar headers preserve `mtime` from `Post.updated_at` so an extracted dump has correct file timestamps for downstream tooling (rsync, git ingest, etc.). Owner who wants zip can `tar xf | zip -r` — keeping the format opinionated avoids a second endpoint. Body is loaded into memory before serving (no streaming `Content-Length: -1`); single-author scale this is fine. The frontmatter serializer reuses the existing `PostFrontmatter` schema for round-tripping — Task 30's import code path validates the same fields, so an exported tar can be deleted and re-imported without semantic drift. The route-collision discovery (`/posts/export.tar` swallowed by `/posts/{post_id}` GET) is now part of the mental model: `.tar`/`.csv`/`.json` exports always live as siblings, never children, of the route that lists the resource.
