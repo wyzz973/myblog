@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiPetSpecies } from '../../api/petSpecies.js';
+import { useConfirm } from '../ui/UIProvider.jsx';
 
 const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 const RARITY_COLOR = {
@@ -59,6 +60,7 @@ export default function PetSpeciesEditor() {
   const [drafts, setDrafts] = useState({});       // id -> partial overrides
   const [newDraft, setNewDraft] = useState(null); // null when add-form closed
   const [framesOpenId, setFramesOpenId] = useState(null); // id of expanded frames panel
+  const confirm = useConfirm();
 
   useEffect(() => {
     let mounted = true;
@@ -110,7 +112,13 @@ export default function PetSpeciesEditor() {
   }
 
   async function removeRow(id) {
-    if (!window.confirm(`删除物种「${id}」？此操作不可撤销。`)) return;
+    const ok = await confirm({
+      title: '删除物种',
+      message: `确定删除物种「${id}」吗？此操作不可撤销。`,
+      confirmLabel: '删除',
+      destructive: true,
+    });
+    if (!ok) return;
     setDeletingId(id);
     setError(null);
     try {

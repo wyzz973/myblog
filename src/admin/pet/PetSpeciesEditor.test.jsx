@@ -10,6 +10,12 @@ vi.mock('../../api/petSpecies.js', () => ({
     delete: vi.fn(),
   },
 }));
+// useConfirm() is provided by UIProvider in production. Mock the hook so
+// the editor can call confirm() in unit tests without mounting the
+// provider tree (and so test-side can flip its return for cancel paths).
+vi.mock('../ui/UIProvider.jsx', () => ({
+  useConfirm: () => async () => true,
+}));
 import { apiPetSpecies } from '../../api/petSpecies.js';
 
 const SAMPLE = [
@@ -33,7 +39,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   apiPetSpecies.list.mockResolvedValue(SAMPLE);
   // Confirm dialog: default to "yes" so delete/create flows progress.
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  // useConfirm is mocked at module scope to always-confirm; nothing else
+  // to set up per-test for now.
 });
 
 describe('PetSpeciesEditor', () => {
