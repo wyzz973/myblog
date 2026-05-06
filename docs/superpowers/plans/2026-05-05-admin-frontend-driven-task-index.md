@@ -2084,3 +2084,26 @@ Implementation note: `setSearchParams` accepts a `(prev) => next` updater, which
 **Commit:** `09b2a1f` (`feat(admin/pet): empty-state on conversations list (Task 55)`).
 
 Implementation note: the empty-state element uses `border: 1px dashed` rather than the solid borders elsewhere in the admin. The dashed treatment is the standard "this slot exists but is intentionally empty" pattern from the public site's draft-mode tag chips, keeping the visual language consistent.
+
+---
+
+### Task 56 — Admin Tags shows 文章数; delete is protected client-side ✅
+
+**Frontend dependency:** PRD §4.1 calls out "tag deletion is gated on attached posts" as a baseline editor capability. The backend already enforced it (DELETE returns an error if posts are attached) and exposed `post_count` on `/api/admin/tags`, but the admin UI did neither — the owner only found out about a blocked delete after clicking the button and reading the error toast.
+
+**Backend:** none — `TagOut.post_count` already populated via the existing left-join group-by in `routers/admin/tags.py::list_`.
+
+**Frontend:**
+- new 文章数 column (right-aligned, tabular nums, `var(--fg-2)` when > 0 / `var(--fg-4)` when 0)
+- delete button gains `disabled={t.post_count > 0}` plus a tooltip "此标签下有 X 篇文章。请先迁移或删除。" so the owner sees both the count and the next-step instruction without clicking
+- `data-testid=tag-postcount-<slug>` and `data-testid=tag-delete-<slug>` for stability
+
+**Tests:** vitest sweep `npx vitest run` → **267/267**. Tags.jsx has no unit-test suite (rendered via Playwright); the existing pytest in `test_admin_tags.py` already covers the API's `post_count` shape.
+
+**Playwright:** `/Users/sd3/anaconda3/bin/python /tmp/admin-rebuild/task-56/verify.py` PASSED — picks one populated tag and one empty tag from `/api/admin/tags`, asserts the populated row's count cell + disabled delete + tooltip, asserts the empty row's enabled delete.
+
+**Snapshot:** `/tmp/admin-rebuild/task-56/admin-tags-postcount.png`.
+
+**Commit:** `9acdf65` (`feat(admin/tags): 文章数 column + protected delete (Task 56)`).
+
+Implementation note: the dim/foreground color split on the count cell mirrors the same convention used in the Posts list (status pill: zero/empty values fade, populated values have full chroma). Helps the owner scan a long tag list and spot the protected rows without reading numbers — heavily-used tags stand out, dead tags fade.
