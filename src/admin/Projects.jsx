@@ -436,7 +436,8 @@ const styles = {
   },
   formGrid: {
     display: 'grid',
-    gridTemplateColumns: '1.5fr 1fr 70px 1fr auto auto',
+    // auto-fit + minmax → 桌面 6 列并排；移动端按 viewport 收缩到 1–2 列堆叠。
+    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
     gap: 8,
     alignItems: 'center',
   },
@@ -447,6 +448,8 @@ const styles = {
     padding: '8px 10px',
     fontFamily: 'inherit',
     fontSize: 12,
+    minWidth: 0,
+    boxSizing: 'border-box',
     borderRadius: 4,
     outline: 'none',
   },

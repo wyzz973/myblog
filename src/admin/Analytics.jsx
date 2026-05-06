@@ -292,7 +292,7 @@ const styles = {
   },
   h1: { fontSize: 20, margin: 0, fontWeight: 600, color: 'var(--fg)' },
   lead: { fontSize: 12, color: 'var(--fg-3)', margin: '4px 0 0' },
-  rangeRow: { display: 'flex', gap: 4, alignItems: 'center' },
+  rangeRow: { display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' },
   rangeBtn: {
     background: 'var(--bg-2)',
     border: '1px solid var(--line-2)',
@@ -440,7 +440,7 @@ function SinceDatePicker({ range, onChange }) {
   }
 
   return (
-    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
       <input
         type="date"
         value={fromVal}

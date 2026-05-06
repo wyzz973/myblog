@@ -411,7 +411,8 @@ const styles = {
   },
   metaGrid: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr auto auto',
+    // auto-fit 让移动端 listening / reading / toggle / post 自然堆叠。
+    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
     gap: 8,
     alignItems: 'center',
   },
@@ -424,6 +425,8 @@ const styles = {
     fontSize: 12,
     borderRadius: 4,
     outline: 'none',
+    minWidth: 0,
+    boxSizing: 'border-box',
   },
   toggleWrap: { display: 'flex', alignItems: 'center', gap: 6 },
   toggleLabel: { fontSize: 11, color: 'var(--fg-3)' },
@@ -545,10 +548,11 @@ const styles = {
   },
   metaInline: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
+    // 桌面 2 列；移动 viewport <440px 时自动塞 1 列。auto-fit 是关键。
+    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
     gap: 8,
   },
-  metaItem: { display: 'flex', flexDirection: 'column', gap: 4 },
+  metaItem: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 },
   metaLabel: {
     fontSize: 10,
     color: 'var(--fg-4)',
@@ -564,6 +568,8 @@ const styles = {
     fontSize: 11,
     borderRadius: 3,
     outline: 'none',
+    minWidth: 0,
+    boxSizing: 'border-box',
   },
   switch: {
     width: 32,

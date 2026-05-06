@@ -2165,6 +2165,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   border-bottom: 1px solid var(--line);
   margin-bottom: 16px;
   padding-bottom: 0;
+  /* 移动端窄屏：tab 太多撑爆容器，让它换行而不是横向溢出。 */
+  flex-wrap: wrap;
 }
 .admin-pet .tab {
   background: transparent;
@@ -2496,6 +2498,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .admin-pet .pet-usage-table {
   display: grid;
   gap: 6px;
+  /* 表格内容比窄屏宽时本表格内自滚，而非把页面撑爆。 */
+  overflow-x: auto;
+  max-width: 100%;
 }
 .admin-pet .pet-usage-head,
 .admin-pet .pet-usage-row {
@@ -2507,6 +2512,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 12px;
+  /* 同步给每一行最小宽度，让 .pet-usage-table 的 overflow-x 真的产生
+     横向滚动条而非把单元格挤变形。 */
+  min-width: 540px;
 }
 .admin-pet .pet-usage-head {
   color: var(--fg-4);

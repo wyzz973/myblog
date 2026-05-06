@@ -371,7 +371,8 @@ const styles = {
   },
   formGrid: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1.5fr 2fr auto auto',
+    // 自动适配 — 桌面 ~5 列并排；移动端 1–2 列堆叠，不会撑爆 viewport。
+    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
     gap: 8,
     alignItems: 'center',
   },
@@ -384,6 +385,8 @@ const styles = {
     fontSize: 12,
     borderRadius: 4,
     outline: 'none',
+    minWidth: 0,
+    boxSizing: 'border-box',
   },
   toggleWrap: { display: 'flex', alignItems: 'center', gap: 6 },
   toggleLabel: { fontSize: 11, color: 'var(--fg-3)' },
