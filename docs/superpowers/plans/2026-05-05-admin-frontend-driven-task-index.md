@@ -1739,3 +1739,39 @@ Implementation note: Markdown format favors human skim — `### mode` headings m
 - **Commit:** `ac78ab9` (`feat(admin/posts): bulk export to tar archive (Task 42)`).
 
 Implementation note: tar (not zip) for unix-friendliness; tar headers preserve `mtime` from `Post.updated_at` so an extracted dump has correct file timestamps for downstream tooling (rsync, git ingest, etc.). Owner who wants zip can `tar xf | zip -r` — keeping the format opinionated avoids a second endpoint. Body is loaded into memory before serving (no streaming `Content-Length: -1`); single-author scale this is fine. The frontmatter serializer reuses the existing `PostFrontmatter` schema for round-tripping — Task 30's import code path validates the same fields, so an exported tar can be deleted and re-imported without semantic drift. The route-collision discovery (`/posts/export.tar` swallowed by `/posts/{post_id}` GET) is now part of the mental model: `.tar`/`.csv`/`.json` exports always live as siblings, never children, of the route that lists the resource.
+
+---
+
+### Task 43 — owner-configurable comment notification email
+
+**Status:** completed
+**Priority:** medium (closes the env-only config gap)
+**Frontend evidence:** Public Reader → comment form → on submit, the backend emails the owner. Recipient was hardcoded via `ADMIN_NOTIFY_EMAIL` in `.env` with fallback to login email — no admin UI.
+**Owner problem:** "I want to redirect notifications to a different mailbox temporarily" / "I want to disable email blasts during a flood" — both required `.env` edit + restart.
+**Existing capability:** `routers/public/comments.py` resolved recipient from `settings.admin_notify_email` (env) → `account.email` (login).
+**Gap:** no master toggle, no runtime override.
+**Backend touch:**
+  - migration `0019_account_notify_email` adds `notify_comments BOOL default true` + `notify_email VARCHAR(128) NULL` to `accounts`
+  - new `email_svc.effective_notify_email(account, settings)` resolves the recipient through the priority chain `account.notify_email → settings.admin_notify_email → account.email`; returns None when `notify_comments=False`
+  - `routers/public/comments.py` switches to the helper — same fallback chain plus the new opt-out path
+  - new `GET /api/admin/account/notify` returns `{notify_comments, notify_email, effective_email}` for the UI
+  - new `PUT /api/admin/account/notify` writes both fields; session-only (rejects api-tokens since this is account-personal config); writes `account.notify.updated` event
+**Frontend API client:** `apiAccount.getNotifyPrefs` + `apiAccount.setNotifyPrefs` in `src/api/account.js`
+**UI / interaction:** new `<NotifySection>` Card on Settings → 账号安全 between EmailSection and PasswordSection. Master checkbox + override email input + save button + live "当前：..." effective-recipient indicator.
+**Automated tests:** pytest 6 (defaults, override, master-off zeroes effective, override-clear round-trip, 401 unauth, 401 api-token rejected).
+**Playwright acceptance path:**
+  1. API smoke: defaults / override sets effective / master off → None
+  2. /admin/settings → 账号安全 → NotifySection mounts
+  3. Effective indicator shows current login email by default
+  4. Fill override → save → "通知将发送到 ..." + indicator updates
+  5. Master toggle → "通知已停用" reflected immediately
+  6. Cleanup: PUT defaults so dev DB is clean
+**Snapshot location:** `/tmp/admin-rebuild/task-43/notify-section.png`
+
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_admin_notify_prefs.py` → 6/6.
+- **Vitest:** combined `npx vitest run` → **261/261** (no regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-43/verify.py` PASSED — every step green.
+- **Snapshots:** `/tmp/admin-rebuild/task-43/notify-section.png`.
+- **Commit:** `b14abbf` (`feat(admin/account): owner-configurable comment notify email (Task 43)`).
+
+Implementation note: account-row override + service env baseline gives owners both per-deploy defaults and runtime control. The override is `null`-able rather than empty-string-able at the schema level so a clear-back path exists; UI maps empty input to null in the request body. Master toggle dominates priority — `notify_comments=False` short-circuits even when an override is set, matching how email-marketing tools handle global opt-outs. Endpoint is session-only (api-tokens rejected) because this is personal owner config, not a CI/CLI lever; the existing `account.email` rotation requires the same. Public comments path keeps the same one-shot email dispatch — no batching / rate-limiting added (single-author site doesn't warrant it).
