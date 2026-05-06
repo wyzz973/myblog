@@ -1191,7 +1191,7 @@ Implementation note: `apiAccount.changeEmail(currentPassword, newEmail)` posts t
 
 ### Task 29 — API tokens: usage history
 
-**Status:** in-progress (29 usage_count counter done; per-request log table deferred)
+**Status:** completed (29 usage_count counter + per-request log table done)
 **Priority:** low
 **Frontend evidence:** owner cost monitoring.
 **Owner problem:** `last_used_at` only — cannot answer "is anyone still using token X?"
@@ -1210,7 +1210,20 @@ Implementation note: `apiAccount.changeEmail(currentPassword, newEmail)` posts t
 **Snapshot location:** `/tmp/admin-rebuild/task-29/usage.png`
 **Commit message:** `feat(admin/api-tokens): per-token usage history`
 **Definition of done:** standard checklist
-**Completed:** Counter (Task 29 main) — `cae0a56` (`feat(admin/api-tokens): add usage_count column + UI (Task 29)`). Per-request log table is deferred.
+**Completed:** Counter (Task 29 main) — `cae0a56` (`feat(admin/api-tokens): add usage_count column + UI (Task 29)`). Per-request log table — `8d8da7b` (`feat(admin/api-tokens): per-request usage log with audit trail UI (Task 29)`).
+
+#### Task 29 (per-request log) — DONE
+
+- **Migration:** `0017_api_token_usage` creates `api_token_usage(id BIGSERIAL PK, api_token_id INT FK→api_tokens ON DELETE CASCADE, used_at TIMESTAMPTZ default now(), method VARCHAR(8), path VARCHAR(256), status_code SMALLINT NULL)` + index `(api_token_id, used_at DESC)`.
+- **Backend:** extended `api_tokens_svc.touch_last_used(token_id, method?, path?)` to also INSERT a usage row (same transaction as the counter bump). New `list_usage(token_id, limit)` service. `require_scope` now passes `request.method` + `request.url.path` (query string stripped — never log secrets carried in URL params). New endpoint `GET /api/admin/api-tokens/{id}/usage?limit=N` returning `[{used_at, method, path, status_code}]`; 404 when token id is unknown.
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_api_tokens.py` → 17/17 (5 new: 404 unknown id, empty for unused token, records each scope-passing call with method+path, session caller doesn't add to trail, token can view its own trail).
+- **Frontend:** `apiTokens.usage(id, limit)` + Settings → API 令牌 tab gains a `查看记录` button per row that expands an inline panel with a `时间/方法/路径` table. Toggle collapses it. Loading + error states handled.
+- **Vitest:** combined `npx vitest run` → **225/225** (no regression; the existing ApiTokens.jsx isn't unit-tested separately so the audit-panel UI is verified by Playwright).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-29/verify-log.py` → seed token, fire 2 POST /api/admin/tags under it → API `/usage` returns 2 rows → 404 for unknown id → /admin/settings → API 令牌 tab → click 查看记录 → panel expands with rows → "POST /api/admin/tags" present in UI text → click again → panel detaches → revoke seed token.
+- **Snapshots:** `/tmp/admin-rebuild/task-29/usage-panel.png`.
+- **Commit:** `8d8da7b` (`feat(admin/api-tokens): per-request usage log with audit trail UI (Task 29)`).
+
+Implementation note: kept the audit row in the same DB transaction as the counter UPDATE — losing one without the other would diverge usage_count from the row count, which the UI would surface as a confusing inconsistency. Path/method are truncated at the model boundary (8/256 chars) so a freak-long path doesn't reject the whole request. Query strings are stripped before logging because admin endpoints occasionally carry tokens or filenames in `?` params; only the route itself goes into the trail. status_code is nullable in the schema for forward-compat with a future middleware-based completion hook, but isn't populated in this revision (the dependency runs before the response is shaped). Inline expansion vs modal: the `<tr>` colspan-row pattern keeps the audit list adjacent to its token row, which is what the owner needs ("is *this* token being used?") rather than a context-switching dialog.
 
 - **Backend tests:** `backend/.venv/bin/python -m pytest tests/test_api_tokens.py` → 12/12 (3 new for Task 29: list returns usage_count + new tokens have 0; counter increments on each scope-passing request via PATCH /api/admin/posts; counter doesn't bump on tampered token → 401).
 - **Vitest:** Combined `npx vitest run` → 203/203 (no regression).
