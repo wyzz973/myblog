@@ -198,7 +198,16 @@ export default function Media() {
       {loading && <div style={styles.muted}>loading media…</div>}
       {error && <div style={styles.error}>error: {error}</div>}
       {!loading && !error && items.length === 0 && (
-        <div style={styles.muted}>no media yet — upload your first image.</div>
+        <div style={styles.emptyBlock} data-testid="media-empty">
+          <div style={styles.emptyHead}>媒体库还是空的</div>
+          <div style={styles.emptyHint}>
+            点击右上角 <kbd style={styles.emptyKbd}>+ upload</kbd>{' '}
+            或把图片拖到上面的虚线区域，文章里就能用 <code>::image{`{id="…"}`}::</code> 引用了。
+          </div>
+          <div style={styles.emptySub}>
+            支持 png / jpg / webp / svg；上传后可在每张图上加 alt 文案。
+          </div>
+        </div>
       )}
 
       {items.length > 0 && (
@@ -719,6 +728,31 @@ const styles = {
     zIndex: 60,
   },
   muted: { color: 'var(--fg-3)', fontSize: 12, padding: '24px 0' },
+  emptyBlock: {
+    padding: '40px 20px',
+    border: '1px dashed var(--line-2)',
+    borderRadius: 6,
+    textAlign: 'center',
+    color: 'var(--fg-3)',
+    margin: '12px 0',
+    lineHeight: 1.7,
+  },
+  emptyHead: {
+    fontSize: 14,
+    color: 'var(--fg-2)',
+    marginBottom: 6,
+    letterSpacing: '0.02em',
+  },
+  emptyHint: { fontSize: 12, color: 'var(--fg-3)' },
+  emptySub: { fontSize: 11, color: 'var(--fg-4)', marginTop: 6 },
+  emptyKbd: {
+    fontFamily: 'inherit',
+    border: '1px solid var(--line-2)',
+    borderRadius: 3,
+    padding: '0 6px',
+    fontSize: 11,
+    color: 'var(--fg-2)',
+  },
   error: {
     color: 'var(--danger)',
     fontSize: 12,
