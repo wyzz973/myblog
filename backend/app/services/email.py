@@ -76,6 +76,25 @@ async def send_email_change_confirm(*, email: str, url: str) -> None:
     await send_email(to=email, subject=subject, body=body)
 
 
+def effective_notify_email(account, settings) -> str | None:
+    """Task 43: resolve the comment-notification recipient.
+
+    Returns None when the owner has disabled notifications, otherwise:
+      1. account.notify_email (admin UI override) if set
+      2. settings.admin_notify_email (.env baseline) if set
+      3. account.email (fallback to login email)
+    """
+    if account is None:
+        return settings.admin_notify_email
+    if not getattr(account, "notify_comments", True):
+        return None
+    return (
+        getattr(account, "notify_email", None)
+        or settings.admin_notify_email
+        or account.email
+    )
+
+
 async def send_comment_notification(
     *, to: str, comment_id: int, post_id: str, who: str, snippet: str
 ) -> None:

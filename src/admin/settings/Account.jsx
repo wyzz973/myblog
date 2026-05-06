@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { apiAccount } from '../../api/account.js';
 
 export default function Account() {
@@ -7,6 +7,7 @@ export default function Account() {
       <TfaSection />
       <MagicLinkSection />
       <EmailSection />
+      <NotifySection />
       <PasswordSection />
     </div>
   );
@@ -294,6 +295,114 @@ function MagicLinkSection() {
         </div>
       </div>
       {error && <div style={styles.error}>! {error}</div>}
+    </Card>
+  );
+}
+
+// --- Notify (Task 43) -------------------------------------------------------
+
+// Comment-notification preferences: master toggle + optional override
+// address. Without this, owners had to set ADMIN_NOTIFY_EMAIL in .env and
+// restart — now it's a runtime setting.
+function NotifySection() {
+  const [prefs, setPrefs] = useState(null); // null while loading
+  const [override, setOverride] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [savedHint, setSavedHint] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    apiAccount.getNotifyPrefs()
+      .then((res) => {
+        if (!alive) return;
+        setPrefs(res);
+        setOverride(res?.notify_email || '');
+      })
+      .catch((e) => alive && setError(e?.detail || e?.message || 'load failed'));
+    return () => { alive = false; };
+  }, []);
+
+  async function save(next) {
+    setBusy(true);
+    setError(null);
+    setSavedHint(null);
+    try {
+      const res = await apiAccount.setNotifyPrefs({
+        notify_comments: next.notify_comments,
+        notify_email: next.notify_email,
+      });
+      setPrefs(res);
+      setOverride(res?.notify_email || '');
+      setSavedHint(res.effective_email
+        ? `通知将发送到 ${res.effective_email}`
+        : '通知已停用');
+    } catch (e) {
+      setError(e?.detail || e?.message || 'save failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (prefs === null && error) {
+    return (
+      <Card title="评论邮件通知" subtitle="新评论时是否发送邮件提醒">
+        <div style={styles.error} data-testid="notify-error">{error}</div>
+      </Card>
+    );
+  }
+  if (prefs === null) {
+    return (
+      <Card title="评论邮件通知" subtitle="新评论时是否发送邮件提醒">
+        <div style={styles.muted}>loading…</div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card title="评论邮件通知" subtitle="新评论时是否发送邮件提醒">
+      <div style={{ display: 'grid', gap: 10 }} data-testid="notify-form">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={prefs.notify_comments}
+            disabled={busy}
+            onChange={(e) =>
+              save({ notify_comments: e.target.checked, notify_email: override })
+            }
+            data-testid="notify-master-toggle"
+          />
+          <span>新评论时发邮件给我</span>
+        </label>
+        <label style={styles.label}>
+          <span style={styles.labelText}>覆盖收件邮箱（可选；留空则用登录邮箱或 .env 默认值）</span>
+          <input
+            type="email"
+            value={override}
+            onChange={(e) => setOverride(e.target.value)}
+            placeholder="alt@example.com"
+            disabled={!prefs.notify_comments || busy}
+            style={styles.input}
+            data-testid="notify-override-input"
+          />
+        </label>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            style={styles.btn}
+            disabled={busy || !prefs.notify_comments}
+            onClick={() => save({ notify_comments: prefs.notify_comments, notify_email: override })}
+            data-testid="notify-save"
+          >{busy ? '保存中…' : '保存'}</button>
+          <span style={styles.muted} data-testid="notify-effective">
+            {prefs.effective_email
+              ? `当前：${prefs.effective_email}`
+              : '当前：通知已停用'}
+          </span>
+        </div>
+        {savedHint && <div style={styles.success} data-testid="notify-saved">{savedHint}</div>}
+        {error && <div style={styles.error}>! {error}</div>}
+      </div>
     </Card>
   );
 }

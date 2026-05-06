@@ -93,6 +93,19 @@ class EmailChangeConfirmResponse(_Strict):
     email: EmailStr
 
 
+# Task 43: comment notification preferences.
+class NotifyPrefsResponse(_Strict):
+    notify_comments: bool
+    notify_email: EmailStr | None
+    effective_email: EmailStr | None  # what the system actually emails
+
+
+class NotifyPrefsUpdateRequest(_Strict):
+    notify_comments: bool
+    # Empty string clears the override; nullable resolves to None too.
+    notify_email: EmailStr | None = None
+
+
 class ApiTokenCreateRequest(_Strict):
     name: str = Field(min_length=1, max_length=64)
     scope: Literal["read", "write"]

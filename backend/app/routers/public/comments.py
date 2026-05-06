@@ -72,13 +72,14 @@ async def create_comment(
         meta={"post_id": post_id, "who": req.who, "length": len(req.body)},
     )
 
+    # Task 43: resolve recipient through the new account.notify_comments
+    # toggle + account.notify_email override. None means notifications
+    # are disabled by the owner.
     settings = get_settings()
-    notify_to = settings.admin_notify_email
-    if notify_to is None:
-        admin = (
-            await s.execute(select(Account).where(Account.id == 1))
-        ).scalar_one_or_none()
-        notify_to = admin.email if admin else None
+    admin = (
+        await s.execute(select(Account).where(Account.id == 1))
+    ).scalar_one_or_none()
+    notify_to = email_svc.effective_notify_email(admin, settings)
     if notify_to:
         await email_svc.send_comment_notification(
             to=notify_to,

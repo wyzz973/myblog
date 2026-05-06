@@ -12,6 +12,8 @@ from app.schemas.auth import (
     EmailChangeRequest,
     EmailChangeRequestMagic,
     MagicLinkToggleRequest,
+    NotifyPrefsResponse,
+    NotifyPrefsUpdateRequest,
     PasswordChangeRequest,
     TfaDisableRequest,
     TfaEnableRequest,
@@ -188,6 +190,48 @@ async def confirm_email_change(
     )
     await s.commit()
     return EmailChangeConfirmResponse(email=acct.email)
+
+
+# Task 43: comment notification preferences.
+@router.get("/account/notify", response_model=NotifyPrefsResponse)
+async def get_notify_prefs(
+    admin: Account = Depends(current_session_admin),
+) -> NotifyPrefsResponse:
+    settings = get_settings()
+    return NotifyPrefsResponse(
+        notify_comments=admin.notify_comments,
+        notify_email=admin.notify_email,
+        effective_email=email_svc.effective_notify_email(admin, settings),
+    )
+
+
+@router.put("/account/notify", response_model=NotifyPrefsResponse)
+async def put_notify_prefs(
+    req: NotifyPrefsUpdateRequest,
+    admin: Account = Depends(current_session_admin),
+    s: AsyncSession = Depends(get_session),
+) -> NotifyPrefsResponse:
+    admin.notify_comments = req.notify_comments
+    # Treat the empty string as a clear (Pydantic EmailStr accepts None
+    # already, but defensive against round-tripped form-state).
+    admin.notify_email = (
+        req.notify_email
+        if (req.notify_email and req.notify_email.strip())
+        else None
+    )
+    await write_event(
+        s, type="account.notify.updated",
+        actor=admin.email,
+        meta={"notify_comments": admin.notify_comments,
+              "has_override": admin.notify_email is not None},
+    )
+    await s.commit()
+    settings = get_settings()
+    return NotifyPrefsResponse(
+        notify_comments=admin.notify_comments,
+        notify_email=admin.notify_email,
+        effective_email=email_svc.effective_notify_email(admin, settings),
+    )
 
 
 @router.patch("/account/magic-link")

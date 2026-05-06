@@ -104,6 +104,20 @@ export const apiAccount = {
       }),
     });
   },
+  // Task 43: comment notification preferences.
+  // GET → { notify_comments, notify_email, effective_email }
+  getNotifyPrefs() {
+    return req('/account/notify');
+  },
+  setNotifyPrefs({ notify_comments, notify_email }) {
+    return req('/account/notify', {
+      method: 'PUT',
+      body: JSON.stringify({
+        notify_comments,
+        notify_email: notify_email || null,
+      }),
+    });
+  },
   // Task 28c step 2: consume the one-shot token and rotate.
   // No bearer required — the token IS the auth.
   async confirmEmailChange(token) {
