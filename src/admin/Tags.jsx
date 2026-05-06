@@ -338,6 +338,16 @@ export default function Tags() {
                       </>
                     ) : (
                       <>
+                        <a
+                          href={`/?tag=${encodeURIComponent(t.slug)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={styles.btnGhostLink}
+                          title="在新标签页查看公开过滤"
+                          data-testid={`tag-public-${t.slug}`}
+                        >
+                          ↗
+                        </a>
                         <button
                           type="button"
                           style={styles.btnGhost}
@@ -419,6 +429,19 @@ const styles = {
     fontFamily: 'inherit',
     cursor: 'pointer',
     marginRight: 6,
+  },
+  btnGhostLink: {
+    background: 'transparent',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-2)',
+    padding: '4px 10px',
+    borderRadius: 4,
+    fontSize: 11,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+    marginRight: 6,
+    textDecoration: 'none',
+    display: 'inline-block',
   },
   btnDanger: {
     background: 'transparent',

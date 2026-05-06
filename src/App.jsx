@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useSite, usePosts, useTags } from './api/hooks.js';
 import { applyAccent } from './utils/accent.js';
 import TopBar from './components/TopBar.jsx';
@@ -18,7 +19,20 @@ const KONAMI = [
 export default function App() {
   const [theme, setThemeRaw] = useState(() => localStorage.getItem('bl.theme') || 'dark');
   const [accent, setAccentRaw] = useState(() => localStorage.getItem('bl.accent') || 'green');
-  const [activeTag, setActiveTag] = useState('all');
+  // Task 54: URL-driven tag filter so `/?tag=devtools` deep-links to a
+  // filtered home view. `activeTag` is now derived from the search
+  // param ('all' when missing/empty), and setActiveTag pushes the new
+  // value back into the URL so back/forward + sharing both work.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTag = searchParams.get('tag') || 'all';
+  const setActiveTag = useCallback((next) => {
+    setSearchParams((prev) => {
+      const sp = new URLSearchParams(prev);
+      if (!next || next === 'all') sp.delete('tag');
+      else sp.set('tag', next);
+      return sp;
+    }, { replace: false });
+  }, [setSearchParams]);
   const [focusIdx, setFocusIdx] = useState(0);
   const [readingId, setReadingId] = useState(() => {
     const m = window.location.pathname.match(/^\/p\/([^/]+)/);
