@@ -229,6 +229,12 @@ export default function Posts() {
 
       {error && <div style={styles.error}>! {error}</div>}
 
+      <div style={styles.kbdHint} data-testid="posts-kbd-hint">
+        <kbd style={styles.kbd}>j</kbd> / <kbd style={styles.kbd}>k</kbd> 行间移动 ·{' '}
+        <kbd style={styles.kbd}>Enter</kbd> / <kbd style={styles.kbd}>e</kbd> 编辑 ·{' '}
+        <kbd style={styles.kbd}>n</kbd> 新建
+      </div>
+
       {!error && (
         <div style={styles.tableWrap}>
           <table style={styles.table}>
@@ -536,6 +542,15 @@ const styles = {
   },
   title: { color: 'var(--fg)', fontWeight: 500 },
   subtitle: { color: 'var(--fg-3)', fontSize: 11, marginTop: 2 },
+  kbdHint: {
+    fontSize: 11, color: 'var(--fg-4)',
+    margin: '0 0 8px', display: 'flex', gap: 6, alignItems: 'center',
+  },
+  kbd: {
+    fontFamily: 'inherit',
+    border: '1px solid var(--line-2)', borderRadius: 3,
+    padding: '0 6px', fontSize: 10, color: 'var(--fg-3)',
+  },
   idHint: { color: 'var(--fg-4)', fontSize: 10, marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4 },
   idCopyBtn: {
     background: 'transparent', border: 0, color: 'var(--fg-4)',
