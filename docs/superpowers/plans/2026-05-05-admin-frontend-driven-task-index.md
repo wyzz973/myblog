@@ -2019,3 +2019,23 @@ Implementation note: status pills use `color-mix(in oklab, var(--<color>) NN%, t
 **Commit:** `7918791` (`feat(public/footer): render editable footer_note (Task 52)`).
 
 Implementation note: the verify pass also accidentally demonstrated that the dev DB had been accumulating `[task5-1777994316]`-style debris in `footer_note` from earlier loop rounds. The cleanup is a side effect of the restore step — the next public homepage visit will show the clean phrase. Fixing the upstream test that wrote those markers (likely an integration scenario in `task-5/` that didn't restore on success) is a separate hygiene item; this task is just about making the field's downstream rendering work.
+
+---
+
+### Task 53 — ↗ 公开页 link in PostEditor header ✅
+
+**Frontend dependency:** Task 50 added the link on the list rows but mid-edit owners still had to back out, scroll, and re-find their row to spot-check the public render. The PRD's cross-cut "view on public site" gap explicitly covered "every detail/edit surface", so the editor header should mirror the row affordance.
+
+**Backend:** none.
+
+**Frontend:** `PostEditor.jsx` adds a `↗ 公开页` anchor in `headerBtns` only when `!isNew && originalId`. Reuses Task 50's `btnGhostLink` pattern (same neutral border, same `text-decoration: none` so it visually balances with the 取消 button). The new-post case omits the link because the slug isn't yet committed — there's no public URL to point at.
+
+**Tests:** vitest sweep `npx vitest run` → **265/265** unchanged. PostEditor still has no unit tests (file is large and tightly coupled to fetch/localStorage; covered via Playwright instead).
+
+**Playwright:** `/Users/sd3/anaconda3/bin/python /tmp/admin-rebuild/task-53/verify.py` PASSED — open posts list → click 编辑 on row 0 → assert `[data-testid=editor-public-link]` resolves to `/p/<id>` with target=`_blank` rel=`noopener`. Negative case: cancel back to list → click `+ 新建文章` → assert the testid is absent because there's no slug to link to.
+
+**Snapshot:** `/tmp/admin-rebuild/task-53/editor-header-public-link.png`.
+
+**Commit:** `ed75821` (`feat(admin/posts): ↗ 公开页 link in editor header (Task 53)`).
+
+Implementation note: the link points at `originalId`, not the current frontmatter's `id`. If the owner is mid-rename (e.g., changing the slug from `vps` to `vps-2026`), the link still resolves to the public URL of the persisted version rather than the in-flight rename. That's the desired behavior — the link is a "preview the live thing", not "preview what you're about to save."
