@@ -285,6 +285,16 @@ export default function Posts() {
                     {typeof p.likes === 'number' ? p.likes : 0}
                   </td>
                   <td style={{ ...styles.td, textAlign: 'right' }}>
+                    <a
+                      href={`/p/${encodeURIComponent(p.id)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={styles.btnGhostLink}
+                      title="在新标签页打开公开页"
+                      data-testid={`public-link-${p.id}`}
+                    >
+                      ↗ 公开页
+                    </a>
                     <button
                       type="button"
                       style={styles.btnGhost}
@@ -479,6 +489,19 @@ const styles = {
     fontFamily: 'inherit',
     cursor: 'pointer',
     marginRight: 6,
+  },
+  btnGhostLink: {
+    background: 'transparent',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-2)',
+    padding: '4px 10px',
+    borderRadius: 4,
+    fontSize: 11,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+    marginRight: 6,
+    textDecoration: 'none',
+    display: 'inline-block',
   },
   btnDanger: {
     background: 'transparent',
