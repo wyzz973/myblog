@@ -304,6 +304,18 @@ export default function PostEditor({ id, onClose, onSaved }) {
           </p>
         </div>
         <div style={styles.headerBtns}>
+          {!isNew && originalId && (
+            <a
+              href={`/p/${encodeURIComponent(originalId)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={styles.btnGhostLink}
+              title="在新标签页打开公开页"
+              data-testid="editor-public-link"
+            >
+              ↗ 公开页
+            </a>
+          )}
           <button type="button" style={styles.btnGhost} onClick={onClose}>
             取消
           </button>
@@ -670,6 +682,19 @@ const styles = {
     fontSize: 12,
     fontFamily: 'inherit',
     cursor: 'pointer',
+  },
+  btnGhostLink: {
+    background: 'transparent',
+    border: '1px solid var(--line-2)',
+    color: 'var(--fg-2)',
+    padding: '8px 14px',
+    borderRadius: 4,
+    fontSize: 12,
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+    textDecoration: 'none',
+    display: 'inline-flex',
+    alignItems: 'center',
   },
   draftBanner: {
     display: 'flex',
