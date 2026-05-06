@@ -493,12 +493,18 @@ const styles = {
     fontFamily: 'inherit',
     fontSize: 12,
     borderRadius: 4,
-    minWidth: 220,
+    minWidth: 0,         // 移动端可缩到 0；flex 布局中负责自动收缩
+    flex: '1 1 220px',   // 桌面 220+ 宽，但允许收缩
+    boxSizing: 'border-box',
   },
   tableWrap: {
     border: '1px solid var(--line)',
     borderRadius: 6,
-    overflow: 'hidden',
+    // 移动端行宽常超出 viewport（9 列含 操作列+id），改成 auto 让表格
+    // 在容器内左右滚动，而不是把整个文档撑出去；maxWidth: 100% 兜底
+    // 防止 flex/grid context 下宽度被内容拉大。
+    overflow: 'auto',
+    maxWidth: '100%',
     background: 'var(--bg-2)',
   },
   table: {
