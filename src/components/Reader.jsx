@@ -3,6 +3,7 @@ import { useSite, usePosts, usePost } from '../api/hooks.js';
 import { api } from '../api/client.js';
 import { sendHit } from '../utils/beacon.js';
 import CopyText from './CopyText.jsx';
+import ReaderAdminBar from './ReaderAdminBar.jsx';
 import Avatar from './Avatar.jsx';
 
 function renderInline(items) {
@@ -275,6 +276,9 @@ export default function Reader({ post: postSummary, onBack, onOpenPost, onSelect
   return (
     <div className="reader-shell" ref={scrollRef}>
       <div className="reader-progress" style={{ transform: `scaleX(${progress / 100})` }} />
+      <div style={{ padding: '0 24px' }}>
+        <ReaderAdminBar postId={post?.id} />
+      </div>
       <div className="reader-layout">
         <aside className="reader-toc">
           <a className="back" href="#" onClick={(e) => { e.preventDefault(); onBack(); }}>
