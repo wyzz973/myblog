@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +9,7 @@ from app.schemas.auth import (
     ApiTokenCreateRequest,
     ApiTokenCreateResponse,
     ApiTokenListItem,
+    ApiTokenUsageItem,
 )
 from app.services import api_tokens as api_tokens_svc
 from app.services.event_log import write_event
@@ -51,6 +52,38 @@ async def create_token(
     )
     await s.commit()
     return ApiTokenCreateResponse(id=row.id, name=row.name, scope=row.scope, token=raw)
+
+
+@router.get(
+    "/api-tokens/{token_id}/usage",
+    response_model=list[ApiTokenUsageItem],
+)
+async def list_token_usage(
+    token_id: int,
+    limit: int = Query(default=50, ge=1, le=500),
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> list[ApiTokenUsageItem]:
+    """Most-recent-first per-request audit trail for one api-token (Task 29).
+
+    Returns 404 if the token doesn't exist so the UI can distinguish a
+    typo from an unused token (whose usage list is just empty).
+    """
+    row = (
+        await s.execute(select(ApiToken).where(ApiToken.id == token_id))
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="token not found")
+    usages = await api_tokens_svc.list_usage(s, token_id=token_id, limit=limit)
+    return [
+        ApiTokenUsageItem(
+            used_at=u.used_at,
+            method=u.method,
+            path=u.path,
+            status_code=u.status_code,
+        )
+        for u in usages
+    ]
 
 
 @router.delete("/api-tokens/{token_id}", status_code=204, dependencies=[Depends(require_scope("write"))])

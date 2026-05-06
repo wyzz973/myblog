@@ -82,6 +82,13 @@ def require_scope(scope: Literal["read", "write"]):
         # do NOT tick the counter; only scope-checked uses do.
         token_id = getattr(request.state, "api_token_id", None)
         if token_id is not None:
-            await api_tokens_svc.touch_last_used(s, token_id=token_id)
+            await api_tokens_svc.touch_last_used(
+                s,
+                token_id=token_id,
+                method=request.method,
+                # Strip query string so we don't accidentally log secrets
+                # in URL params; the path alone is enough for the audit UI.
+                path=request.url.path,
+            )
 
     return _dep

@@ -98,3 +98,11 @@ class ApiTokenListItem(_Strict):
     usage_count: int = 0
     revoked_at: datetime | None = None
     created_at: datetime
+
+
+class ApiTokenUsageItem(_Strict):
+    """One row of api_token_usage for the per-token audit panel (Task 29)."""
+    used_at: datetime
+    method: str
+    path: str
+    status_code: int | None = None

@@ -1,5 +1,6 @@
 from app.models.account import Account
 from app.models.api_token import ApiToken
+from app.models.api_token_usage import ApiTokenUsage
 from app.models.base import Base, TimestampMixin
 from app.models.comment import Comment
 from app.models.contact import Contact
@@ -26,7 +27,7 @@ from app.models.tfa_recovery_code import TfaRecoveryCode
 
 __all__ = [
     "Base", "TimestampMixin",
-    "Account", "ApiToken", "Comment", "Contact", "ContribDay", "EventLog",
+    "Account", "ApiToken", "ApiTokenUsage", "Comment", "Contact", "ContribDay", "EventLog",
     "EventLogArchive",
     "ExportJob",
     "HitDaily", "HitEvent",

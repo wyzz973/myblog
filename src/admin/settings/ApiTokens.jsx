@@ -13,6 +13,9 @@ export default function ApiTokens() {
 
   const [secret, setSecret] = useState(null); // ApiTokenCreateResponse on success
   const [revokingId, setRevokingId] = useState(null);
+  const [usageOpenId, setUsageOpenId] = useState(null); // id of expanded usage row
+  const [usageRows, setUsageRows] = useState({});       // id → list[ApiTokenUsageItem] | null while loading
+  const [usageError, setUsageError] = useState({});      // id → string (error detail)
   const confirm = useConfirm();
 
   async function refresh() {
@@ -65,6 +68,27 @@ export default function ApiTokens() {
     }
   }
 
+  async function toggleUsage(id) {
+    if (usageOpenId === id) {
+      setUsageOpenId(null);
+      return;
+    }
+    setUsageOpenId(id);
+    if (usageRows[id]) return; // cached
+    setUsageRows((prev) => ({ ...prev, [id]: null }));
+    setUsageError((prev) => ({ ...prev, [id]: null }));
+    try {
+      const list = await apiTokens.usage(id, 50);
+      setUsageRows((prev) => ({ ...prev, [id]: list }));
+    } catch (err) {
+      setUsageError((prev) => ({
+        ...prev,
+        [id]: err?.detail || err?.message || 'failed to load usage',
+      }));
+      setUsageRows((prev) => ({ ...prev, [id]: [] }));
+    }
+  }
+
   async function onRevoke(id) {
     const ok = await confirm({
       title: '吊销 token',
@@ -111,10 +135,12 @@ export default function ApiTokens() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((t) => {
+                {rows.flatMap((t) => {
                   const revoked = Boolean(t.revoked_at);
-                  return (
-                    <tr key={t.id}>
+                  const isOpen = usageOpenId === t.id;
+                  const usageList = usageRows[t.id];
+                  const tokenRow = (
+                    <tr key={`row-${t.id}`}>
                       <td style={styles.td}>{t.name}</td>
                       <td style={styles.td}>
                         <span style={{ ...styles.badge, ...(t.scope === 'write' ? styles.badgeWrite : styles.badgeRead) }}>
@@ -137,12 +163,21 @@ export default function ApiTokens() {
                         )}
                       </td>
                       <td style={{ ...styles.td, textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          onClick={() => toggleUsage(t.id)}
+                          style={styles.btnSecondary}
+                          data-testid={`api-token-usage-toggle-${t.id}`}
+                          aria-expanded={isOpen}
+                        >
+                          {isOpen ? '收起' : '查看记录'}
+                        </button>
                         {!revoked && (
                           <button
                             type="button"
                             onClick={() => onRevoke(t.id)}
                             disabled={revokingId === t.id}
-                            style={styles.btnDanger}
+                            style={{ ...styles.btnDanger, marginLeft: 6 }}
                           >
                             {revokingId === t.id ? 'revoking…' : 'revoke'}
                           </button>
@@ -150,6 +185,41 @@ export default function ApiTokens() {
                       </td>
                     </tr>
                   );
+                  if (!isOpen) return [tokenRow];
+                  return [
+                    tokenRow,
+                    <tr key={`usage-${t.id}`}>
+                      <td colSpan={7} style={styles.usageCell} data-testid={`api-token-usage-panel-${t.id}`}>
+                        {usageList === null && <div style={styles.muted}>loading…</div>}
+                        {usageList && usageError[t.id] && (
+                          <div style={styles.error}>{usageError[t.id]}</div>
+                        )}
+                        {usageList && !usageError[t.id] && usageList.length === 0 && (
+                          <div style={styles.muted}>该 token 还没有任何调用记录。</div>
+                        )}
+                        {usageList && usageList.length > 0 && (
+                          <table style={styles.usageTable}>
+                            <thead>
+                              <tr>
+                                <th style={styles.th}>时间</th>
+                                <th style={styles.th}>方法</th>
+                                <th style={styles.th}>路径</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {usageList.map((u, i) => (
+                                <tr key={i} data-testid={`api-token-usage-row-${t.id}-${i}`}>
+                                  <td style={styles.td}>{fmtDate(u.used_at)}</td>
+                                  <td style={styles.td}><code>{u.method}</code></td>
+                                  <td style={styles.td}><code>{u.path}</code></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </td>
+                    </tr>,
+                  ];
                 })}
               </tbody>
             </table>
@@ -363,6 +433,17 @@ const styles = {
     fontFamily: 'inherit',
   },
   muted: { color: 'var(--fg-3)', fontSize: 12 },
+  usageCell: {
+    background: 'var(--bg)',
+    borderBottom: '1px solid var(--line)',
+    padding: '8px 12px',
+  },
+  usageTable: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    fontSize: 11,
+    color: 'var(--fg-2)',
+  },
   error: {
     color: 'var(--danger)',
     fontSize: 12,

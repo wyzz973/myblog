@@ -49,6 +49,10 @@ export const apiTokens = {
   remove(id) {
     return req(`/api-tokens/${id}`, { method: 'DELETE' });
   },
+  // Task 29: per-request audit trail.
+  usage(id, limit = 50) {
+    return req(`/api-tokens/${id}/usage?limit=${limit}`);
+  },
 };
 
 export default apiTokens;

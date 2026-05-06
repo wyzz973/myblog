@@ -11,10 +11,10 @@ import secrets
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import select, update
+from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ApiToken
+from app.models import ApiToken, ApiTokenUsage
 
 PREFIX = "tk_"
 
@@ -60,12 +60,19 @@ async def verify(s: AsyncSession, raw: str) -> ApiToken | None:
     ).scalar_one_or_none()
 
 
-async def touch_last_used(s: AsyncSession, *, token_id: int) -> None:
-    """Stamp last_used_at AND increment usage_count atomically.
+async def touch_last_used(
+    s: AsyncSession,
+    *,
+    token_id: int,
+    method: str | None = None,
+    path: str | None = None,
+) -> None:
+    """Stamp last_used_at, increment usage_count, and (Task 29) log a row in
+    api_token_usage so the admin UI can surface a per-request audit trail.
 
-    Uses SQL `usage_count = usage_count + 1` so concurrent requests
-    against the same token don't lose updates (which a read-modify-write
-    in Python would).
+    SQL `usage_count = usage_count + 1` keeps concurrent requests safe.
+    method+path may be omitted by older callers — we only insert a usage
+    row when both are present.
     """
     await s.execute(
         update(ApiToken)
@@ -75,7 +82,30 @@ async def touch_last_used(s: AsyncSession, *, token_id: int) -> None:
             usage_count=ApiToken.usage_count + 1,
         )
     )
+    if method and path:
+        s.add(ApiTokenUsage(
+            api_token_id=token_id,
+            method=method[:8],
+            path=path[:256],
+        ))
     await s.commit()
+
+
+async def list_usage(
+    s: AsyncSession,
+    *,
+    token_id: int,
+    limit: int = 50,
+) -> list[ApiTokenUsage]:
+    """Most-recent-first usage rows for one token. Caller validates token
+    existence; we return an empty list for unknown ids without raising."""
+    rows = await s.execute(
+        select(ApiTokenUsage)
+        .where(ApiTokenUsage.api_token_id == token_id)
+        .order_by(desc(ApiTokenUsage.used_at))
+        .limit(limit)
+    )
+    return list(rows.scalars())
 
 
 async def revoke(s: AsyncSession, *, token_id: int) -> bool:
