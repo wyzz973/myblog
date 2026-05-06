@@ -2157,3 +2157,23 @@ Style parity with Task 55 — same dashed `var(--line-2)` border, same `var(--fg
 **Commit:** `18e0734` (`feat(admin/media): empty-state onboarding block (Task 58)`).
 
 Implementation note: Playwright's `route()` interception is the cleanest way to test fresh-install UX without polluting the dev DB or tearing real data down between runs. That same pattern unlocks future empty-state verifies for any admin page where the dev DB is too rich to easily reach an empty state.
+
+---
+
+### Task 59 — Comments admin: clickable post link per row ✅
+
+**Frontend dependency:** PRD §4.2 calls comments moderation a primary admin workflow with explicit "back to source" expectations. Each row showed `post: <title>` as a static span — moderators had to copy `c.post_id` from the title-tooltip and hand-construct a `/p/<id>` URL to see the public context. The Tasks 50/53 cross-cut public-link pattern hadn't reached this surface yet.
+
+**Backend:** none.
+
+**Frontend:** the meta span becomes an `<a target=_blank rel=noopener>` linking to `/p/{post_id}#comment-{id}`, with `data-testid="comment-post-link-{id}"`. The trailing `#comment-{id}` anchor lines up with the public Reader's planned scroll target so deep-linking already works the moment that anchor is wired. Visual: same pill chip as before, just clickable, plus a small ↗ glyph so users see it's an external nav.
+
+**Tests:** vitest sweep `npx vitest run` → **267/267** unchanged. `Comments.test.jsx` exists but doesn't drill into per-row markup; the link is exercised end-to-end by Playwright.
+
+**Playwright:** `/Users/sd3/anaconda3/bin/python /tmp/admin-rebuild/task-59/verify.py` PASSED — picks any existing comment from `/api/admin/comments`, switches to the `all` tab so non-pending comments are visible, asserts the link's tag/href/target/rel/text.
+
+**Snapshot:** `/tmp/admin-rebuild/task-59/admin-comments-post-link.png`.
+
+**Commit:** `8341dc3` (`feat(admin/comments): clickable post link per row (Task 59)`).
+
+Implementation note: the verifier's "switch to all tab" step is necessary because the Comments page defaults to `pending`, and a real moderation queue with no pending items would otherwise hide every row. Codifying this in the verify script (rather than seeding a pending comment per run) keeps the dev DB clean across rounds.
