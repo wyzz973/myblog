@@ -2039,3 +2039,25 @@ Implementation note: the verify pass also accidentally demonstrated that the dev
 **Commit:** `ed75821` (`feat(admin/posts): ↗ 公开页 link in editor header (Task 53)`).
 
 Implementation note: the link points at `originalId`, not the current frontmatter's `id`. If the owner is mid-rename (e.g., changing the slug from `vps` to `vps-2026`), the link still resolves to the public URL of the persisted version rather than the in-flight rename. That's the desired behavior — the link is a "preview the live thing", not "preview what you're about to save."
+
+---
+
+### Task 54 — URL-driven tag filter on home + admin Tags public link ✅
+
+**Frontend dependency:** PRD §1's home audit highlights the per-tag filter chips on `HomeA`, but the active tag was tracked as a plain `useState('all')` — invisible to URLs, refresh-resetting, and unshareable. PRD §6.2 explicitly calls out shareable filter URLs as a cross-cut goal. Admin Tags also lacked any "preview filtered public" link, leaving owners to construct the URL by hand.
+
+**Backend:** none — `/api/posts?tag=<slug>` already supports the filter; this task is purely about wiring the URL.
+
+**Frontend:**
+- `App.jsx`: imports `useSearchParams` from `react-router-dom` (already mounted around the public app via `main.jsx`'s `<BrowserRouter>`), derives `activeTag` from `searchParams.get('tag') || 'all'`, and writes back via `setSearchParams` (deletes the param when 'all'). All existing chip/keyboard handlers continue to call `setActiveTag(slug)` so no downstream changes were needed.
+- `Tags.jsx`: each row's actions cell gets an `<a target=_blank href="/?tag=<slug>" rel="noopener noreferrer">↗</a>` styled like the existing ghost button (new `btnGhostLink` style entry).
+
+**Tests:** vitest sweep `npx vitest run` → **265/265** unchanged. `App.jsx` is rendered only via integration suites and Playwright; the URL-sync hook contract is too thin to merit a dedicated unit test.
+
+**Playwright:** `/Users/sd3/anaconda3/bin/python /tmp/admin-rebuild/task-54/verify.py` PASSED — `/?tag=devtools` deep link triggers the filtered home; admin `/admin/tags` row exposes the link with proper href/target/rel; URL preserves the `tag` param across navigations.
+
+**Snapshots:** `/tmp/admin-rebuild/task-54/home-filtered-by-tag.png`, `/tmp/admin-rebuild/task-54/admin-tags-public-link.png`.
+
+**Commit:** `2c848ad` (`feat(public/home): URL-driven tag filter + admin link (Task 54)`).
+
+Implementation note: `setSearchParams` accepts a `(prev) => next` updater, which we use here so the rest of the query string (e.g., a future `?from=…` analytics window or `?theme=…` debug flag) survives tag changes. Also: `setActiveTag('all')` deletes the param rather than writing `?tag=all`, keeping the canonical home URL clean. The previous `setActiveTag(undefined)` call site in HomeA still works because the updater coalesces null/undefined/'all' uniformly.
