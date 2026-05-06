@@ -9,6 +9,7 @@ import {
 import MediaPicker from './MediaPicker.jsx';
 import { buildImageMarkdown, insertAt } from './markdownInsert.js';
 import { clearDraft, draftIsNewerThan, loadDraft, saveDraft } from './draftStore.js';
+import { countWords, readingMinutes } from './wordCount.js';
 
 const NEW_POST_TEMPLATE = `---
 id: my-new-post
@@ -292,6 +293,14 @@ export default function PostEditor({ id, onClose, onSaved }) {
 
   const fmInfo = preview?.frontmatter || null;
 
+  // Task 66: live word count + reading time. useMemo 避免每次按键
+  // setState 都重算（虽然函数 O(n) 也快）。指标和后端 compute_derived
+  // 一致：words = ASCII 词块 + CJK 字符；read = max(1, ceil(total/240))。
+  const wcStats = useMemo(() => {
+    const total = countWords(markdown);
+    return { total, read: readingMinutes(total) };
+  }, [markdown]);
+
   return (
     <div>
       <header style={styles.header}>
@@ -301,6 +310,13 @@ export default function PostEditor({ id, onClose, onSaved }) {
           </h1>
           <p style={styles.lead}>
             使用带 YAML Frontmatter 的 Markdown 源文，保存时会经过后端导入流程。
+            <span
+              style={styles.wcInline}
+              data-testid="editor-word-count"
+              title="字数 / 阅读时长（前端实时估算，与后端 compute_derived 一致）"
+            >
+              {' '}· {wcStats.total.toLocaleString()} 字 · {wcStats.read} min 阅读
+            </span>
           </p>
         </div>
         <div style={styles.headerBtns}>
@@ -660,6 +676,7 @@ const styles = {
   },
   h1: { fontSize: 18, margin: 0, fontWeight: 600, color: 'var(--fg)' },
   lead: { fontSize: 12, color: 'var(--fg-3)', margin: '4px 0 0' },
+  wcInline: { color: 'var(--fg-4)', fontVariantNumeric: 'tabular-nums' },
   headerBtns: { display: 'flex', gap: 8 },
   btnPrimary: {
     background: 'var(--accent)',
