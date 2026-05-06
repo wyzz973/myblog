@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiPet } from '../../api/pet.js';
 import {
   buildBars,
+  buildCostLine,
   buildPieSlices,
+  formatUSD,
   groupByDay,
   groupByMode,
+  groupCostByDay,
   legendFromData,
   SOURCE_COLORS,
   SOURCE_LABELS,
@@ -33,6 +36,7 @@ export default function PetUsage() {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start' }}>
         <div style={{ flex: '1 1 480px', minWidth: 320 }}>
           <UsageChart items={items} />
+          <CostChart items={items} />
         </div>
         <div style={{ flex: '0 0 220px' }}>
           <ModePieChart items={items} />
@@ -249,6 +253,78 @@ function ModePieChart({ items }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+// Daily estimated-cost line chart (Task 26c). The math lives in
+// petUsageChart.js (rowCostUSD + groupCostByDay + buildCostLine) and
+// applies per-provider $/M token rates to in/out token splits. Cache
+// hits / fallbacks / rate-limited calls cost zero.
+function CostChart({ items }) {
+  const daily = useMemo(() => groupCostByDay(items), [items]);
+  const W = 720;
+  const H = 120;
+  const PAD_X = 28;
+  const PAD_Y = 16;
+  const line = useMemo(
+    () => buildCostLine(daily, { width: W, height: H, padX: PAD_X, padY: PAD_Y }),
+    [daily],
+  );
+  const total = useMemo(() => daily.reduce((a, d) => a + d.cost, 0), [daily]);
+
+  if (daily.length === 0 || total === 0) {
+    return (
+      <div data-testid="pet-usage-cost-empty" style={{ color: 'var(--fg-4)', fontSize: 12, padding: '8px 0' }}>
+        暂无估算成本（缓存或降级调用计为 $0）。
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="pet-usage-cost" style={{ marginTop: 12 }}>
+      <div style={{
+        display: 'flex', alignItems: 'baseline', gap: 8,
+        fontSize: 11, color: 'var(--fg-3)', marginBottom: 6,
+      }}>
+        <span>窗口估算成本</span>
+        <strong
+          data-testid="pet-usage-cost-total"
+          style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--accent)' }}
+        >{formatUSD(total)}</strong>
+        <span style={{ color: 'var(--fg-4)' }}>· {daily.length} 天 · 按提供商 $/M token 估算</span>
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ width: '100%', height: 'auto', display: 'block' }}
+        role="img"
+        aria-label={`pet usage estimated cost across ${daily.length} days`}
+      >
+        <line
+          x1={PAD_X} x2={W - PAD_X}
+          y1={H - PAD_Y} y2={H - PAD_Y}
+          stroke="var(--line)" strokeWidth="1"
+        />
+        <polyline
+          points={line.points}
+          fill="none"
+          stroke="var(--accent)"
+          strokeWidth="1.5"
+          data-testid="pet-usage-cost-line"
+        />
+        {line.dots.map((d) => (
+          <circle
+            key={d.day}
+            cx={d.cx}
+            cy={d.cy}
+            r="2.5"
+            fill="var(--accent)"
+            data-testid={`pet-usage-cost-dot-${d.day}`}
+          >
+            <title>{`${d.day}: ${formatUSD(d.cost)}`}</title>
+          </circle>
+        ))}
+      </svg>
     </div>
   );
 }

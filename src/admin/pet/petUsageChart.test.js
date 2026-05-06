@@ -1,11 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildBars,
+  buildCostLine,
   buildPieSlices,
+  formatUSD,
   groupByDay,
   groupByMode,
+  groupCostByDay,
   legendFromData,
   modeColor,
+  rowCostUSD,
+  PROVIDER_RATES,
   SOURCE_COLORS,
   SOURCE_LABELS,
 } from './petUsageChart.js';
@@ -137,5 +142,121 @@ describe('buildPieSlices', () => {
     expect(single).toHaveLength(1);
     expect(single[0].frac).toBe(1);
     expect(single[0].path).toMatch(/^M /);
+  });
+});
+
+// --- Task 26c: cost line chart helpers ---
+
+const COST_ROWS = [
+  // anthropic provider call: 1k in + 500 out tokens
+  { day: '2026-05-03', mode: 'greet', source: 'anthropic', calls: 1,
+    estimated_total_tokens: 1500, estimated_input_tokens: 1000, estimated_output_tokens: 500 },
+  // zhipu provider call same day, much cheaper
+  { day: '2026-05-03', mode: 'greet', source: 'zhipu', calls: 1,
+    estimated_total_tokens: 4000, estimated_input_tokens: 3000, estimated_output_tokens: 1000 },
+  // cache hit on the next day — should cost zero regardless of tokens
+  { day: '2026-05-04', mode: 'greet', source: 'cache_hit', calls: 5,
+    estimated_total_tokens: 100000, estimated_input_tokens: 50000, estimated_output_tokens: 50000 },
+  // fallback also zero
+  { day: '2026-05-04', mode: 'greet', source: 'fallback', calls: 3,
+    estimated_total_tokens: 0, estimated_input_tokens: 0, estimated_output_tokens: 0 },
+  // unknown source → default rate (so a typo doesn't silently zero the bill)
+  { day: '2026-05-05', mode: 'summary', source: 'mystery', calls: 1,
+    estimated_total_tokens: 1000, estimated_input_tokens: 1000, estimated_output_tokens: 0 },
+];
+
+describe('rowCostUSD', () => {
+  it('charges zero for cache_hit / fallback / rate_limited regardless of tokens', () => {
+    expect(rowCostUSD(COST_ROWS[2])).toBe(0); // cache_hit
+    expect(rowCostUSD(COST_ROWS[3])).toBe(0); // fallback
+    expect(rowCostUSD({ source: 'rate_limited', estimated_input_tokens: 9999, estimated_output_tokens: 9999 })).toBe(0);
+  });
+
+  it('applies per-provider in/out rates with correct units (per 1M)', () => {
+    // anthropic: 1000 * 3 / 1e6 + 500 * 15 / 1e6 = 0.003 + 0.0075 = 0.0105
+    expect(rowCostUSD(COST_ROWS[0])).toBeCloseTo(0.0105, 6);
+    // zhipu: 3000 * 0.08 / 1e6 + 1000 * 0.16 / 1e6 = 0.00024 + 0.00016 = 0.0004
+    expect(rowCostUSD(COST_ROWS[1])).toBeCloseTo(0.0004, 6);
+  });
+
+  it('falls back to PROVIDER_RATES.default for unknown source names', () => {
+    // mystery row: 1000 in @ default in_per_m
+    const expected = 1000 * PROVIDER_RATES.default.in_per_m / 1e6;
+    expect(rowCostUSD(COST_ROWS[4])).toBeCloseTo(expected, 6);
+  });
+
+  it('handles missing or null token fields gracefully', () => {
+    expect(rowCostUSD({ source: 'anthropic' })).toBe(0);
+    expect(rowCostUSD(null)).toBe(0);
+    expect(rowCostUSD(undefined)).toBe(0);
+  });
+});
+
+describe('groupCostByDay', () => {
+  it('sums per-day cost in ascending date order', () => {
+    const daily = groupCostByDay(COST_ROWS);
+    expect(daily.map((d) => d.day)).toEqual(['2026-05-03', '2026-05-04', '2026-05-05']);
+    // 2026-05-03 = anthropic + zhipu
+    expect(daily[0].cost).toBeCloseTo(0.0105 + 0.0004, 6);
+    expect(daily[1].cost).toBe(0); // 2026-05-04 = cache+fallback
+    expect(daily[2].cost).toBeGreaterThan(0);
+  });
+
+  it('returns [] for empty input', () => {
+    expect(groupCostByDay([])).toEqual([]);
+    expect(groupCostByDay(null)).toEqual([]);
+    expect(groupCostByDay(undefined)).toEqual([]);
+  });
+});
+
+describe('buildCostLine', () => {
+  const CHART = { width: 600, height: 100, padX: 20, padY: 10 };
+
+  it('returns one dot per day, mapped onto the chart bounds', () => {
+    const daily = groupCostByDay(COST_ROWS);
+    const line = buildCostLine(daily, CHART);
+    expect(line.dots).toHaveLength(3);
+    // First dot at left padX, last dot at width - padX
+    expect(line.dots[0].cx).toBe(CHART.padX);
+    expect(line.dots[line.dots.length - 1].cx).toBe(CHART.width - CHART.padX);
+    // Highest cost lands closest to the top (smallest cy)
+    const sortedByCost = [...line.dots].sort((a, b) => b.cost - a.cost);
+    const sortedByCy = [...line.dots].sort((a, b) => a.cy - b.cy);
+    expect(sortedByCost[0].day).toBe(sortedByCy[0].day);
+  });
+
+  it('zero-cost days sit on the baseline', () => {
+    const line = buildCostLine(groupCostByDay(COST_ROWS), CHART);
+    const zeroDay = line.dots.find((d) => d.cost === 0);
+    expect(zeroDay.cy).toBe(CHART.height - CHART.padY);
+  });
+
+  it('points string is space-separated x,y pairs', () => {
+    const line = buildCostLine(groupCostByDay(COST_ROWS), CHART);
+    expect(line.points.split(' ')).toHaveLength(3);
+    for (const p of line.points.split(' ')) {
+      expect(p).toMatch(/^\d+(\.\d+)?,\d+(\.\d+)?$/);
+    }
+  });
+
+  it('single-day input still produces a renderable dot at padX', () => {
+    const line = buildCostLine([{ day: '2026-05-03', cost: 0.5 }], CHART);
+    expect(line.dots).toHaveLength(1);
+    expect(line.dots[0].cx).toBe(CHART.padX);
+  });
+});
+
+describe('formatUSD', () => {
+  it('shows $0.00 for zero/non-finite', () => {
+    expect(formatUSD(0)).toBe('$0.00');
+    expect(formatUSD(NaN)).toBe('$0.00');
+    expect(formatUSD(Infinity)).toBe('$0.00');
+  });
+  it('uses 4 decimals when below $0.01 (so micro-spend is not "rounded to free")', () => {
+    expect(formatUSD(0.0042)).toBe('$0.0042');
+  });
+  it('uses 2 decimals at $0.01 and above', () => {
+    expect(formatUSD(0.01)).toBe('$0.01');
+    expect(formatUSD(12.345)).toBe('$12.35');
   });
 });

@@ -336,6 +336,8 @@ async def get_pet_usage(
                 PetUsageEvent.source,
                 func.count(PetUsageEvent.id).label("calls"),
                 func.sum(PetUsageEvent.estimated_total_tokens).label("tokens"),
+                func.sum(PetUsageEvent.estimated_input_tokens).label("in_tokens"),
+                func.sum(PetUsageEvent.estimated_output_tokens).label("out_tokens"),
             )
             .group_by("day", PetUsageEvent.mode, PetUsageEvent.source)
             .order_by(desc("day"), PetUsageEvent.mode, PetUsageEvent.source)
@@ -349,6 +351,10 @@ async def get_pet_usage(
             "source": row.source,
             "calls": int(row.calls or 0),
             "estimated_total_tokens": int(row.tokens or 0),
+            # Task 26c: split tokens so the client-side cost line can apply
+            # provider-specific in/out rates.
+            "estimated_input_tokens": int(row.in_tokens or 0),
+            "estimated_output_tokens": int(row.out_tokens or 0),
         }
         for row in rows
     ]

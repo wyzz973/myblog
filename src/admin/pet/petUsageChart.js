@@ -191,3 +191,68 @@ function donutFullCircle(cx, cy, r, inner) {
     `M ${cx},${cy - inner} A ${inner},${inner} 0 1,0 ${cx - 0.001},${cy - inner} Z`
   );
 }
+
+// --- Task 26c: daily estimated cost line chart ---
+//
+// Per-provider USD rates, $/1M tokens. Approximate published rates as of
+// 2026-05; owner can override later via Integrations settings (out of scope
+// for 26c). Sources that are not paid LLM calls (cache_hit / fallback /
+// rate_limited) cost zero. Unknown providers fall through to PROVIDER_RATES.default
+// rather than going free, so a typo doesn't silently zero the bill.
+//
+// in_per_m / out_per_m read in dollars per 1,000,000 tokens.
+export const PROVIDER_RATES = {
+  anthropic: { in_per_m: 3.00, out_per_m: 15.00 },
+  zhipu:     { in_per_m: 0.08, out_per_m: 0.16 },
+  qwen:      { in_per_m: 0.10, out_per_m: 0.30 },
+  doubao:    { in_per_m: 0.05, out_per_m: 0.15 },
+  deepseek:  { in_per_m: 0.27, out_per_m: 1.10 },
+  default:   { in_per_m: 0.50, out_per_m: 1.50 },
+};
+
+const ZERO_COST_SOURCES = new Set(['cache_hit', 'fallback', 'rate_limited']);
+
+export function rowCostUSD(row) {
+  if (!row) return 0;
+  if (ZERO_COST_SOURCES.has(row.source)) return 0;
+  const rate = PROVIDER_RATES[row.source] || PROVIDER_RATES.default;
+  const inTok = Number(row.estimated_input_tokens || 0);
+  const outTok = Number(row.estimated_output_tokens || 0);
+  return (inTok * rate.in_per_m + outTok * rate.out_per_m) / 1_000_000;
+}
+
+export function groupCostByDay(rows) {
+  const days = new Map();
+  for (const r of rows || []) {
+    if (!r.day) continue;
+    days.set(r.day, (days.get(r.day) || 0) + rowCostUSD(r));
+  }
+  return Array.from(days.entries())
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([day, cost]) => ({ day, cost }));
+}
+
+// Build a polyline + circles geometry for a single-series line chart.
+// Returns { points: "x1,y1 x2,y2 ...", dots: [{cx,cy,day,cost}], max }.
+export function buildCostLine(daily, { width, height, padX, padY }) {
+  const innerW = Math.max(1, width - padX * 2);
+  const innerH = Math.max(1, height - padY * 2);
+  const max = Math.max(0.0001, ...daily.map((d) => d.cost));
+  const baseY = height - padY;
+  const stepX = daily.length <= 1 ? 0 : innerW / (daily.length - 1);
+  const dots = daily.map((d, i) => ({
+    day: d.day,
+    cost: d.cost,
+    cx: padX + i * stepX,
+    cy: baseY - (d.cost / max) * innerH,
+  }));
+  const points = dots.map((p) => `${p.cx.toFixed(1)},${p.cy.toFixed(1)}`).join(' ');
+  return { points, dots, max };
+}
+
+export function formatUSD(n) {
+  if (!isFinite(n)) return '$0.00';
+  if (n === 0) return '$0.00';
+  if (n < 0.01) return `$${n.toFixed(4)}`;
+  return `$${n.toFixed(2)}`;
+}
