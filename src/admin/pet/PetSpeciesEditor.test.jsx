@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import PetSpeciesEditor, { frameLayoutHint } from './PetSpeciesEditor.jsx';
+import PetSpeciesEditor, { frameLayoutHint, renderFrameForPreview } from './PetSpeciesEditor.jsx';
 
 vi.mock('../../api/petSpecies.js', () => ({
   apiPetSpecies: {
@@ -164,6 +164,35 @@ describe('frameLayoutHint', () => {
   });
 });
 
+// Task 40: live frame preview
+describe('renderFrameForPreview', () => {
+  it('substitutes {E} with the idle eye marker (·)', () => {
+    const lines = ['  ( {E}  {E} )  ', '  (  ω   )  '];
+    const out = renderFrameForPreview(lines);
+    // Two replacements per line 1, zero on line 2
+    expect(out).toBe('  ( ·  · )  \n  (  ω   )  ');
+  });
+
+  it('joins lines with newlines so <pre> renders a multi-line frame', () => {
+    const out = renderFrameForPreview(['a', 'b', 'c']);
+    expect(out).toBe('a\nb\nc');
+    expect(out.split('\n')).toHaveLength(3);
+  });
+
+  it('empty / null / undefined / non-array inputs return empty string', () => {
+    expect(renderFrameForPreview([])).toBe('');
+    expect(renderFrameForPreview(null)).toBe('');
+    expect(renderFrameForPreview(undefined)).toBe('');
+    expect(renderFrameForPreview('not an array')).toBe('');
+  });
+
+  it('non-string entries inside the array are coerced to empty (defensive)', () => {
+    // Mixed types — {E} on the strings should still substitute, garbage entries become empty.
+    const out = renderFrameForPreview(['  {E}  ', 42, null, '  end  ']);
+    expect(out.split('\n')).toEqual(['  ·  ', '', '', '  end  ']);
+  });
+});
+
 describe('PetSpeciesEditor — frames panel', () => {
   it('toggle expands the frames panel and shows three textareas', async () => {
     render(<PetSpeciesEditor />);
@@ -220,5 +249,19 @@ describe('PetSpeciesEditor — frames panel', () => {
     expect(btn.textContent).toContain('收起帧');
     fireEvent.click(btn);
     expect(btn.textContent).toContain('编辑帧');
+  });
+
+  it('live preview substitutes {E} with idle eye and updates as the textarea changes', async () => {
+    render(<PetSpeciesEditor />);
+    await waitFor(() => screen.getByTestId('species-row-duck'));
+    fireEvent.click(screen.getByTestId('species-frames-toggle-duck'));
+
+    const preview0 = screen.getByTestId('species-frame-preview-duck-0');
+    expect(preview0).toBeInTheDocument();
+    // Drive the textarea to known content with {E}; preview must show ·
+    fireEvent.change(screen.getByTestId('species-frame-duck-0'), {
+      target: { value: '( {E} )\n  ω  ' },
+    });
+    expect(preview0.textContent).toBe('( · )\n  ω  ');
   });
 });

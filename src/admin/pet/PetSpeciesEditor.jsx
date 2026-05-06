@@ -387,6 +387,19 @@ export default function PetSpeciesEditor() {
 const SPEC_LINES = 5;
 const SPEC_WIDTH = 12;
 
+// Task 40: render a frame's lines exactly the way AsciiPet does for the
+// `idle` state — the most neutral preview, since it's what visitors first
+// see when no interaction is in flight. The eye marker `·` mirrors
+// STATE_EYE.idle in src/components/pet/species.js (we don't import it
+// to avoid coupling the admin to the pet renderer's hydration cycle).
+const PREVIEW_EYE = '·';
+export function renderFrameForPreview(lines) {
+  if (!Array.isArray(lines)) return '';
+  return lines
+    .map((line) => (typeof line === 'string' ? line.replaceAll('{E}', PREVIEW_EYE) : ''))
+    .join('\n');
+}
+
 export function frameLayoutHint(lines) {
   if (!Array.isArray(lines)) return null;
   const issues = [];
@@ -459,6 +472,27 @@ function FramesPanel({ speciesId, frames, onChange }) {
                 spellCheck={false}
                 wrap="off"
               />
+              {/* Live preview: shows the frame as AsciiPet would render it
+                  for the `idle` state (eye marker · substituted in for {E}).
+                  Updates as the textarea changes. */}
+              <pre
+                data-testid={`species-frame-preview-${speciesId}-${idx}`}
+                style={{
+                  margin: '4px 0 0',
+                  padding: '4px 6px',
+                  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                  fontSize: 12,
+                  lineHeight: 1.1,
+                  color: 'var(--accent)',
+                  background: 'var(--bg-2)',
+                  border: '1px dashed var(--line)',
+                  borderRadius: 3,
+                  whiteSpace: 'pre',
+                  overflowX: 'auto',
+                  minHeight: '5em',
+                }}
+                aria-label={`帧 ${idx + 1} 预览`}
+              >{renderFrameForPreview(frame)}</pre>
               {hint && (
                 <div
                   data-testid={`species-frame-hint-${speciesId}-${idx}`}
