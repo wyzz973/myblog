@@ -791,7 +791,7 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 
 ### Task 21 — Pet species catalogue admin (extract `species.js` to backend)
 
-**Status:** completed (21a + 21b + 21c + 21d + 21e done)
+**Status:** completed (21a + 21b + 21c + 21d + 21e + 21f done)
 **Priority:** medium
 **Frontend evidence:** `src/components/pet/species.js` — 28 entries, hardcoded. `AsciiPet.jsx` reads frames + behavior from it. S7.
 **Owner problem:** adding/tweaking a species requires a code edit + redeploy.
@@ -814,7 +814,7 @@ Implementation note: `<SectionHead n="03" title="./posts" count="42 entries" lea
 **Snapshot location:** `/tmp/admin-rebuild/task-21/species-admin.png`, `/tmp/admin-rebuild/task-21/pet-bubble.png`
 **Commit message:** `feat(admin/pet): species catalogue editable from admin`
 **Definition of done:** standard checklist
-**Completed:** all five sub-tasks — `2b68fd6` (table+model+schema), `64184c7` (seed), `4b1af73` (CRUD router + public list), `35fc1b5` (admin editor tab), `ee79017` (`feat(pet): hydrate species catalogue from /api/pet/species (Task 21e)`).
+**Completed:** all six sub-tasks — `2b68fd6` (table+model+schema), `64184c7` (seed), `4b1af73` (CRUD router + public list), `35fc1b5` (admin editor tab), `ee79017` (frontend hydrates from API), `203b261` (`feat(admin/pet): inline ASCII frame editor in species panel (Task 21f)`).
 
 #### Task 21a — pet_species table + model + schema (DONE)
 
@@ -861,6 +861,15 @@ Implementation note: new `Species` tab in `src/admin/Pet.jsx` next to Behavior/P
 - **Commit:** `ee79017` (`feat(pet): hydrate species catalogue from /api/pet/species (Task 21e)`).
 
 Implementation note: removed the inline 27-species hardcode (SPECIES_BASE / PET_PROFILES / RARITY_STAT_BASE blocks — ~280 LOC of static data) from `src/components/pet/species.js`; replaced with `loadSpecies(fetch)` that calls `/api/pet/species` and mutates the exported `SPECIES` / `SPECIES_BEHAVIOR` objects in place. Importers get live bindings so the existing `import { SPECIES }` reads keep working without a rename. Added `useSpecies()` React hook returning `{ ready, species, behavior }`; AsciiPet gates render on `speciesReady` to avoid a missing-frame flash, PetPersonas shows "加载物种目录中…" until ready. `loadSpecies()` is kicked off in `src/main.jsx` so the fetch runs in parallel with React mount and usually lands well before AsciiPet's first commit. Adapter maps `*_zh` → `trait/personality/description` so consumers don't need updates.
+
+#### Task 21f — inline ASCII frame editor (DONE)
+
+- **Tests:** `npx vitest run src/admin/pet/PetSpeciesEditor.test.jsx` → 15/15 (10 prior + 5 new: frameLayoutHint canonical-pass + row-count + width + {E} substitution + null-safety; toggle expands/collapses; edit dirties the row + surfaces hint; save sends frames array via PATCH; toggle label flip). Combined `npx vitest run` → **252/252** (no Task 1-28 regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-21f/verify.py` → /admin/pet?tab=species → click `编辑帧 (3)` toggle → 3 frame textareas mount → fill frame 0 with marker → row dirty=true → 保存 → row dirty=false → API GET confirms marker persisted → cleanup restores original frames.
+- **Snapshots:** `/tmp/admin-rebuild/task-21f/frames-panel.png`.
+- **Commit:** `203b261` (`feat(admin/pet): inline ASCII frame editor in species panel (Task 21f)`).
+
+Implementation note: pure UI add — no schema or service change needed because the existing 21c PATCH already accepts a `frames` JSONB. The panel is collapsed by default per row; expanding renders 3 textareas (one per frame) joined-by-`\n`. New `setDraftFrame(id, idx, lines)` helper avoids cross-wiring with `setDraftField` so the frames array stays its own thing in the dirty diff. `frameLayoutHint(lines)` is exported (also unit-tested in isolation) so a future preview canvas can reuse the same width/height check; it's intentionally non-blocking — drift surfaces as a small accent-colored line under the textarea but doesn't reject the save. Dropped the static "N frames" badge in favor of the toggle button (which still shows the count). Defensive: `frameLayoutHint` no-ops on non-string entries, so a stale draft mid-edit can't crash the panel. Frame composer follow-ups: live preview side-panel with `{E}` → `STATE_EYE['idle']` substitution, drag-from-template frame import, and uploading a 5x12 ASCII mask from clipboard.
 
 ---
 
