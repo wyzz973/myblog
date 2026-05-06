@@ -1807,3 +1807,35 @@ Implementation note: account-row override + service env baseline gives owners bo
 - **Commit:** `a84c61b` (`feat(admin/comments): substring search across who+body (Task 44)`).
 
 Implementation note: ILIKE rather than full-text-search keeps the migration footprint zero — pg_trgm indexes are overkill for single-author comment volume, and ILIKE on a 4-digit comment table is a sub-millisecond seq scan. The same pattern can extend to posts/now/contacts admin pages later without churn. Whitespace-only `q` is treated as absent (rather than literal-space match) so URL-state encoders that pad with `%20` don't fall into a "matches every comment containing a space" trap. Server-side filter (not client-side) so pagination stays correct for large windows.
+
+---
+
+### Task 45 — text search across activity log
+
+**Status:** completed
+**Priority:** medium (operational gap — same as Task 44 but for event_log)
+**Frontend evidence:** `/admin/activity-log` had a type-chip filter + pagination but no way to find events touching a specific email / post id / token name without scrolling.
+**Owner problem:** "Show me every event involving wyzz973@gmail.com" / "Find the event for the API token I just revoked, by name".
+**Existing capability:** `/api/admin/activity?type=&limit=&offset=` (Task 5).
+**Gap:** no substring search.
+**Backend touch:**
+  - extend `activity.list_events` to accept `q: str | None`; ILIKE on `EventLog.actor OR EventLog.target` when present (NULL targets are silently skipped via OR semantics)
+  - whitespace-only `q` short-circuits to "no filter" (same convention as Task 44)
+  - extend `/api/admin/activity` router to forward `q`
+**Frontend API client:** `activityApi.list({...q})` propagates the new param.
+**UI / interaction:** new `<input type=search data-testid=activity-search>` above the type-chip row on `/admin/activity-log`. Clearing resets pagination via the same `pickQuery` reset path that `pickFilter` already used for chips.
+**Automated tests:** pytest +4 (q matches target / matches actor / blank q ignored / q ANDs with type filter).
+**Playwright acceptance path:**
+  1. seed 2 events with `T45-needle-foobar` target + `alice@example.com` actor
+  2. API: `q=T45-needle-foobar` returns 1 row; `q=alice@example.com` matches actor; `q=zzzzz-no-match-45` returns `[]`
+  3. UI: search input renders, filling shows matching row, clear empties input
+  4. Cleanup
+**Snapshot location:** `/tmp/admin-rebuild/task-45/activity-search.png`
+
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_admin_activity.py -k "_q_"` → 4/4.
+- **Vitest:** combined `npx vitest run` → **261/261** (no regression).
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-45/verify.py` PASSED — every step green.
+- **Snapshots:** `/tmp/admin-rebuild/task-45/activity-search.png`.
+- **Commit:** `3592e3f` (`feat(admin/activity): substring search across actor+target (Task 45)`).
+
+Implementation note: same ILIKE pattern as Task 44 — zero migration footprint, sub-millisecond on event_log volumes a single-author site emits. Search and chip filter compose with AND so an owner can narrow first by type then refine by actor (the test proves both predicates stick together). Search box sits *above* the chip row instead of beside it because chips wrap to multiple rows in dense logs and a sibling input would visually drift. Same `data-testid=activity-search` / `activity-search-clear` selector pattern as Comments search keeps Playwright tooling consistent.
