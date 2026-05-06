@@ -1,12 +1,13 @@
 """Sitemap + Atom feed for SEO and RSS readers (Task 37).
 
-Exposes two pure-XML endpoints driven entirely by Post rows:
+Exposes three SEO endpoints driven entirely by Post rows:
   - GET /api/sitemap.xml  — Sitemap protocol 0.9 listing
   - GET /api/feed.xml     — Atom 1.0 feed of recent published posts
+  - GET /api/robots.txt   — Allow-all robots policy + Sitemap pointer (Task 38)
 
-Both filter to `status='published'` and `private=False`. The site host
-comes from `settings.public_site_base_url` so the URLs are absolute and
-crawler-friendly.
+The XML endpoints filter to `status='published'` and `private=False`.
+The site host comes from `settings.public_site_base_url` so the URLs are
+absolute and crawler-friendly.
 """
 from __future__ import annotations
 
@@ -123,3 +124,27 @@ async def atom_feed(s: AsyncSession = Depends(get_session)) -> Response:
         )
     parts.append("</feed>")
     return _xml("".join(parts))
+
+
+@router.get("/robots.txt")
+async def robots_txt() -> Response:
+    """Allow-all crawl policy with explicit Sitemap pointer (Task 38).
+
+    Disallows the admin API surface so crawlers don't waste budget on 401
+    pages. The sitemap location uses the absolute site host so deploys
+    behind a reverse proxy still get the right URL — even when this
+    endpoint is mounted under /api, the sitemap reference points at the
+    canonical resource.
+    """
+    settings = get_settings()
+    base = settings.public_site_base_url.rstrip("/")
+    body = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /api/admin/\n"
+        f"Sitemap: {base}/api/sitemap.xml\n"
+    )
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="text/plain; charset=utf-8",
+    )

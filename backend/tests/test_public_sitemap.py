@@ -115,3 +115,27 @@ async def test_sitemap_no_published_posts_returns_empty_urlset(client):
     # urlset root with at least one <url> child (the site root)
     assert root.tag.endswith("urlset")
     assert len(list(root)) >= 1
+
+
+# Task 38: robots.txt + feed-discovery
+
+
+async def test_robots_txt_allows_crawl_with_sitemap_pointer(client):
+    r = await client.get("/api/robots.txt")
+    assert r.status_code == 200, r.text
+    ct = r.headers["content-type"]
+    assert "text/plain" in ct, ct
+    body = r.text
+    # Allow-by-default with admin API blocked
+    assert "User-agent: *" in body
+    assert "Allow: /" in body
+    assert "Disallow: /api/admin/" in body
+    # Sitemap absolute pointer
+    assert "Sitemap: " in body
+    assert "/api/sitemap.xml" in body
+
+
+async def test_robots_txt_publicly_accessible(client):
+    """Crawlers don't sign in — same as sitemap and feed."""
+    r = await client.get("/api/robots.txt")
+    assert r.status_code == 200
