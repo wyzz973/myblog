@@ -1932,3 +1932,23 @@ Implementation note: 60-second poll cadence matches the dashboard's freshness ex
 - **Commit:** `97a6672` (`feat(admin/layout): generalize sidebar badges; add posts drafts (Task 48)`).
 
 Implementation note: `pickNavCounters` is a pure function so the unit test can pin behavior without rendering Layout. This makes adding a third counter (e.g., flagged comments, lockout-active sessions) a one-line change + a new test case. Inventory fields (published-post count, media count) intentionally omit from the map — sidebar badges should signal "this needs attention" not "you have 47 things". Renders zero counts as silent — same convention as Task 47 — so the sidebar stays calm during normal periods.
+
+---
+
+### Task 49 — auto-suggest next post number for new posts ✅
+
+**Frontend dependency:** the new-post template in `PostEditor.jsx` hardcoded `n: "001"`. After the owner created a first post the second invocation tripped the unique constraint and showed a 409 — the template's job was supposed to be "just hit save" but it required manual editing every time.
+
+**Backend:** `GET /api/admin/posts/next-n` returns `{n}` where n = max(int(n))+1 zero-padded to 3 digits (or stringified raw int if it overflows past 999). Skips rows whose `n` isn't numeric. Declared before `/posts/{post_id}` so the literal slug isn't swallowed by the path parameter (same precedent as `/posts/render-preview`).
+
+**Frontend:** `postsApi.nextN()` helper; `PostEditor.jsx` fetches on isNew mount and substitutes the value into the markdown template via `setFmField`. Substitutes only when the textarea still holds the pristine template — draft recovery and quick paste both win.
+
+**Tests:** added 4 pytest cases (status-code shape, increments after seed, unauth → 401, non-numeric n filtered).
+
+- **Pytest:** `pytest tests/test_admin_posts.py` → **18/18** (4 new + 14 prior).
+- **Vitest:** full sweep `npx vitest run` → **265/265** (no regression).
+- **Playwright:** `/Users/sd3/anaconda3/bin/python /tmp/admin-rebuild/task-49/verify.py` PASSED — API smoke (200 / 401), UI smoke shows the `n: "013"` line in the editor textarea after clicking 新建文章.
+- **Snapshot:** `/tmp/admin-rebuild/task-49/post-editor-suggested-n.png`.
+- **Commit:** `757eaf1` (`feat(admin/posts): auto-suggest next post number on new (Task 49)`).
+
+Implementation note: the substitute-only-if-pristine guard matters because the next-n network round-trip can race against the user starting to type or recovering a stale draft. Comparing to the literal `NEW_POST_TEMPLATE` constant is a cheap and exact way to detect "still untouched" without a separate dirty flag — once the user types any character the markdown won't equal the constant any more.
