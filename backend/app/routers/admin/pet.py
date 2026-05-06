@@ -114,10 +114,17 @@ async def list_conversations(
     cursor: str | None = Query(default=None),
     species: str | None = Query(default=None, max_length=32),
     since: datetime | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=64),
     _admin: Account = Depends(current_admin),
     s: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    """List conversations grouped by visitor_hash, ordered by last_msg_at desc."""
+    """List conversations grouped by visitor_hash, ordered by last_msg_at desc.
+
+    Task 46: ``q`` does a case-insensitive prefix match on visitor_hash —
+    owners typically paste a hash they saw in logs / the export filename
+    (which uses a 12-char prefix) and want to land on that visitor.
+    Whitespace-only ``q`` is ignored.
+    """
     # Step 1: aggregate query — visitor_hash, max(created_at), count(id)
     stmt = (
         select(
@@ -131,6 +138,10 @@ async def list_conversations(
         stmt = stmt.where(PetMessage.species == species)
     if since:
         stmt = stmt.where(PetMessage.created_at >= since)
+    if q and q.strip():
+        # Prefix match — visitor_hash columns are opaque hex strings, so a
+        # `LIKE 'prefix%'` is what owners actually want (and is cheap).
+        stmt = stmt.where(PetMessage.visitor_hash.ilike(f"{q.strip()}%"))
 
     # Cursor logic: filter rows older than (ts, vh) using HAVING (compound cursor).
     if cursor:

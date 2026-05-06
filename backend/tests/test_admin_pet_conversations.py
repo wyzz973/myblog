@@ -134,6 +134,60 @@ async def test_conversations_filter_by_species(
     assert any(it["visitor_hash"] == "bob000000000000b" for it in seeded)
 
 
+# Task 46: visitor-hash prefix search
+
+
+async def test_conversations_q_prefix_match(client, admin_token, seed_pet_messages):
+    """q matches the start of visitor_hash; case-insensitive."""
+    r = await client.get(
+        "/api/admin/pet/conversations?q=alice",
+        headers=_hdr(admin_token),
+    )
+    items = r.json()["items"]
+    assert any(it["visitor_hash"].startswith("alice") for it in items)
+    # bob/carol must NOT appear when q='alice'
+    assert not any(it["visitor_hash"].startswith("bob") for it in items)
+    assert not any(it["visitor_hash"].startswith("carol") for it in items)
+
+
+async def test_conversations_q_blank_ignored(client, admin_token, seed_pet_messages):
+    r = await client.get(
+        "/api/admin/pet/conversations?q=%20%20",
+        headers=_hdr(admin_token),
+    )
+    items = r.json()["items"]
+    seeded = [it for it in items
+              if it["visitor_hash"] in
+              {"alice000000000aa", "bob000000000000b", "carol00000000000"}]
+    assert len(seeded) == 3, seeded
+
+
+async def test_conversations_q_combines_with_species(client, admin_token, seed_pet_messages):
+    """q + species AND together — only `bob` (dragon prefix) survives."""
+    r = await client.get(
+        "/api/admin/pet/conversations?q=bob&species=dragon",
+        headers=_hdr(admin_token),
+    )
+    items = r.json()["items"]
+    seeded = [it for it in items
+              if it["visitor_hash"] in
+              {"alice000000000aa", "bob000000000000b", "carol00000000000"}]
+    assert len(seeded) == 1
+    assert seeded[0]["visitor_hash"].startswith("bob")
+
+
+async def test_conversations_q_no_match(client, admin_token, seed_pet_messages):
+    r = await client.get(
+        "/api/admin/pet/conversations?q=zzzzzz",
+        headers=_hdr(admin_token),
+    )
+    items = r.json()["items"]
+    seeded = [it for it in items
+              if it["visitor_hash"] in
+              {"alice000000000aa", "bob000000000000b", "carol00000000000"}]
+    assert seeded == []
+
+
 async def test_conversations_pagination(
     client, admin_token, seed_pet_messages,
 ):

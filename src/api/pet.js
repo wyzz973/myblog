@@ -69,6 +69,7 @@ export const apiPet = {
     if (params.species) qs.set('species', params.species);
     if (params.since) qs.set('since', params.since);
     if (params.limit) qs.set('limit', String(params.limit));
+    if (params.q) qs.set('q', params.q);  // Task 46: visitor-hash prefix search
     const suffix = qs.toString();
     return request(`/pet/conversations${suffix ? '?' + suffix : ''}`);
   },

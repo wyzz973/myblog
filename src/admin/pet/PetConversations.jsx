@@ -17,6 +17,7 @@ export default function PetConversations() {
   const [items, setItems] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [species, setSpecies] = useState('');
+  const [hashQuery, setHashQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(false);
@@ -27,6 +28,7 @@ export default function PetConversations() {
       const params = {};
       if (!reset && cursor) params.cursor = cursor;
       if (species) params.species = species;
+      if (hashQuery.trim()) params.q = hashQuery.trim();
       const r = await apiPet.listConversations(params);
       setItems((prev) => (reset ? r.items : [...prev, ...r.items]));
       setCursor(r.next_cursor);
@@ -42,14 +44,14 @@ export default function PetConversations() {
   useEffect(() => {
     loadPage(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [species]);
+  }, [species, hashQuery]);
 
   return (
     <div className="form pad">
       <p className="hint">
         按访客聚合宠物助手对话，点击任一行查看完整消息时间线。
       </p>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <label>
           物种：&nbsp;
           <input
@@ -60,6 +62,24 @@ export default function PetConversations() {
             style={{ width: 120 }}
           />
         </label>
+        <label>
+          访客哈希前缀：&nbsp;
+          <input
+            type="search"
+            value={hashQuery}
+            placeholder="如 388cd0b07caa"
+            onChange={(e) => setHashQuery(e.target.value)}
+            style={{ width: 200 }}
+            data-testid="conv-search"
+          />
+        </label>
+        {hashQuery && (
+          <button
+            type="button"
+            onClick={() => setHashQuery('')}
+            data-testid="conv-search-clear"
+          >清除</button>
+        )}
       </div>
       {error && <div className="err">{error}</div>}
       {loading && items.length === 0 && <div className="hint">加载中...</div>}
