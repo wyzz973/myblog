@@ -177,6 +177,7 @@ export default function Posts() {
           />
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <ExportTarButton />
           <button
             type="button"
             style={styles.btnGhost}
@@ -530,6 +531,36 @@ const styles = {
   },
   dim: { color: 'var(--fg-4)' },
 };
+
+// Task 42: download every post as a tar archive — backup / migration tool.
+// Pairs with the bulk-upload import; archive entries round-trip through
+// /posts/upload exactly.
+function ExportTarButton() {
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  async function onClick() {
+    setBusy(true);
+    try {
+      const { filename } = await postsApi.downloadTar();
+      toast.success(`已导出 ${filename}`);
+    } catch (e) {
+      toast.error(`导出失败：${e?.detail || e?.message || '未知错误'}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button
+      type="button"
+      style={styles.btnGhost}
+      onClick={onClick}
+      disabled={busy}
+      data-testid="posts-export-tar"
+    >
+      {busy ? '导出中…' : '导出 tar'}
+    </button>
+  );
+}
 
 // Task 30: bulk upload of .md files. Drag-drop or file picker; per-file
 // row with status icon. Posts the multipart batch via postsApi.bulkUpload

@@ -109,6 +109,33 @@ export const postsApi = {
     err.detail = detail;
     throw err;
   },
+  // Task 42: download every post as a single tar archive — round-trips
+  // through bulkUpload for full backup/restore.
+  async downloadTar() {
+    const token = getToken();
+    const r = await fetch(`${BASE}/api/admin/posts.tar`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) {
+      const detail = await r.text().catch(() => `${r.status}`);
+      const err = new Error(`${r.status} ${detail}`);
+      err.status = r.status;
+      throw err;
+    }
+    const blob = await r.blob();
+    const cd = r.headers.get('content-disposition') || '';
+    const m = cd.match(/filename="([^"]+)"/);
+    const filename = m ? m[1] : 'posts.tar';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { filename };
+  },
 };
 
 export default postsApi;

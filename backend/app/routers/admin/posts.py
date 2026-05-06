@@ -1,9 +1,13 @@
+import io
+import tarfile
+from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Response, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db import get_session
 from app.deps import current_admin, require_scope
@@ -222,4 +226,98 @@ async def upload_md(
     return JSONResponse(
         status_code=status_code,
         content={"results": results, "summary": {"total": len(results), "ok": ok, "failed": failed}},
+    )
+
+
+# --- Task 42: bulk post export to tar archive ---
+
+
+def _serialize_post_to_md(p: Post) -> str:
+    """Render a Post as a frontmatter-prefixed markdown document.
+
+    The frontmatter shape mirrors ``PostFrontmatter`` so the output of
+    /posts/export.tar can be fed straight back through the bulk-import
+    upload endpoint as a round-trip backup format.
+
+    Strings that may contain colons / quotes are emitted as block scalars
+    (``key: |``) so YAML stays unambiguous; simple strings stay inline.
+    """
+    def _scalar(value: str) -> str:
+        # If the string contains characters YAML would mis-parse, dump it
+        # as a `|` block scalar. Otherwise inline-quote it.
+        if "\n" in value or value.startswith(("'", '"', "[", "{", "&", "*", "?", "|", ">", "!", "%", "#", "@", "`")):
+            indented = "\n  ".join(value.split("\n"))
+            return f"|\n  {indented}"
+        # Always quote — defends against colons, leading dashes, etc.
+        escaped = value.replace('"', '\\"')
+        return f'"{escaped}"'
+
+    lines: list[str] = ["---"]
+    lines.append(f'id: "{p.id}"')
+    lines.append(f'n: "{p.n}"')
+    lines.append(f"title: {_scalar(p.title)}")
+    if p.subtitle:
+        lines.append(f"subtitle: {_scalar(p.subtitle)}")
+    # Tag slug, not id — the import pipeline resolves slug → tag_id.
+    tag_slug = p.tag.slug if p.tag else ""
+    lines.append(f'tag: "{tag_slug}"')
+    lines.append(f"date: {p.date.isoformat()}")
+    if p.read:
+        lines.append(f'read: "{p.read}"')
+    lines.append(f'lang: "{p.lang}"')
+    if p.summary:
+        lines.append(f"summary: {_scalar(p.summary)}")
+    if p.tldr:
+        lines.append(f"tldr: {_scalar(p.tldr)}")
+    lines.append(f'status: "{p.status}"')
+    if p.scheduled_at is not None:
+        lines.append(f"scheduled_at: {p.scheduled_at.isoformat()}")
+    lines.append(f"featured: {'true' if p.featured else 'false'}")
+    lines.append(f"private: {'true' if p.private else 'false'}")
+    lines.append(f"comments_enabled: {'true' if p.comments_enabled else 'false'}")
+    lines.append("---")
+    lines.append("")
+    lines.append(p.body_md or "")
+    return "\n".join(lines)
+
+
+@router.get("/posts.tar")
+async def export_all_posts(
+    _admin: Account = Depends(current_admin),
+    s: AsyncSession = Depends(get_session),
+) -> Response:
+    """Stream every post (regardless of status / private flag) as a single
+    tar archive. Each entry is `{post_id}.md` with frontmatter that round-
+    trips through the existing /posts/upload endpoint.
+
+    No pagination — owner is taking a full backup. With private/draft
+    posts included, archive size scales linearly with content; for
+    single-author scale this is fine.
+    """
+    rows = (
+        await s.execute(
+            select(Post).options(selectinload(Post.tag)).order_by(Post.date.desc(), Post.id)
+        )
+    ).scalars().all()
+
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        for p in rows:
+            md = _serialize_post_to_md(p)
+            data = md.encode("utf-8")
+            info = tarfile.TarInfo(name=f"{p.id}.md")
+            info.size = len(data)
+            # Posts have an `updated_at` via TimestampMixin — use that as
+            # the tar entry mtime for reproducible ordering.
+            info.mtime = int((p.updated_at or datetime.now(UTC)).timestamp())
+            tar.addfile(info, io.BytesIO(data))
+    body = buf.getvalue()
+    stamp = datetime.now(UTC).strftime("%Y%m%d")
+    filename = f"posts-{stamp}-{len(rows)}items.tar"
+    return Response(
+        content=body,
+        media_type="application/x-tar",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
     )

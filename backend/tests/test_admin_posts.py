@@ -161,3 +161,82 @@ async def test_post_detail_includes_lifecycle_flags(client, auth):
         assert body["scheduled_at"] is None
     finally:
         await client.delete("/api/admin/posts/test-post-1", headers=auth)
+
+
+# --- Task 42: bulk export to tar archive ---
+
+
+async def test_export_tar_returns_tar_with_seeded_post(client, auth):
+    """Seed a post via create, export, assert the post appears in the tar."""
+    import io
+    import tarfile
+    # Clean slate for our seed id (idempotent if missing).
+    await client.delete("/api/admin/posts/t42-export", headers=auth)
+    seed = GOOD_MD.replace("id: test-post-1", "id: t42-export").replace(
+        "title: Test post", "title: t42 export fixture"
+    )
+    create = await client.post(
+        "/api/admin/posts", json={"markdown": seed}, headers=auth,
+    )
+    assert create.status_code == 201, create.text
+    try:
+        r = await client.get("/api/admin/posts.tar", headers=auth)
+        assert r.status_code == 200, r.text
+        ct = r.headers["content-type"]
+        assert "application/x-tar" in ct, ct
+        cd = r.headers.get("content-disposition", "")
+        assert "posts-" in cd and "items.tar" in cd, cd
+
+        tar = tarfile.open(fileobj=io.BytesIO(r.content), mode="r")
+        names = tar.getnames()
+        assert "t42-export.md" in names, names
+        # Frontmatter round-trips through the upload endpoint shape
+        member = tar.extractfile("t42-export.md")
+        assert member is not None
+        body = member.read().decode("utf-8")
+        # Frontmatter delimiters present
+        assert body.startswith("---\n"), body[:50]
+        assert "\n---\n" in body, "missing closing frontmatter delimiter"
+        # Required fields present
+        for needle in ('id: "t42-export"', 'tag: "devtools"', 'status: "published"'):
+            assert needle in body, f"missing {needle!r} in body:\n{body[:500]}"
+        # Body content preserved
+        assert "## Heading" in body
+    finally:
+        await client.delete("/api/admin/posts/t42-export", headers=auth)
+
+
+async def test_export_tar_round_trips_through_upload(client, auth):
+    """Export a post, delete it from the DB, re-upload from the tar, see the
+    content match. Validates the export → import round-trip."""
+    import io
+    import tarfile
+    await client.delete("/api/admin/posts/t42-roundtrip", headers=auth)
+    seed = GOOD_MD.replace("id: test-post-1", "id: t42-roundtrip").replace(
+        "title: Test post", "title: roundtrip"
+    )
+    await client.post("/api/admin/posts", json={"markdown": seed}, headers=auth)
+    try:
+        r = await client.get("/api/admin/posts.tar", headers=auth)
+        tar = tarfile.open(fileobj=io.BytesIO(r.content), mode="r")
+        member = tar.extractfile("t42-roundtrip.md")
+        md_bytes = member.read()
+
+        # Delete and re-upload from the captured tar member.
+        await client.delete("/api/admin/posts/t42-roundtrip", headers=auth)
+        files = [("files", ("t42-roundtrip.md", md_bytes, "text/markdown"))]
+        up = await client.post("/api/admin/posts/upload", files=files, headers=auth)
+        assert up.status_code == 201, up.text
+        body = up.json()
+        assert body["summary"]["ok"] == 1, body
+        # And the post is back, with the same title.
+        det = await client.get("/api/admin/posts/t42-roundtrip", headers=auth)
+        assert det.status_code == 200
+        assert det.json()["title"] == "roundtrip"
+    finally:
+        await client.delete("/api/admin/posts/t42-roundtrip", headers=auth)
+
+
+async def test_export_tar_requires_session(client):
+    r = await client.get("/api/admin/posts.tar")
+    assert r.status_code == 401
