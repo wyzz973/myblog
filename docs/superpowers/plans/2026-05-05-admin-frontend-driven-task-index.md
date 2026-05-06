@@ -1158,7 +1158,7 @@ Implementation note: simple ↑/↓ arrow buttons instead of HTML5 drag-and-drop
 
 ### Task 28 — Account: email change
 
-**Status:** in-progress (28a backend + 28b UI form done; magic-link confirm flow still pending)
+**Status:** completed (28a backend + 28b UI form + 28c magic-link confirm done)
 **Priority:** medium
 **Frontend evidence:** Profile page reads-only email; account login uses email.
 **Owner problem:** owner cannot rotate the admin email.
@@ -1197,6 +1197,19 @@ Implementation note: `EmailChangeRequest{current_password, new_email: EmailStr}`
 - **Commit:** `5df5684` (`feat(admin/account): change-email form on Account tab (Task 28b)`).
 
 Implementation note: `apiAccount.changeEmail(currentPassword, newEmail)` posts to `/api/admin/account/email` and returns `{email}`. Account.jsx adds a new `<EmailSection>` Card between MagicLink and Password, mirroring the password-change form layout (current_password + new_email + submit). All inputs carry `data-testid=email-change-{role}` for stable test selectors. Success message tells the user their next login uses the new address. The current JWT keeps working because access tokens claim `sub` (account id) not email; only the login form has to use the new value. Magic-link confirmation (28c) is still pending — current flow trusts the password gate alone, which is fine for a single-owner site but could be tightened with email-roundtrip later.
+
+#### Task 28c — magic-link confirm flow (DONE)
+
+- **Migration:** `0018_pending_email_change` adds `pending_email_change(token_hash PK, account_id FK CASCADE, new_email, expires_at, consumed_at, requested_ip, user_agent, created_at)`.
+- **Backend:** new `pending_email_change` service mirrors `magic_link.consume()`'s atomic single-use pattern — `WHERE consumed_at IS NULL AND expires_at > now()` predicate on the rotation UPDATE so concurrent confirms can't both succeed. Two new endpoints: `POST /api/admin/account/email/request {current_password, new_email}` (session-only, password-gated, mails the link, does NOT rotate) and `POST /api/admin/account/email/confirm {token}` (public — token IS the auth, rotates and writes `account.email.changed` event with `via=magic_link`). New `email_svc.send_email_change_confirm` template; new `public_site_base_url` config (defaults to dev frontend `:5173`) so the link points at the SPA's confirm page rather than the API host. The legacy one-step `POST /account/email` endpoint stays for backwards compat (its tests still pass) but the UI no longer calls it.
+- **Backend tests:** `./.venv/bin/python -m pytest tests/test_admin_email_change.py` → 13/13 (6 prior + 6 new + 1 unchanged: 401 unauth on /request, 400 wrong password, request does NOT rotate immediately, end-to-end confirm rotates + login flips, 400 invalid token, 400 on token replay).
+- **Frontend:** `apiAccount.requestEmailChange(pw, new)` + `apiAccount.confirmEmailChange(token)` (no bearer — the token IS auth). New route `/admin/account/email-confirm?token=...` mounted PUBLIC (outside `RequireAuth`) — owner often clicks the link from a different browser/device where they're not logged in. New `<EmailConfirm>` page auto-submits and renders success / error / pending states. Existing `<EmailSection>` form rewired to call `/request` and shows "已发送确认链接到 …, 15 分钟内点开链接才会真正切换邮箱" instead of immediate rotation. New `data-testid=email-change-sent` (replaces `email-change-done`).
+- **Vitest:** combined `npx vitest run` → **238/238** (no Task 1-26 regression). EmailConfirm itself isn't unit-tested separately — Playwright covers the full token round-trip end-to-end.
+- **Playwright:** `/tmp/.audit-env/bin/python /tmp/admin-rebuild/task-28c/verify.py` → login → /admin/settings → 账号安全 tab → submit form for `wyzz973+t28c@gmail.com` → UI shows `已发送确认链接到 …` (no rotation yet) → issue raw token via in-process backend service (dev SMTP is null) → visit `/admin/account/email-confirm?token=<raw>` → success state with new email → login under new address returns 200 → restore.
+- **Snapshots:** `/tmp/admin-rebuild/task-28c/confirm-success.png`.
+- **Commit:** `e6d7619` (`feat(admin/account): magic-link confirm for email change (Task 28c)`).
+
+Implementation note: hit a classic StrictMode + side-effect bug — the EmailConfirm useEffect was firing the confirm POST twice (StrictMode mounts → unmounts → remounts in dev), and the second call saw the row already consumed → 400 → page stuck on "正在确认…". Fix is a `useRef` keyed by token to dedupe + dropping the `alive` cleanup flag (so the surviving mount's setState wins). The server's idempotent path `if new_email == acct.email.lower()` also helps — when the SAME confirm fires twice in rapid succession before the first commit lands, the second consume() returns None but the UI catches the success state from the first call. Backwards compat: legacy POST `/account/email` still rotates immediately if called (preserved for any admin scripts that hit it directly); the UI itself uses the magic-link path now.
 
 ---
 
