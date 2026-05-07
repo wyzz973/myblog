@@ -2251,7 +2251,12 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .admin-pet input[type="text"],
 .admin-pet input[type="number"],
-.admin-pet textarea {
+.admin-pet input[type="search"],
+.admin-pet input[type="email"],
+.admin-pet input[type="url"],
+.admin-pet input:not([type]),
+.admin-pet textarea,
+.admin-pet select {
   background: var(--bg-3);
   color: var(--fg);
   border: 1px solid var(--line);
@@ -2265,13 +2270,25 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   box-sizing: border-box;
   min-width: 0;
 }
+.admin-pet select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--fg-3) 50%),
+                    linear-gradient(135deg, var(--fg-3) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 24px;
+  cursor: pointer;
+}
 .admin-pet textarea {
   resize: vertical;
   min-height: 60px;
   font-family: 'JetBrains Mono', monospace;
 }
 .admin-pet input:focus,
-.admin-pet textarea:focus {
+.admin-pet textarea:focus,
+.admin-pet select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 25%, transparent);
 }
@@ -2403,7 +2420,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .admin-pet .species-grid label {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 2px;
+  margin-right: 0;
   font-size: 12px;
   color: var(--fg-2);
 }
