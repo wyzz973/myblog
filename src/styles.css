@@ -2394,15 +2394,38 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   min-height: 60px;
 }
 
-/* PetSpeciesEditor (Task 21d) — per-row editor inside the Species tab. */
+/* PetSpeciesEditor (Task 21d) — collapsible per-row editor in Species tab.
+   Each row is a <details>: closed shows a one-line summary, open reveals
+   the full grid + frames panel. The new-species form remains a fieldset
+   (always-expanded). */
+.admin-pet .species-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.admin-pet .species-toolbar .species-filter {
+  flex: 1 1 240px;
+  max-width: 380px;
+  min-width: 0;
+}
+.admin-pet .species-group-summary {
+  font-size: 12px;
+  color: var(--fg-2);
+  padding: 4px 0;
+}
+
 .admin-pet .species-row {
   border: 1px solid var(--line);
   border-radius: 4px;
-  margin: 8px 0;
-  padding: 8px 12px;
+  margin: 6px 0;
   background: var(--bg-2);
+  overflow: hidden;
 }
 .admin-pet .species-row[data-dirty="true"] { border-color: var(--accent); }
+
+/* New-species fieldset: keep legend chrome from older form pattern. */
+.admin-pet fieldset.species-row { padding: 8px 12px; }
 .admin-pet .species-row legend {
   font-size: 12px;
   color: var(--fg-3);
@@ -2412,23 +2435,129 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   color: var(--accent);
   font-family: 'JetBrains Mono', monospace;
 }
+
+/* Collapsible row summary line. */
+.admin-pet details.species-row > summary.species-row-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font-size: 13px;
+  color: var(--fg-2);
+}
+.admin-pet details.species-row > summary.species-row-summary::-webkit-details-marker {
+  display: none;
+}
+.admin-pet details.species-row > summary.species-row-summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 0.9em;
+  color: var(--fg-3);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.admin-pet details.species-row[open] > summary.species-row-summary::before {
+  content: '▾';
+}
+.admin-pet details.species-row[open] > summary.species-row-summary {
+  border-bottom: 1px solid var(--line);
+}
+.admin-pet .species-row-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.admin-pet .species-row-id {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.admin-pet .species-row-name {
+  color: var(--fg);
+  font-size: 13px;
+  flex-shrink: 0;
+  min-width: 4em;
+}
+.admin-pet .species-row-meta {
+  color: var(--fg-3);
+  font-size: 11px;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.admin-pet .species-row-dirty {
+  color: var(--accent);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* The grid only mounts inside an opened <details>; pad it to align with
+   the summary's gutter. */
+.admin-pet details.species-row > .species-grid,
+.admin-pet fieldset.species-row > .species-grid {
+  padding: 12px 12px 4px;
+}
+.admin-pet fieldset.species-row > .species-grid { padding: 4px 0 0; }
+
 .admin-pet .species-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px 12px;
+  gap: 10px 14px;
 }
-.admin-pet .species-grid label {
+/* Wide screens: pack the four header fields onto one row instead of two,
+   so each opened species takes about half the vertical space. */
+@media (min-width: 1280px) {
+  .admin-pet .species-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .admin-pet .species-grid .span-2 { grid-column: 1 / -1; }
+}
+.admin-pet .species-grid .span-2 { grid-column: 1 / -1; }
+
+/* Field cell: title text and input as siblings. The title is a
+   <label htmlFor>, so clicking the title focuses the input — but the
+   surrounding cell padding does NOT, which is the bug we're fixing. */
+.admin-pet .species-field {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-  margin-right: 0;
+  gap: 3px;
+  min-width: 0;
+}
+.admin-pet .species-field-title {
+  display: inline-block;
+  width: max-content;
+  margin: 0;
+  font-size: 12px;
+  color: var(--fg-3);
+  cursor: text;
+}
+.admin-pet .species-grid input[type="color"] { width: 80px; height: 28px; padding: 0; }
+.admin-pet .species-grid input[type="number"] { width: 100%; max-width: 140px; }
+.admin-pet .species-grid textarea { min-height: 48px; }
+
+.admin-pet .species-row-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 12px;
+  flex-wrap: wrap;
+}
+.admin-pet .species-row-visible {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
   font-size: 12px;
   color: var(--fg-2);
 }
-.admin-pet .species-grid label.span-2 { grid-column: span 2; }
-.admin-pet .species-grid input[type="color"] { width: 80px; height: 28px; padding: 0; }
-.admin-pet .species-grid textarea { min-height: 48px; }
 
 /* PetBehavior — providers comma-edit field & advanced details */
 .admin-pet .form > fieldset > input[type="text"] {

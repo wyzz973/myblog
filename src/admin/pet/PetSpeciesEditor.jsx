@@ -1,16 +1,18 @@
 // Owner-facing editor for the pet species catalogue (Task 21d).
 //
 // Stays consistent with the rest of the pet tabs: rarity-grouped <details>
-// sections, terse inline forms, no SaaS-template chrome. Frame editing is
-// intentionally not wired up here — frames are a 3-frame ASCII spec with
-// strict layout rules that deserve a dedicated frame composer; for now we
-// surface a "N frames" badge and let owner edit frames via the API. Adding
-// the composer is a follow-up task (likely 21f).
+// sections, terse inline forms, no SaaS-template chrome. Frame editing
+// lives inline in an expandable panel per row.
 //
 // Why per-row save instead of bulk-save like the other Pet tabs: the
 // catalogue is N rows owned independently. A single Save would lose the
 // "edit one row, ignore others" affordance and surface 409 conflicts in
 // confusing ways.
+//
+// Why each row is itself a <details> (collapsed by default): there are
+// ~30 species, each with ~7 fields and a frames panel. Showing them all
+// expanded forces the owner to scroll past everything to find the one
+// they want to edit. Collapsed summaries fit ~30 rows on one screen.
 
 import { useEffect, useState } from 'react';
 import { apiPetSpecies } from '../../api/petSpecies.js';
@@ -52,6 +54,22 @@ function emptyDraft() {
   };
 }
 
+// Title-text + input siblings (NOT label-wraps-input). Why: a wrapping
+// <label> turns its entire bounding box into a click-target for the
+// input. With a stretched flex column inside a wide grid cell, that
+// means clicking on empty space below the input — or anywhere in the
+// cell — opens dropdowns / focuses inputs by accident. Using
+// <label htmlFor> as a sibling keeps the click-target restricted to
+// the title text itself while preserving accessibility.
+function Field({ id, label, span, children }) {
+  return (
+    <div className={`species-field${span ? ' span-2' : ''}`}>
+      <label className="species-field-title" htmlFor={id}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
 export default function PetSpeciesEditor() {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(null);
@@ -60,6 +78,8 @@ export default function PetSpeciesEditor() {
   const [drafts, setDrafts] = useState({});       // id -> partial overrides
   const [newDraft, setNewDraft] = useState(null); // null when add-form closed
   const [framesOpenId, setFramesOpenId] = useState(null); // id of expanded frames panel
+  const [openIds, setOpenIds] = useState(() => new Set()); // ids of expanded species rows
+  const [filter, setFilter] = useState('');
   const confirm = useConfirm();
 
   useEffect(() => {
@@ -92,6 +112,15 @@ export default function PetSpeciesEditor() {
   }
 
   const dirty = (id) => Boolean(drafts[id] && Object.keys(drafts[id]).length);
+
+  function toggleOpen(id, nextOpen) {
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (nextOpen) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
 
   async function saveRow(id) {
     if (!dirty(id)) return;
@@ -128,6 +157,11 @@ export default function PetSpeciesEditor() {
         const { [id]: _, ...rest } = prev;
         return rest;
       });
+      setOpenIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     } catch (e) {
       setError(`${id}: ${e?.detail || e?.message || 'delete failed'}`);
     } finally {
@@ -143,6 +177,9 @@ export default function PetSpeciesEditor() {
       const created = await apiPetSpecies.create(newDraft);
       setRows((prev) => [...prev, created]);
       setNewDraft(null);
+      // Auto-expand the freshly created row so the owner can keep editing
+      // its long-form fields without hunting for it in the list.
+      setOpenIds((prev) => new Set([...prev, created.id]));
     } catch (e) {
       setError(`new: ${e?.detail || e?.message || 'create failed'}`);
     } finally {
@@ -156,14 +193,22 @@ export default function PetSpeciesEditor() {
       : <div className="pad">loading…</div>;
   }
 
-  const groups = groupByRarity(rows);
+  const q = filter.trim().toLowerCase();
+  const filteredRows = q
+    ? rows.filter((r) =>
+        r.id.toLowerCase().includes(q) ||
+        (r.name || '').toLowerCase().includes(q) ||
+        (r.trait_zh || '').toLowerCase().includes(q),
+      )
+    : rows;
+  const groups = groupByRarity(filteredRows);
 
   return (
     <div className="form pad" data-testid="species-editor">
       <p className="hint">
-        管理 AsciiPet 物种目录。按稀有度分组；每行独立保存。隐藏（visible=false）
-        的物种不会出现在公共 <code>/api/pet/species</code>，但已分配的访客 cookie
-        仍能继续使用，直到被重新分配。
+        管理 AsciiPet 物种目录。按稀有度分组；每行点击展开后独立保存。
+        隐藏 (visible=false) 的物种不会出现在公共 <code>/api/pet/species</code>，
+        但已分配的访客 cookie 仍能继续使用，直到被重新分配。
       </p>
 
       {error && (
@@ -175,56 +220,67 @@ export default function PetSpeciesEditor() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      <div className="species-toolbar">
         <button
           type="button"
           data-testid="species-add-toggle"
           onClick={() => setNewDraft(newDraft ? null : emptyDraft())}
         >{newDraft ? '取消新增' : '+ 新增物种'}</button>
-        <span className="grow" />
-        <span className="hint">共 {rows.length} 个</span>
+        <input
+          type="search"
+          className="species-filter"
+          placeholder="按 id / 名称 / 特点 过滤..."
+          value={filter}
+          data-testid="species-filter"
+          onChange={(e) => setFilter(e.target.value)}
+        />
+        <span className="hint">
+          {q ? `${filteredRows.length} / ${rows.length} 个` : `共 ${rows.length} 个`}
+        </span>
       </div>
 
       {newDraft && (
-        <fieldset className="species-row" data-testid="species-new-row" style={{ marginBottom: 16 }}>
+        <fieldset className="species-row species-row--new" data-testid="species-new-row" style={{ marginBottom: 16 }}>
           <legend>新增物种</legend>
           <div className="species-grid">
-            <label>
-              id (slug)
+            <Field id="species-new-id" label="id (slug)">
               <input
+                id="species-new-id"
+                type="text"
                 data-testid="species-new-id"
                 value={newDraft.id}
                 onChange={(e) => setNewDraft({ ...newDraft, id: e.target.value })}
                 placeholder="kraken"
               />
-            </label>
-            <label>
-              名称
+            </Field>
+            <Field id="species-new-name" label="名称">
               <input
+                id="species-new-name"
+                type="text"
                 data-testid="species-new-name"
                 value={newDraft.name}
                 onChange={(e) => setNewDraft({ ...newDraft, name: e.target.value })}
               />
-            </label>
-            <label>
-              稀有度
+            </Field>
+            <Field id="species-new-rarity" label="稀有度">
               <select
+                id="species-new-rarity"
                 data-testid="species-new-rarity"
                 value={newDraft.rarity}
                 onChange={(e) => setNewDraft({ ...newDraft, rarity: e.target.value })}
               >
                 {RARITY_ORDER.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
-            </label>
-            <label>
-              颜色
+            </Field>
+            <Field id="species-new-color" label="颜色">
               <input
+                id="species-new-color"
                 type="color"
                 data-testid="species-new-color"
                 value={newDraft.color}
                 onChange={(e) => setNewDraft({ ...newDraft, color: e.target.value })}
               />
-            </label>
+            </Field>
           </div>
           <div style={{ marginTop: 8 }}>
             <button
@@ -243,91 +299,110 @@ export default function PetSpeciesEditor() {
         if (!list || list.length === 0) return null;
         return (
           <details key={rarity} open data-testid={`species-group-${rarity}`}>
-            <summary>
+            <summary className="species-group-summary">
               <span className="rarity-dot" style={{ background: RARITY_COLOR[rarity] }} />
               {rarity} ({list.length})
             </summary>
             {list.map((r) => {
               const d = rowDraft(r.id);
               const isDirty = dirty(r.id);
+              const isOpen = openIds.has(r.id);
               return (
-                <fieldset
+                <details
                   key={r.id}
                   className="species-row"
                   data-testid={`species-row-${r.id}`}
                   data-dirty={isDirty ? 'true' : 'false'}
+                  open={isOpen}
+                  onToggle={(e) => toggleOpen(r.id, e.currentTarget.open)}
                 >
-                  <legend>
-                    <code>{r.id}</code>
-                    {!r.visible && <span className="hint" style={{ marginLeft: 8 }}>· 隐藏</span>}
-                  </legend>
+                  <summary className="species-row-summary">
+                    <span
+                      className="species-row-color"
+                      style={{ background: r.color }}
+                      aria-hidden="true"
+                    />
+                    <code className="species-row-id">{r.id}</code>
+                    <span className="species-row-name">{r.name}</span>
+                    <span className="species-row-meta">
+                      {!r.visible && '隐藏 · '}
+                      sort {r.sort_order}
+                      {(r.frames || []).length > 0 && ` · ${(r.frames || []).length} 帧`}
+                      {r.trait_zh && ` · ${r.trait_zh}`}
+                    </span>
+                    {isDirty && (
+                      <span className="species-row-dirty" title="未保存的改动">●</span>
+                    )}
+                  </summary>
                   <div className="species-grid">
-                    <label>
-                      名称
+                    <Field id={`sf-${r.id}-name`} label="名称">
                       <input
+                        id={`sf-${r.id}-name`}
+                        type="text"
                         data-testid={`species-name-${r.id}`}
                         value={d.name}
                         onChange={(e) => setDraftField(r.id, 'name', e.target.value)}
                       />
-                    </label>
-                    <label>
-                      稀有度
+                    </Field>
+                    <Field id={`sf-${r.id}-rarity`} label="稀有度">
                       <select
+                        id={`sf-${r.id}-rarity`}
                         data-testid={`species-rarity-${r.id}`}
                         value={d.rarity}
                         onChange={(e) => setDraftField(r.id, 'rarity', e.target.value)}
                       >
                         {RARITY_ORDER.map((rr) => <option key={rr} value={rr}>{rr}</option>)}
                       </select>
-                    </label>
-                    <label>
-                      颜色
+                    </Field>
+                    <Field id={`sf-${r.id}-color`} label="颜色">
                       <input
+                        id={`sf-${r.id}-color`}
                         type="color"
                         data-testid={`species-color-${r.id}`}
                         value={d.color}
                         onChange={(e) => setDraftField(r.id, 'color', e.target.value)}
                       />
-                    </label>
-                    <label>
-                      sort_order
+                    </Field>
+                    <Field id={`sf-${r.id}-sort`} label="sort_order">
                       <input
+                        id={`sf-${r.id}-sort`}
                         type="number"
                         min={0}
                         data-testid={`species-sort-${r.id}`}
                         value={d.sort_order}
                         onChange={(e) => setDraftField(r.id, 'sort_order', parseInt(e.target.value, 10) || 0)}
                       />
-                    </label>
-                    <label className="span-2">
-                      特点 (trait_zh)
+                    </Field>
+                    <Field id={`sf-${r.id}-trait`} label="特点 (trait_zh)" span>
                       <input
+                        id={`sf-${r.id}-trait`}
+                        type="text"
                         data-testid={`species-trait-${r.id}`}
                         value={d.trait_zh || ''}
                         onChange={(e) => setDraftField(r.id, 'trait_zh', e.target.value)}
                       />
-                    </label>
-                    <label className="span-2">
-                      人格 (personality_zh)
+                    </Field>
+                    <Field id={`sf-${r.id}-personality`} label="人格 (personality_zh)" span>
                       <textarea
+                        id={`sf-${r.id}-personality`}
                         rows={2}
                         data-testid={`species-personality-${r.id}`}
                         value={d.personality_zh || ''}
                         onChange={(e) => setDraftField(r.id, 'personality_zh', e.target.value)}
                       />
-                    </label>
-                    <label className="span-2">
-                      描述 (description_zh)
+                    </Field>
+                    <Field id={`sf-${r.id}-description`} label="描述 (description_zh)" span>
                       <textarea
+                        id={`sf-${r.id}-description`}
                         rows={2}
                         data-testid={`species-description-${r.id}`}
                         value={d.description_zh || ''}
                         onChange={(e) => setDraftField(r.id, 'description_zh', e.target.value)}
                       />
-                    </label>
+                    </Field>
                   </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-                    <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <div className="species-row-footer">
+                    <label className="species-row-visible">
                       <input
                         type="checkbox"
                         data-testid={`species-visible-${r.id}`}
@@ -367,7 +442,7 @@ export default function PetSpeciesEditor() {
                       onChange={(frameIdx, lines) => setDraftFrame(r.id, frameIdx, lines)}
                     />
                   )}
-                </fieldset>
+                </details>
               );
             })}
           </details>
@@ -431,7 +506,7 @@ function FramesPanel({ speciesId, frames, onChange }) {
     <div
       data-testid={`species-frames-panel-${speciesId}`}
       style={{
-        marginTop: 12, padding: '10px 12px',
+        margin: '12px 12px 12px', padding: '10px 12px',
         border: '1px dashed var(--line)', borderRadius: 4,
         background: 'var(--bg)',
       }}
