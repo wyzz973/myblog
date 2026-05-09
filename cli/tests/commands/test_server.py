@@ -54,3 +54,31 @@ def test_ssh_passthrough(tmp_home, tmp_repo, monkeypatch) -> None:
     res = CliRunner().invoke(app, ["server", "ssh", "echo hello"])
     assert res.exit_code == 0
     assert "echo hello" in seen[0]
+
+
+def test_migrate_up_runs_alembic(tmp_home, tmp_repo, monkeypatch) -> None:
+    seen = _patch_ssh(monkeypatch, stdout="OK")
+    res = CliRunner().invoke(app, ["server", "migrate", "up"])
+    assert res.exit_code == 0
+    assert "alembic upgrade head" in seen[0]
+    assert "/opt/myblog/repo/backend" in seen[0]
+
+
+def test_migrate_status(tmp_home, tmp_repo, monkeypatch) -> None:
+    seen = _patch_ssh(monkeypatch, stdout="0020 (head)")
+    res = CliRunner().invoke(app, ["server", "migrate", "status"])
+    assert res.exit_code == 0
+    assert "alembic current" in seen[0]
+
+
+def test_migrate_down_requires_confirm(tmp_home, tmp_repo, monkeypatch) -> None:
+    res = CliRunner().invoke(app, ["server", "migrate", "down", "0019"])
+    assert res.exit_code == 1
+    assert "I understand" in res.stdout
+
+
+def test_migrate_down_with_confirm(tmp_home, tmp_repo, monkeypatch) -> None:
+    seen = _patch_ssh(monkeypatch, stdout="downgraded")
+    res = CliRunner().invoke(app, ["server", "migrate", "down", "0019", "--confirm", "I understand"])
+    assert res.exit_code == 0
+    assert "alembic downgrade 0019" in seen[0]

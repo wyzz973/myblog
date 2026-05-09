@@ -91,3 +91,46 @@ def ssh_passthrough(
     if err:
         typer.echo(err, err=True, nl=False)
     raise typer.Exit(code=rc)
+
+
+migrate = typer.Typer(help="alembic migrations on the server.")
+app.add_typer(migrate, name="migrate")
+
+_REMOTE_BACKEND = "/opt/myblog/repo/backend"
+_ALEMBIC = (
+    f"sudo -u myblog -H bash -lc 'cd {_REMOTE_BACKEND} && set -a && . .env && set +a"
+    " && .venv/bin/alembic {sub}'"
+)
+
+
+def _alembic(sub: str) -> tuple[int, str, str]:
+    return ssh.run_ssh(_ALEMBIC.format(sub=sub), timeout=180)
+
+
+@migrate.command("status")
+def migrate_status() -> None:
+    rc, out, err = _alembic("current")
+    typer.echo(out)
+    if err: typer.echo(err, err=True)
+    raise typer.Exit(code=rc)
+
+
+@migrate.command("up")
+def migrate_up() -> None:
+    rc, out, err = _alembic("upgrade head")
+    typer.echo(out)
+    if err: typer.echo(err, err=True)
+    raise typer.Exit(code=rc)
+
+
+@migrate.command("down")
+def migrate_down(
+    revision: str = typer.Argument(..., help="Target revision id, e.g. 0019"),
+    confirm: str = typer.Option("", "--confirm"),
+) -> None:
+    safety.gate("L3", dry_run=False, yes=True, confirm=confirm,
+                summary=f"alembic downgrade {revision}")
+    rc, out, err = _alembic(f"downgrade {revision}")
+    typer.echo(out)
+    if err: typer.echo(err, err=True)
+    raise typer.Exit(code=rc)
