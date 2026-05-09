@@ -109,3 +109,29 @@ def test_backup_restore_db_requires_confirm(tmp_home, tmp_repo, monkeypatch, tmp
     res = CliRunner().invoke(app, ["server", "backup", "restore", "db", str(f)])
     assert res.exit_code == 1
     assert "I understand" in res.stdout
+
+
+def test_shell_psql(tmp_home, tmp_repo, monkeypatch) -> None:
+    seen: list[list[str]] = []
+    def fake_popen(cmd, **kw):
+        seen.append(cmd)
+        m = MagicMock(); m.wait.return_value = 0; m.returncode = 0
+        return m
+    monkeypatch.setattr(ssh.subprocess, "Popen", fake_popen)
+    res = CliRunner().invoke(app, ["server", "shell", "psql"])
+    assert res.exit_code == 0
+    flat = " ".join(seen[0])
+    assert "psql" in flat
+    assert "myblog" in flat
+
+
+def test_shell_redis(tmp_home, tmp_repo, monkeypatch) -> None:
+    seen: list[list[str]] = []
+    def fake_popen(cmd, **kw):
+        seen.append(cmd)
+        m = MagicMock(); m.wait.return_value = 0; m.returncode = 0
+        return m
+    monkeypatch.setattr(ssh.subprocess, "Popen", fake_popen)
+    res = CliRunner().invoke(app, ["server", "shell", "redis"])
+    assert res.exit_code == 0
+    assert "redis-cli" in " ".join(seen[0])

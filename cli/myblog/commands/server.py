@@ -205,3 +205,17 @@ def restore_db(
         code=2,
     )
     raise typer.Exit(code=2)
+
+
+@app.command("shell")
+def shell(target: str = typer.Argument(..., help="psql | redis")) -> None:
+    """Open an interactive psql / redis-cli session via ssh -t."""
+    if target == "psql":
+        cmd = "sudo -u postgres psql myblog"
+    elif target == "redis":
+        cmd = "redis-cli -n 0"
+    else:
+        output.emit_error("target must be psql or redis", code=2)
+        raise typer.Exit(code=2)
+    rc = ssh.run_ssh_streaming(cmd)
+    raise typer.Exit(code=rc)
