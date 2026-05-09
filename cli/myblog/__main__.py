@@ -5,6 +5,7 @@ from myblog.commands import auth as auth_cmd
 from myblog.commands import media as media_cmd
 from myblog.commands import pet as pet_cmd
 from myblog.commands import post as post_cmd
+from myblog.commands import projects as projects_cmd
 from myblog.commands import site as site_cmd
 from myblog.commands import tag as tag_cmd
 
@@ -34,6 +35,7 @@ app.add_typer(post_cmd.app, name="post")
 app.add_typer(tag_cmd.app, name="tag")
 app.add_typer(media_cmd.app, name="media")
 app.add_typer(pet_cmd.app, name="pet")
+app.add_typer(projects_cmd.app, name="projects")
 
 if __name__ == "__main__":
     app()
