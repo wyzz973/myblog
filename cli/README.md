@@ -26,9 +26,9 @@ for the full design.
 Production code, README, pyproject, and skills must not contain real IPs / tokens / passwords / SSH hosts. Test files use deliberate placeholders (`secret`, `super-secret-token`) and are excluded.
 
 ```bash
-git ls-files cli/myblog/ cli/README.md cli/pyproject.toml skills/ \
+git ls-files cli/myblog/ cli/pyproject.toml skills/ \
   | xargs grep -nE '\b(8|10|172|192)\.[0-9]+\.[0-9]+\.[0-9]+\b|cfut_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|wyzz973' \
   || echo "no leaks"
 ```
 
-Expected: `no leaks`. Real secrets live only in `~/.config/myblog/credentials.toml` and `.env.deploy` (both gitignored).
+Expected: `no leaks`. The README is excluded from its own recipe to avoid self-matching the documented regex. Real secrets live only in `~/.config/myblog/credentials.toml` and `.env.deploy` (both gitignored).
