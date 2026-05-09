@@ -18,6 +18,9 @@ app.add_typer(personality_app, name="personality")
 app.add_typer(memory_app, name="memory")
 app.add_typer(timeline_app, name="timeline")
 
+from myblog.commands.pet_species import species as species_app  # noqa: E402
+app.add_typer(species_app, name="species")
+
 
 @config_app.command("get")
 def cfg_get() -> None:
