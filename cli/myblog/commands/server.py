@@ -134,3 +134,74 @@ def migrate_down(
     typer.echo(out)
     if err: typer.echo(err, err=True)
     raise typer.Exit(code=rc)
+
+
+import datetime as _dt
+import shlex
+
+backup = typer.Typer(help="DB / media backups.")
+app.add_typer(backup, name="backup")
+restore = typer.Typer(help="Destructive restore.")
+backup.add_typer(restore, name="restore")
+
+
+def _stamp() -> str:
+    return _dt.datetime.now().strftime("%Y%m%dT%H%M%S")
+
+
+@backup.command("db")
+def backup_db(
+    out: Path | None = typer.Option(None, "--out", help="Output .sql.gz path"),
+) -> None:
+    remote = f"/tmp/myblog-db-{_stamp()}.sql.gz"
+    cmd = (
+        f"sudo -u postgres -H bash -lc 'pg_dump -Fc myblog | gzip > {shlex.quote(remote)}'"
+    )
+    rc, _, err = ssh.run_ssh(cmd, timeout=600)
+    if rc != 0:
+        output.emit_error(err.strip() or "pg_dump failed", code=1)
+        raise typer.Exit(code=rc)
+    out = out or Path.cwd() / Path(remote).name
+    rc2 = ssh.scp_pull(remote, out)
+    ssh.run_ssh(f"rm -f {shlex.quote(remote)}", timeout=30)
+    if rc2 != 0:
+        output.emit_error("scp pull failed", code=1)
+        raise typer.Exit(code=rc2)
+    output.emit_message(f"saved {out}")
+
+
+@backup.command("media")
+def backup_media(
+    out: Path | None = typer.Option(None, "--out", help="Output .tgz path"),
+) -> None:
+    remote = f"/tmp/myblog-media-{_stamp()}.tgz"
+    cmd = (
+        f"tar -C /opt/myblog -czf {shlex.quote(remote)} media"
+    )
+    rc, _, err = ssh.run_ssh(cmd, timeout=600)
+    if rc != 0:
+        output.emit_error(err.strip() or "tar failed", code=1)
+        raise typer.Exit(code=rc)
+    out = out or Path.cwd() / Path(remote).name
+    rc2 = ssh.scp_pull(remote, out)
+    ssh.run_ssh(f"rm -f {shlex.quote(remote)}", timeout=30)
+    if rc2 != 0:
+        output.emit_error("scp pull failed", code=1)
+        raise typer.Exit(code=rc2)
+    output.emit_message(f"saved {out}")
+
+
+@restore.command("db")
+def restore_db(
+    file: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
+    confirm: str = typer.Option("", "--confirm"),
+) -> None:
+    safety.gate("L3", dry_run=False, yes=True, confirm=confirm,
+                summary=f"pg_restore --clean myblog from {file.name}")
+    output.emit_error(
+        "restore is interactive and operator-confirmed; not implemented in v1. "
+        "Manual recipe: scp the dump to the server, then "
+        "sudo -u postgres pg_restore --clean -d myblog <file>.",
+        code=2,
+    )
+    raise typer.Exit(code=2)

@@ -82,3 +82,30 @@ def test_migrate_down_with_confirm(tmp_home, tmp_repo, monkeypatch) -> None:
     res = CliRunner().invoke(app, ["server", "migrate", "down", "0019", "--confirm", "I understand"])
     assert res.exit_code == 0
     assert "alembic downgrade 0019" in seen[0]
+
+
+def test_backup_db_runs_pgdump_then_scp(tmp_home, tmp_repo, monkeypatch, tmp_path) -> None:
+    seen = _patch_ssh(monkeypatch, stdout="")
+    out = tmp_path / "dump.sql"
+    res = CliRunner().invoke(app, ["server", "backup", "db", "--out", str(out)])
+    assert res.exit_code == 0, res.stdout
+    # 1) pg_dump on server, 2) scp pull, 3) cleanup rm
+    assert any("pg_dump" in s for s in seen)
+    assert any("scp" in s for s in seen)
+
+
+def test_backup_media_runs_tar_then_scp(tmp_home, tmp_repo, monkeypatch, tmp_path) -> None:
+    seen = _patch_ssh(monkeypatch, stdout="")
+    out = tmp_path / "media.tgz"
+    res = CliRunner().invoke(app, ["server", "backup", "media", "--out", str(out)])
+    assert res.exit_code == 0
+    assert any("tar" in s for s in seen)
+    assert any("scp" in s for s in seen)
+
+
+def test_backup_restore_db_requires_confirm(tmp_home, tmp_repo, monkeypatch, tmp_path) -> None:
+    f = tmp_path / "x.sql"
+    f.write_text("-- dump")
+    res = CliRunner().invoke(app, ["server", "backup", "restore", "db", str(f)])
+    assert res.exit_code == 1
+    assert "I understand" in res.stdout
