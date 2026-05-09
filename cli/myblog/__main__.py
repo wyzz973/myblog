@@ -8,6 +8,7 @@ from myblog.commands import now as now_cmd
 from myblog.commands import pet as pet_cmd
 from myblog.commands import post as post_cmd
 from myblog.commands import projects as projects_cmd
+from myblog.commands import server as server_cmd
 from myblog.commands import site as site_cmd
 from myblog.commands import tag as tag_cmd
 
@@ -40,6 +41,7 @@ app.add_typer(pet_cmd.app, name="pet")
 app.add_typer(projects_cmd.app, name="projects")
 app.add_typer(now_cmd.app, name="now")
 app.add_typer(deploy_cmd.app, name="deploy")
+app.add_typer(server_cmd.app, name="server")
 
 if __name__ == "__main__":
     app()
