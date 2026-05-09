@@ -1,3 +1,5 @@
+import json as _json
+
 import httpx
 import pytest
 import respx
@@ -28,7 +30,9 @@ def test_patch_sends_json_body(tmp_home) -> None:
     )
     out = http.admin_patch("/posts/p1", json={"status": "published"})
     assert out["status"] == "published"
-    assert route.calls.last.request.read() == b'{"status": "published"}'
+    body = route.calls.last.request.read()
+    assert _json.loads(body) == {"status": "published"}
+    assert route.calls.last.request.headers["content-type"].startswith("application/json")
 
 
 @respx.mock

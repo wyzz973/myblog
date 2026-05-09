@@ -1,7 +1,6 @@
 """Synchronous httpx wrapper for /api/admin/* with bearer auth."""
 from __future__ import annotations
 
-import json as _json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,12 +10,6 @@ import httpx
 from myblog import config
 
 _TIMEOUT = httpx.Timeout(15.0, connect=5.0)
-
-
-def _json_body(payload: Any) -> tuple[bytes, dict[str, str]]:
-    """Serialize JSON with stdlib defaults (spaces after separators)."""
-    data = _json.dumps(payload).encode("utf-8")
-    return data, {"Content-Type": "application/json"}
 
 
 @dataclass(slots=True)
@@ -63,28 +56,19 @@ def admin_get(path: str, *, params: dict | None = None) -> Any:
 def admin_post(path: str, *, json: dict | None = None, params: dict | None = None) -> Any:
     client, _ = _client()
     with client:
-        if json is not None:
-            content, headers = _json_body(json)
-            return _handle(client.post(path, content=content, headers=headers, params=params))
-        return _handle(client.post(path, params=params))
+        return _handle(client.post(path, json=json, params=params))
 
 
 def admin_patch(path: str, *, json: dict | None = None) -> Any:
     client, _ = _client()
     with client:
-        if json is not None:
-            content, headers = _json_body(json)
-            return _handle(client.patch(path, content=content, headers=headers))
-        return _handle(client.patch(path))
+        return _handle(client.patch(path, json=json))
 
 
 def admin_put(path: str, *, json: dict | None = None) -> Any:
     client, _ = _client()
     with client:
-        if json is not None:
-            content, headers = _json_body(json)
-            return _handle(client.put(path, content=content, headers=headers))
-        return _handle(client.put(path))
+        return _handle(client.put(path, json=json))
 
 
 def admin_delete(path: str) -> None:
