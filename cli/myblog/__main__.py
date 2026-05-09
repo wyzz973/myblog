@@ -3,6 +3,7 @@ import typer
 from myblog import output
 from myblog.commands import auth as auth_cmd
 from myblog.commands import media as media_cmd
+from myblog.commands import now as now_cmd
 from myblog.commands import pet as pet_cmd
 from myblog.commands import post as post_cmd
 from myblog.commands import projects as projects_cmd
@@ -36,6 +37,7 @@ app.add_typer(tag_cmd.app, name="tag")
 app.add_typer(media_cmd.app, name="media")
 app.add_typer(pet_cmd.app, name="pet")
 app.add_typer(projects_cmd.app, name="projects")
+app.add_typer(now_cmd.app, name="now")
 
 if __name__ == "__main__":
     app()
