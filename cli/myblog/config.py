@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import tomli_w
@@ -21,14 +21,14 @@ class NotConfigured(RuntimeError):
 @dataclass(frozen=True, slots=True)
 class Credentials:
     base_url: str
-    admin_token: str
+    admin_token: str = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True)
 class DeployEnv:
     server: str
-    sshpass: str | None
-    domain: str | None
+    sshpass: str | None = field(repr=False, default=None)
+    domain: str | None = None
 
 
 def credentials_path() -> Path:
@@ -42,7 +42,10 @@ def load_credentials() -> Credentials:
         raise NotConfigured(
             f"{p} not found — run `myblog auth login` to create it."
         )
-    data = tomllib.loads(p.read_text())
+    try:
+        data = tomllib.loads(p.read_text())
+    except tomllib.TOMLDecodeError as e:
+        raise NotConfigured(f"{p} is malformed TOML: {e}") from e
     base_url = data.get("base_url")
     admin_token = data.get("admin_token")
     if not base_url or not admin_token:

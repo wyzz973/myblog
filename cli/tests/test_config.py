@@ -48,3 +48,26 @@ def test_load_deploy_env_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     with pytest.raises(config.NotConfigured) as ei:
         config.load_deploy_env()
     assert ".env.deploy" in str(ei.value)
+
+
+def test_load_credentials_malformed_toml(tmp_home: Path) -> None:
+    p = config.credentials_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text('base_url = "x"\nadmin_token = "y"\n[bad section\n')
+    with pytest.raises(config.NotConfigured) as ei:
+        config.load_credentials()
+    assert "malformed TOML" in str(ei.value)
+
+
+def test_credentials_repr_does_not_leak_token(tmp_home: Path) -> None:
+    creds = config.Credentials(base_url="https://x", admin_token="super-secret-token")
+    r = repr(creds)
+    assert "super-secret-token" not in r
+    assert "https://x" in r
+
+
+def test_deploy_env_repr_does_not_leak_sshpass(tmp_repo: Path) -> None:
+    env = config.load_deploy_env()
+    r = repr(env)
+    assert "secret" not in r            # SSHPASS=secret in fixture
+    assert "root@example.com" in r
