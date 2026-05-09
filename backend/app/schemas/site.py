@@ -17,6 +17,7 @@ class SitePayload(BaseModel):
     words: int
     commits52w: int
     footer_note: str
+    icp_beian: str = ""
     default_theme: str
     accent_color: str
     accent2_color: str

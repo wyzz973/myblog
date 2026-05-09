@@ -278,6 +278,15 @@ export default function App() {
               <CopyText label="email" value={siteData.email} />
             )}
           </div>
+          {siteData?.icp_beian?.trim() && (
+            <div className="footer-beian" data-testid="footer-beian">
+              <a
+                href="https://beian.miit.gov.cn/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >{siteData.icp_beian}</a>
+            </div>
+          )}
         </footer>
       </div>
     </>

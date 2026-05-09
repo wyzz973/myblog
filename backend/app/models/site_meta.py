@@ -27,6 +27,7 @@ class SiteMeta(Base, TimestampMixin):
     typing_line: Mapped[str] = mapped_column(Text, nullable=False, default="")
     stack_chips: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     footer_note: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    icp_beian: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     default_theme: Mapped[str] = mapped_column(String(8), nullable=False, default="dark")
     accent_color: Mapped[str] = mapped_column(String(32), nullable=False, default="oklch(82% 0.17 152)")
     accent2_color: Mapped[str] = mapped_column(String(32), nullable=False, default="oklch(80% 0.15 70)")

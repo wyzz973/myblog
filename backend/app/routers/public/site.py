@@ -50,6 +50,7 @@ async def get_site(s: AsyncSession = Depends(get_session)) -> SitePayload:
         uptime=_format_uptime(sm.launched_at),
         posts=int(posts_count), words=int(words), commits52w=int(commits52w),
         footer_note=sm.footer_note,
+        icp_beian=sm.icp_beian,
         default_theme=sm.default_theme,
         accent_color=sm.accent_color, accent2_color=sm.accent2_color,
         violet_color=sm.violet_color, danger_color=sm.danger_color,

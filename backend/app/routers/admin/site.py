@@ -30,6 +30,7 @@ class SiteIn(BaseModel):
     email: str | None = None
     github: str | None = None
     footer_note: str | None = None
+    icp_beian: str | None = None
     default_theme: str | None = None
     launched_at: str | None = None  # ISO date
 

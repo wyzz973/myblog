@@ -27,6 +27,7 @@ const SITE_TEXT_FIELDS = [
   { key: 'email', label: '联系邮箱', placeholder: 'you@example.com' },
   { key: 'github', label: 'github 用户名', placeholder: 'username' },
   { key: 'footer_note', label: 'footer 文案', placeholder: '' },
+  { key: 'icp_beian', label: 'ICP 备案号', placeholder: '蜀ICP备XXXXXXXXX号-1' },
   { key: 'launched_at', label: '上线日期', placeholder: '2026-01-01' },
 ];
 
