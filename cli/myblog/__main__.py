@@ -2,6 +2,7 @@ import typer
 
 from myblog import output
 from myblog.commands import auth as auth_cmd
+from myblog.commands import post as post_cmd
 from myblog.commands import site as site_cmd
 
 app = typer.Typer(
@@ -26,6 +27,7 @@ def main(
 
 app.add_typer(auth_cmd.app, name="auth")
 app.add_typer(site_cmd.app, name="site")
+app.add_typer(post_cmd.app, name="post")
 
 if __name__ == "__main__":
     app()
