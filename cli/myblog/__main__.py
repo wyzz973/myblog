@@ -2,6 +2,7 @@ import typer
 
 from myblog import output
 from myblog.commands import auth as auth_cmd
+from myblog.commands import deploy as deploy_cmd
 from myblog.commands import media as media_cmd
 from myblog.commands import now as now_cmd
 from myblog.commands import pet as pet_cmd
@@ -38,6 +39,7 @@ app.add_typer(media_cmd.app, name="media")
 app.add_typer(pet_cmd.app, name="pet")
 app.add_typer(projects_cmd.app, name="projects")
 app.add_typer(now_cmd.app, name="now")
+app.add_typer(deploy_cmd.app, name="deploy")
 
 if __name__ == "__main__":
     app()
