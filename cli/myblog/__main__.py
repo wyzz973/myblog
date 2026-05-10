@@ -45,5 +45,21 @@ app.add_typer(deploy_cmd.app, name="deploy")
 app.add_typer(server_cmd.app, name="server")
 app.add_typer(skill_cmd.app, name="skill")
 
+def main_entrypoint() -> None:
+    """Console-script entrypoint: run app() and translate known errors to friendly output."""
+    import sys
+
+    from myblog import config, http
+
+    try:
+        app()
+    except config.NotConfigured as e:
+        output.emit_error(str(e), code=2)
+        sys.exit(2)
+    except http.ApiError as e:
+        output.emit_error(f"{e.status} {e.detail}", code=1)
+        sys.exit(1)
+
+
 if __name__ == "__main__":
-    app()
+    main_entrypoint()

@@ -20,7 +20,7 @@ dev = [
 ]
 
 [project.scripts]
-myblog = "myblog.__main__:app"
+myblog = "myblog.__main__:main_entrypoint"
 
 [build-system]
 requires = ["hatchling"]

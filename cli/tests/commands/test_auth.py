@@ -52,3 +52,17 @@ def test_whoami_401(tmp_home) -> None:
     res = runner.invoke(app, ["auth", "whoami"])
     assert res.exit_code == 1
     assert "bad token" in res.stdout or "bad token" in res.stderr
+
+
+def test_whoami_no_credentials_friendly_error(tmp_home, capsys) -> None:
+    """When credentials are missing, surface a friendly error not a traceback."""
+    from myblog.__main__ import main_entrypoint
+    import sys
+    sys.argv = ["myblog", "auth", "whoami"]
+    try:
+        main_entrypoint()
+    except SystemExit as e:
+        assert e.code == 2
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err
+    assert "auth login" in captured.err or "auth login" in captured.out
