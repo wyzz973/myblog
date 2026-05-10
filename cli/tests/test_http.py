@@ -90,3 +90,39 @@ def test_client_honors_myblog_proxy(tmp_home, monkeypatch) -> None:
     # so we verify the client got the proxy hint by monkey-checking the constructor:
     # at minimum trust_env stays False and a proxy was provided.
     assert client._trust_env is False
+
+
+@respx.mock
+def test_admin_get_retries_on_connect_error(tmp_home) -> None:
+    """First attempt fails with ConnectError, second succeeds; admin_get returns the success body."""
+    config.save_credentials(base_url="https://example.test", admin_token="t")
+    # Two responses: first raises, second returns 200.
+    route = respx.get("https://example.test/api/admin/site").mock(
+        side_effect=[httpx.ConnectError("transient"), httpx.Response(200, json={"handle": "ok"})]
+    )
+    out = http.admin_get("/site")
+    assert out == {"handle": "ok"}
+    assert route.call_count == 2
+
+
+@respx.mock
+def test_admin_get_does_not_retry_on_4xx(tmp_home) -> None:
+    """4xx is an ApiError, not transient — no retry."""
+    config.save_credentials(base_url="https://example.test", admin_token="t")
+    route = respx.get("https://example.test/api/admin/site").mock(
+        return_value=httpx.Response(401, json={"detail": "bad token"})
+    )
+    with pytest.raises(http.ApiError):
+        http.admin_get("/site")
+    assert route.call_count == 1
+
+
+def test_retry_helper_eventually_raises(tmp_home) -> None:
+    """If all attempts fail, the last exception is raised."""
+    calls = {"n": 0}
+    def boom():
+        calls["n"] += 1
+        raise httpx.ConnectError("forever")
+    with pytest.raises(httpx.ConnectError):
+        http._retry(boom, attempts=2, base_delay=0.001)
+    assert calls["n"] == 2

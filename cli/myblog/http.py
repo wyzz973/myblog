@@ -2,15 +2,36 @@
 from __future__ import annotations
 
 import os
+import time as _time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 import httpx
 
 from myblog import config
 
 _TIMEOUT = httpx.Timeout(15.0, connect=5.0)
+
+_T = TypeVar("_T")
+
+_RETRYABLE = (httpx.ConnectError, httpx.ReadError, httpx.RemoteProtocolError)
+
+
+def _retry(fn: Callable[[], _T], *, attempts: int = 3, base_delay: float = 0.3) -> _T:
+    """Run fn() with limited retry on transient httpx connect/read errors.
+
+    Does not retry on HTTP errors (4xx/5xx) — those are not transports;
+    they go to _handle as ApiError.
+    """
+    for i in range(attempts):
+        try:
+            return fn()
+        except _RETRYABLE:
+            if i == attempts - 1:
+                raise
+            _time.sleep(base_delay * (3 ** i))
+    raise RuntimeError("unreachable")  # for type-checkers
 
 
 @dataclass(slots=True)
@@ -54,31 +75,31 @@ def _handle(resp: httpx.Response) -> Any:
 def admin_get(path: str, *, params: dict | None = None) -> Any:
     client, _ = _client()
     with client:
-        return _handle(client.get(path, params=params))
+        return _handle(_retry(lambda: client.get(path, params=params)))
 
 
 def admin_post(path: str, *, json: dict | None = None, params: dict | None = None) -> Any:
     client, _ = _client()
     with client:
-        return _handle(client.post(path, json=json, params=params))
+        return _handle(_retry(lambda: client.post(path, json=json, params=params)))
 
 
 def admin_patch(path: str, *, json: dict | None = None) -> Any:
     client, _ = _client()
     with client:
-        return _handle(client.patch(path, json=json))
+        return _handle(_retry(lambda: client.patch(path, json=json)))
 
 
 def admin_put(path: str, *, json: dict | None = None) -> Any:
     client, _ = _client()
     with client:
-        return _handle(client.put(path, json=json))
+        return _handle(_retry(lambda: client.put(path, json=json)))
 
 
 def admin_delete(path: str) -> None:
     client, _ = _client()
     with client:
-        return _handle(client.delete(path))
+        return _handle(_retry(lambda: client.delete(path)))
 
 
 def admin_upload(
@@ -89,6 +110,9 @@ def admin_upload(
     field_name: str = "file",
 ) -> Any:
     client, _ = _client()
-    with client, file_path.open("rb") as fh:
-        files = {field_name: (file_path.name, fh)}
-        return _handle(client.post(path, files=files, data=fields or {}))
+    def _do() -> Any:
+        with file_path.open("rb") as fh:
+            files = {field_name: (file_path.name, fh)}
+            return _handle(client.post(path, files=files, data=fields or {}))
+    with client:
+        return _retry(_do)
