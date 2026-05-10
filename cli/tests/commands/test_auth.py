@@ -66,3 +66,29 @@ def test_whoami_no_credentials_friendly_error(tmp_home, capsys) -> None:
     captured = capsys.readouterr()
     assert "Traceback" not in captured.err
     assert "auth login" in captured.err or "auth login" in captured.out
+
+
+def test_whoami_transient_network_error_friendly(tmp_home, monkeypatch, capsys) -> None:
+    """When network errors exhaust retries, surface friendly message not traceback."""
+    import httpx
+
+    from myblog import config, http
+    from myblog.__main__ import main_entrypoint
+
+    config.save_credentials(base_url="https://example.test", admin_token="t")
+
+    def boom(*a, **kw):
+        raise httpx.ConnectError("transient")
+
+    # Force every retry attempt to raise.
+    monkeypatch.setattr(http, "admin_get", boom)
+
+    import sys
+    sys.argv = ["myblog", "auth", "whoami"]
+    try:
+        main_entrypoint()
+    except SystemExit as e:
+        assert e.code == 1
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err
+    assert "network error" in captured.err or "network error" in captured.out

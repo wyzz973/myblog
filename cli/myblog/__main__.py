@@ -49,6 +49,7 @@ def main_entrypoint() -> None:
     """Console-script entrypoint: run app() and translate known errors to friendly output."""
     import sys
 
+    import httpx
     from myblog import config, http
 
     try:
@@ -58,6 +59,14 @@ def main_entrypoint() -> None:
         sys.exit(2)
     except http.ApiError as e:
         output.emit_error(f"{e.status} {e.detail}", code=1)
+        sys.exit(1)
+    except httpx.HTTPError as e:
+        # Transient transport / TLS issue after retries exhausted.
+        output.emit_error(
+            f"network error: {type(e).__name__}: {e}. "
+            "Try again — transpacific links to the origin can be flaky.",
+            code=1,
+        )
         sys.exit(1)
 
 
