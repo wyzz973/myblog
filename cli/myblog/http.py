@@ -1,6 +1,7 @@
 """Synchronous httpx wrapper for /api/admin/* with bearer auth."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,10 +25,13 @@ class ApiError(Exception):
 
 def _client() -> tuple[httpx.Client, str]:
     creds = config.load_credentials()
+    proxy = os.environ.get("MYBLOG_PROXY") or None
     client = httpx.Client(
         base_url=f"{creds.base_url}/api/admin",
         headers={"Authorization": f"Bearer {creds.admin_token}"},
         timeout=_TIMEOUT,
+        trust_env=False,    # ignore HTTPS_PROXY/HTTP_PROXY by default
+        proxy=proxy,        # but honor explicit MYBLOG_PROXY override
     )
     return client, creds.base_url
 
